@@ -63,13 +63,25 @@ module.exports = async (req, res) => {
     return res.status(405).end(JSON.stringify({ __error: true, message: 'Method not allowed' }));
   }
 
-  let action, args;
+  let action, args, authProvided = '';
   try {
     const body = await readJsonBody(req);
     action = body.action;
     args = Array.isArray(body.args) ? body.args : [];
+    authProvided = (req.headers['x-app-password'] || body._auth || '').toString();
   } catch (e) {
     return res.status(400).end(JSON.stringify({ __error: true, message: 'Body tidak valid.' }));
+  }
+
+  // Proteksi opsional: jika env APP_PASSWORD diisi, SEMUA action butuh password yang cocok.
+  // Bila APP_PASSWORD kosong, gerbang ini nonaktif (app terbuka seperti biasa).
+  const APP_PASSWORD = (process.env.APP_PASSWORD || '').trim();
+  if (action === 'login') {
+    const okPw = !APP_PASSWORD || authProvided === APP_PASSWORD;
+    return res.status(200).end(JSON.stringify({ success: okPw, authRequired: !!APP_PASSWORD, message: okPw ? 'Login berhasil.' : 'Password salah.' }));
+  }
+  if (APP_PASSWORD && authProvided !== APP_PASSWORD) {
+    return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Perlu login.' }));
   }
 
   const handler = HANDLERS[action];

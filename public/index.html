@@ -92,6 +92,22 @@
 
   <div id="toast" class="fixed right-5 bottom-5 z-[120] hide px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium"></div>
 
+  <!-- Login gate (aktif hanya jika env APP_PASSWORD diisi di server) -->
+  <div id="loginGate" class="hide fixed inset-0 z-[130] bg-slate-950/95 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-6">
+      <div class="flex items-center gap-2.5 mb-1">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">lock</span></div>
+        <div class="text-lg font-bold text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span></div>
+      </div>
+      <p class="text-sm text-gray-500 mb-4">Masukkan password tim untuk mengakses.</p>
+      <form onsubmit="event.preventDefault(); submitLogin();">
+        <input id="loginPw" type="password" placeholder="Password" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
+        <div id="loginErr" class="hide text-sm text-rose-600 mt-2">Password salah. Coba lagi.</div>
+        <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk</button>
+      </form>
+    </div>
+  </div>
+
   <div class="flex h-screen">
     <!-- Sidebar -->
     <aside id="sidebar" class="w-[260px] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 hidden md:flex flex-col shrink-0">
@@ -150,6 +166,7 @@
         </div>
       </div>
     </aside>
+    <div id="mobileBackdrop" onclick="closeMobileSidebar()" class="hide fixed inset-0 z-[70] bg-gray-900/50 md:hidden"></div>
 
     <!-- Main -->
     <main class="flex-1 flex flex-col min-w-0">
@@ -179,6 +196,7 @@
       </header>
 
       <section class="flex-1 overflow-y-auto p-4 md:p-6">
+        <div id="deadlineReminder" class="hide max-w-[1700px] mx-auto mb-4"></div>
         <div id="filterBar" class="hide max-w-[1700px] mx-auto mb-4 flex flex-wrap items-center gap-2"></div>
         <!-- DASHBOARD -->
         <div id="dashboardView" class="view space-y-5 max-w-[1500px] mx-auto">
@@ -260,7 +278,12 @@
         <div id="communicationView" class="view hide max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-5">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 lg:col-span-1 h-[calc(100vh-150px)] flex flex-col">
             <h2 class="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-1.5 text-sm"><span class="material-icons-round text-[18px] text-indigo-600">forum</span>Pilih Task</h2>
-            <input id="commSearch" oninput="renderCommunicationTasks()" placeholder="Cari task untuk diskusi…" class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 outline-none text-sm mb-3 focus:ring-2 focus:ring-indigo-300">
+            <input id="commSearch" oninput="renderCommunicationTasks()" placeholder="Cari task untuk diskusi…" class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 outline-none text-sm mb-2 focus:ring-2 focus:ring-indigo-300">
+            <div class="flex flex-wrap gap-1.5 mb-3">
+              <button id="commUnreadToggle" onclick="toggleCommUnread()" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 flex items-center gap-1"><span class="material-icons-round text-[14px]">mark_chat_unread</span> Belum dibaca</button>
+              <select id="commFilterPic" onchange="setCommFilterPic(this.value)" class="px-2 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua PIC</option></select>
+              <select id="commFilterStatus" onchange="setCommFilterStatus(this.value)" class="px-2 py-1.5 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua Status</option></select>
+            </div>
             <div id="commTaskList" class="space-y-1.5 overflow-y-auto flex-1 pr-1 scrollbar-thin"></div>
           </div>
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 lg:col-span-2 h-[calc(100vh-150px)] flex flex-col overflow-hidden">
@@ -339,20 +362,18 @@
               <input id="fieldIdDisplay" class="form-control bg-gray-100 dark:bg-slate-800" placeholder="Auto" disabled>
             </div>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div><label class="form-label">Status</label><select id="fieldStatus" class="form-control"></select></div>
             <div><label class="form-label">Priority</label><select id="fieldPriority" class="form-control"></select></div>
             <div><label class="form-label">Stage</label><select id="fieldStage" class="form-control"></select></div>
-            <div><label class="form-label">Approval Gate</label><select id="fieldApprovalGate" class="form-control"></select></div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div><label class="form-label">Platform</label><select id="fieldPlatform" class="form-control"></select></div>
             <div><label class="form-label">PIC</label><select id="fieldPic" class="form-control"></select></div>
             <div class="md:col-span-2"><label class="form-label">Support</label><select id="fieldSupport" class="form-control" multiple></select><p class="text-[11px] text-gray-400 mt-1">Ctrl/Cmd untuk pilih lebih dari satu.</p></div>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div><label class="form-label">Created Date</label><input id="fieldCreatedDate" type="date" class="form-control"></div>
-            <div><label class="form-label">Start Date</label><input id="fieldStartDate" type="date" class="form-control"></div>
             <div><label class="form-label">Due Date</label><input id="fieldDueDate" type="date" class="form-control"></div>
           </div>
           <div>
@@ -391,20 +412,32 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
+var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW },
     body: JSON.stringify({ action: action, args: args || [] })
   }).then(function(r){
     return r.text().then(function(txt){
       var data = null;
       try { data = txt ? JSON.parse(txt) : null; } catch(e){ data = null; }
+      if(r.status === 401 || (data && data.code === 'AUTH')){ showLoginGate(); throw new Error('Perlu login.'); }
       if(!r.ok){ throw new Error((data && data.message) || ('HTTP ' + r.status)); }
       if(data && data.__error){ throw new Error(data.message || 'API error'); }
       return data;
     });
   });
+}
+function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },50); }
+function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
+function submitLogin(){
+  var pw=(document.getElementById('loginPw')||{}).value||'';
+  fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json','x-app-password':pw},body:JSON.stringify({action:'login',args:[]})})
+    .then(function(r){ return r.json(); }).then(function(d){
+      if(d && d.success){ try{ sessionStorage.setItem('tt_app_pw', pw); }catch(e){} location.reload(); }
+      else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
+    }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
 var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker'];
 function makeRunner(){
@@ -433,7 +466,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commFilters: {unreadOnly:false, pic:'', status:''}, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -472,8 +505,8 @@ function init() {
 }
 
 function afterLoad() {
-  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll();
-  if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose);}
+  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder();
+  if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); });}
   document.getElementById('loading').classList.add('hide');
 }
 
@@ -511,8 +544,25 @@ function applyTheme(){
   const icon = document.getElementById('themeIcon'); if(icon) icon.textContent = dark ? 'light_mode' : 'dark_mode';
 }
 function toggleTheme(){localStorage.setItem('theme', document.documentElement.classList.contains('dark')?'light':'dark'); applyTheme(); renderAll();}
-function toggleMobileSidebar(){const s=document.getElementById('sidebar');['hidden','absolute','z-[80]','h-full','shadow-2xl'].forEach(c=>s.classList.toggle(c));}
+function openMobileSidebar(){const s=document.getElementById('sidebar'); s.classList.remove('hidden'); s.classList.add('absolute','z-[80]','h-full','top-0','left-0','shadow-2xl'); const bd=document.getElementById('mobileBackdrop'); if(bd) bd.classList.remove('hide');}
+function closeMobileSidebar(){const s=document.getElementById('sidebar'); s.classList.add('hidden'); s.classList.remove('absolute','z-[80]','h-full','top-0','left-0','shadow-2xl'); const bd=document.getElementById('mobileBackdrop'); if(bd) bd.classList.add('hide');}
+function toggleMobileSidebar(){const s=document.getElementById('sidebar'); if(s.classList.contains('hidden')) openMobileSidebar(); else closeMobileSidebar();}
 function showToast(msg, ok=true){const el=document.getElementById('toast');el.textContent=msg;el.className='fixed right-5 bottom-5 z-[120] px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium '+(ok?'bg-emerald-600':'bg-rose-600');setTimeout(()=>el.classList.add('hide'),3000);}
+function renderDeadlineReminder(){
+  const box=document.getElementById('deadlineReminder'); if(!box) return;
+  if(state._deadlineDismissed){ box.classList.add('hide'); box.innerHTML=''; return; }
+  const mine=scopedTasks();
+  const overdue=mine.filter(t=>isLate(t));
+  const today=mine.filter(t=>!isDone(t)&&daysToDue(t)===0);
+  if(!overdue.length && !today.length){ box.classList.add('hide'); box.innerHTML=''; return; }
+  const parts=[];
+  if(overdue.length) parts.push(`<b>${overdue.length}</b> task overdue`);
+  if(today.length) parts.push(`<b>${today.length}</b> jatuh tempo hari ini`);
+  const danger=overdue.length>0;
+  box.classList.remove('hide');
+  box.innerHTML=`<div class="flex items-center gap-3 p-3 rounded-xl border ${danger?'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-900/40':'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40'}"><span class="material-icons-round ${danger?'text-rose-600':'text-amber-600'}">${danger?'warning':'schedule'}</span><div class="flex-1 text-sm text-gray-700 dark:text-slate-200">Pengingat untuk <b>${escapeHtml(state.currentUser||'')}</b>: ${parts.join(' dan ')}.</div><button onclick="switchView('list')" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold ${danger?'bg-rose-600 hover:bg-rose-700':'bg-amber-600 hover:bg-amber-700'} text-white">Lihat</button><button onclick="dismissDeadlineReminder()" class="shrink-0 w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-gray-400"><span class="material-icons-round text-[18px]">close</span></button></div>`;
+}
+function dismissDeadlineReminder(){ state._deadlineDismissed=true; const box=document.getElementById('deadlineReminder'); if(box){ box.classList.add('hide'); box.innerHTML=''; } }
 
 function injectUtilityClasses(){
   document.querySelectorAll('.filter-select').forEach(el=>el.className+=' bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200 min-w-[140px]');
@@ -528,7 +578,7 @@ function populateUserSelect(){
   if(!(state.options.pic||[]).includes(state.currentUser)) state.currentUser = (state.options.pic||['Nynda'])[0];
   select.value = state.currentUser;
 }
-function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();}
+function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();}
 function populateManagerFocus(){const el=document.getElementById('managerFocusPic');if(!el)return;el.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');el.value=state.managerFocus;}
 function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;applyRoleUI();renderAll();}
 
@@ -536,7 +586,6 @@ function populateModalDropdowns(){
   fillSelect('fieldStatus', state.options.status, null, 'Todo');
   fillSelect('fieldPriority', state.options.priority, null, 'Normal');
   fillSelect('fieldStage', state.options.stage, null);
-  fillSelect('fieldApprovalGate', state.options.approvalGate, null, 'No');
   fillSelect('fieldPlatform', state.options.platform, null);
   fillSelect('fieldPic', state.options.pic, null, state.currentUser);
   const support = document.getElementById('fieldSupport');
@@ -552,6 +601,7 @@ function fillSelect(id, values=[], placeholder=null, defaultValue=''){
 /* ---------- View switching ---------- */
 function switchView(view){
   state.activeView=view;
+  closeMobileSidebar();
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hide'));
   document.getElementById(view+'View').classList.remove('hide');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('nav-active'));
@@ -728,7 +778,7 @@ function renderDeadlineList(tasks){
   document.getElementById('deadlineList').innerHTML = list.length ? list.map(t=>taskMiniCard(t,true)).join('') : emptyState('Tidak ada deadline aktif.');
 }
 function renderRecentList(tasks){
-  const list=[...tasks].sort((a,b)=>String(b.lastUpdate||'').localeCompare(String(a.lastUpdate||''))).slice(0,18);
+  const list=[...tasks].sort((a,b)=>String(b.createdDate||'').localeCompare(String(a.createdDate||''))||String(b.id||'').localeCompare(String(a.id||''))).slice(0,18);
   document.getElementById('recentList').innerHTML = list.length ? list.map(t=>taskMiniCard(t,false)).join('') : emptyState('Belum ada update.');
 }
 function renderStageSummary(tasks){
@@ -822,7 +872,7 @@ function renderTable(){
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
-    <td class="px-4 py-3"><div class="font-medium text-gray-900 dark:text-white line-clamp-1">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')} • ${escapeHtml(t.lastUpdate||'-')}</div></td>
+    <td class="px-4 py-3"><div class="font-medium text-gray-900 dark:text-white line-clamp-1">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}</div></td>
     <td class="px-4 py-3">${inlineSelect('status', t)}</td>
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
     <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
@@ -915,11 +965,76 @@ function rescheduleTask(id, startStr, dueStr){
 }
 
 /* ---------- Communication ---------- */
+/* ---------- Unread komentar (berbasis ACTIVITY log) ---------- */
+function commReadKey(){ return 'tt_comm_read_'+(state.currentUser||'x'); }
+function getCommReadMap(){ try{ return JSON.parse(localStorage.getItem(commReadKey())||'{}')||{}; }catch(e){ return {}; } }
+function setCommReadMap(m){ try{ localStorage.setItem(commReadKey(), JSON.stringify(m)); }catch(e){} }
+function commentEntriesByTask(){
+  const map={};
+  (state.activity||[]).forEach(a=>{
+    if(String(a.action||'').toLowerCase()!=='comment') return;
+    const id=String(a.taskId||''); if(!id) return;
+    (map[id]=map[id]||[]).push({ts:String(a.timestamp||''), user:String(a.user||'')});
+  });
+  return map;
+}
+function latestCommentTs(list){ return (list||[]).reduce((m,c)=>c.ts>m?c.ts:m,''); }
+function unreadCountForTask(id, byTask, readMap){
+  const list=byTask[id]; if(!list||!list.length) return 0;
+  const last=readMap[id]||'';
+  return list.filter(c=>c.ts>last && c.user!==state.currentUser).length;
+}
+function totalUnreadTasks(){
+  const byTask=commentEntriesByTask(), readMap=getCommReadMap();
+  return Object.keys(byTask).reduce((n,id)=>n+(unreadCountForTask(id,byTask,readMap)>0?1:0),0);
+}
+function updateCommNavBadge(){
+  const nav=document.getElementById('nav-communication'); if(!nav) return;
+  let badge=document.getElementById('commNavBadge');
+  if(!badge){ badge=document.createElement('span'); badge.id='commNavBadge'; badge.className='ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold'; nav.appendChild(badge); }
+  const n=totalUnreadTasks();
+  badge.textContent=n; badge.style.display=n>0?'inline-flex':'none';
+}
+function markTaskCommReadFromComments(taskId, comments){
+  if(!taskId) return;
+  const byTask=commentEntriesByTask();
+  const fromComments=(comments||[]).reduce((m,c)=>String(c.timestamp||'')>m?String(c.timestamp||''):m,'');
+  const fromActivity=latestCommentTs(byTask[taskId]);
+  const readMap=getCommReadMap();
+  readMap[taskId]= fromActivity>fromComments ? fromActivity : fromComments;
+  setCommReadMap(readMap);
+  updateCommNavBadge();
+  if(state.activeView==='communication') renderCommunicationTasks();
+}
+function populateCommFilters(){
+  const picSel=document.getElementById('commFilterPic');
+  if(picSel && picSel.options.length<=1){ picSel.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join(''); picSel.value=state.commFilters.pic||''; }
+  const stSel=document.getElementById('commFilterStatus');
+  if(stSel && stSel.options.length<=1){ stSel.innerHTML='<option value="">Semua Status</option>'+(state.options.status||[]).map(s=>`<option value="${escapeAttr(s)}">${escapeHtml(s)}</option>`).join(''); stSel.value=state.commFilters.status||''; }
+}
+function toggleCommUnread(){
+  state.commFilters.unreadOnly=!state.commFilters.unreadOnly;
+  const b=document.getElementById('commUnreadToggle');
+  if(b) b.className='px-2.5 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1 '+(state.commFilters.unreadOnly?'border-rose-300 bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:border-rose-800 dark:text-rose-300':'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300');
+  renderCommunicationTasks();
+}
+function setCommFilterPic(v){ state.commFilters.pic=v; renderCommunicationTasks(); }
+function setCommFilterStatus(v){ state.commFilters.status=v; renderCommunicationTasks(); }
 function renderCommunicationTasks(){
+  populateCommFilters();
   const q=(document.getElementById('commSearch')?.value||'').toLowerCase();
-  const arr=scopedTasks().filter(t=>!q || Object.values(t).join(' ').toLowerCase().includes(q)).sort((a,b)=>String(b.lastUpdate||'').localeCompare(String(a.lastUpdate||''))).slice(0,120);
-  const selected=state.selectedTaskId || (arr[0] && arr[0].id); if(selected && !state.selectedTaskId) selectCommunicationTask(selected);
-  document.getElementById('commTaskList').innerHTML=arr.map(t=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="font-medium text-sm text-gray-900 dark:text-white truncate">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task.');
+  const f=state.commFilters||{unreadOnly:false,pic:'',status:''};
+  const byTask=commentEntriesByTask(), readMap=getCommReadMap();
+  const arr=scopedTasks()
+    .filter(t=>!q || Object.values(t).join(' ').toLowerCase().includes(q))
+    .filter(t=>!f.pic || String(t.pic||'')===f.pic)
+    .filter(t=>!f.status || String(t.status||'')===f.status)
+    .map(t=>({t, unread:unreadCountForTask(t.id, byTask, readMap)}))
+    .filter(o=>!f.unreadOnly || o.unread>0)
+    .sort((a,b)=>((b.unread>0)-(a.unread>0))||String(b.t.createdDate||'').localeCompare(String(a.t.createdDate||''))||String(b.t.id||'').localeCompare(String(a.t.id||'')))
+    .slice(0,120);
+  const selected=state.selectedTaskId || (arr[0] && arr[0].t.id); if(selected && !state.selectedTaskId) selectCommunicationTask(selected);
+  document.getElementById('commTaskList').innerHTML=arr.map(({t,unread})=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="flex items-center gap-2"><div class="font-medium text-sm text-gray-900 dark:text-white truncate flex-1">${escapeHtml(t.taskName||'-')}</div>${unread>0?`<span class="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">${unread}</span>`:''}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task sesuai filter.');
 }
 function selectCommunicationTask(id){state.selectedTaskId=id;loadComments(id);renderCommunicationPanel();}
 function renderCommunicationPanel(){
@@ -930,8 +1045,8 @@ function renderCommunicationPanel(){
 }
 function loadComments(taskId, cb){
   if(!taskId){state.comments=[];renderCommunicationPanel();return;}
-  if(IS_GAS){GAS.withSuccessHandler(c=>{state.comments=c||[];renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast('Gagal memuat komentar: '+(err.message||err),false)).getComments(taskId);}
-  else {state.comments=[{timestamp:'2026-06-17 09:00',author:'Nynda',message:'Pastikan database mengikuti kolom terbaru.'}]; renderCommunicationPanel(); if(cb)cb();}
+  if(IS_GAS){GAS.withSuccessHandler(c=>{state.comments=c||[]; markTaskCommReadFromComments(taskId, state.comments); renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast('Gagal memuat komentar: '+(err.message||err),false)).getComments(taskId);}
+  else {state.comments=[{timestamp:'2026-06-17 09:00',author:'Nynda',message:'Pastikan database mengikuti kolom terbaru.'}]; markTaskCommReadFromComments(taskId, state.comments); renderCommunicationPanel(); if(cb)cb();}
 }
 function sendCommunicationComment(){
   const msg=document.getElementById('commInput').value.trim(); if(!state.selectedTaskId||!msg) return;
@@ -946,8 +1061,8 @@ function openTaskModal(id=''){
   document.getElementById('modalTitle').textContent=t?'Edit Task':'Tambah Task';
   document.getElementById('deleteBtn').classList.toggle('hide',!t);
   setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan'); setVal('fieldTaskName', t?.taskName||'');
-  setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldStartDate', t?.startDate||''); setVal('fieldDueDate', t?.dueDate||'');
-  setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||''); setVal('fieldApprovalGate', t?.approvalGate||'No');
+  setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
+  setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||'');
   setVal('fieldPlatform', t?.platform||''); setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
   const selectedSupport=String(t?.support||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldSupport').options].forEach(o=>o.selected=selectedSupport.includes(o.value));
@@ -957,7 +1072,7 @@ function openTaskModal(id=''){
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),startDate:getVal('fieldStartDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),approvalGate:getVal('fieldApprovalGate'),platform:getVal('fieldPlatform'),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
+function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:getVal('fieldPlatform'),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
 function saveTaskFromModal(){
   const task=modalTask(); if(!task.taskName){showToast('Task Name wajib diisi.',false);return;}
   task.actor=state.currentUser;
@@ -981,12 +1096,20 @@ function sendComment(taskId,message,cb){
 }
 function renderComments(targetId,comments){
   const target=document.getElementById(targetId); if(!target) return;
-  target.innerHTML=(comments&&comments.length)?comments.map(c=>`<div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-3"><div class="flex justify-between gap-3 mb-1"><span class="font-semibold text-sm text-gray-900 dark:text-white flex items-center gap-1.5">${avatar(c.author)}${escapeHtml(c.author||'-')}</span><span class="text-[11px] text-gray-400">${escapeHtml(c.timestamp||'-')}</span></div><div class="text-sm leading-relaxed text-gray-600 dark:text-slate-300">${escapeHtml(c.message||'')}</div></div>`).join(''):emptyState('Belum ada komentar untuk task ini.');
+  if(!comments||!comments.length){ target.innerHTML=emptyState('Belum ada komentar untuk task ini.'); return; }
+  target.innerHTML=comments.map(c=>{
+    const mine=String(c.author||'')===String(state.currentUser||'');
+    const bubble=mine
+      ? 'bg-indigo-600 text-white rounded-2xl rounded-br-sm'
+      : 'bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-bl-sm';
+    const meta=mine?'text-indigo-200':'text-gray-400';
+    return `<div class="flex ${mine?'justify-end':'justify-start'}"><div class="max-w-[80%] ${bubble} px-3 py-2 shadow-sm">${mine?'':`<div class="flex items-center gap-1.5 mb-0.5">${avatar(c.author)}<span class="font-semibold text-[12px] text-gray-900 dark:text-white">${escapeHtml(c.author||'-')}</span></div>`}<div class="text-sm leading-relaxed whitespace-pre-wrap break-words">${escapeHtml(c.message||'')}</div><div class="text-[10px] ${meta} mt-1 text-right">${escapeHtml(c.timestamp||'')}</div></div></div>`;
+  }).join('');
 }
 
 /* ---------- Settings ---------- */
 function renderSettings(){
-  const names={status:'Status',priority:'Priority',stage:'Stage',platform:'Platform',pic:'PIC',support:'Support',approvalGate:'Approval Gate'};
+  const names={status:'Status',priority:'Priority',stage:'Stage',platform:'Platform',pic:'PIC',support:'Support'};
   document.getElementById('settingsGrid').innerHTML=Object.keys(names).map(type=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="p-4 border-b border-gray-100 dark:border-slate-800"><div class="font-semibold text-gray-900 dark:text-white">${names[type]}</div><div class="flex gap-2 mt-2.5"><input id="new-${type}" placeholder="Tambah opsi…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"><button onclick="addOption('${type}')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Add</button></div></div><div class="p-3 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin">${(state.options[type]||[]).map(v=>`<div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800"><span class="font-medium text-sm text-gray-700 dark:text-slate-200">${escapeHtml(v)}</span><button onclick="removeOption('${type}','${escapeAttr(v)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`).join('')}</div></div>`).join('');
 }
 function addOption(type){const input=document.getElementById('new-'+type); const value=input.value.trim(); if(!value)return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).saveOption(type,value);} else {state.options[type]=[...(state.options[type]||[]),value]; renderSettings(); populateModalDropdowns(); renderAll();}}
@@ -1032,8 +1155,8 @@ function runSetup(){
 
 /* ---------- Misc ---------- */
 function exportCsv(){
-  const rows=viewTasks(); const headers=['Task ID','Created Date','Due Date','Start Date','Status','Priority','Task Name','Stage','Platform','PIC','Support','Document','Approval Gate','Last Update','PIC Notes','PM Notes'];
-  const data=rows.map(t=>[t.id,t.createdDate,t.dueDate,t.startDate,t.status,t.priority,t.taskName,t.stage,t.platform,t.pic,t.support,t.document,t.approvalGate,t.lastUpdate,t.picNotes,t.pmNotes]);
+  const rows=viewTasks(); const headers=['Task ID','Created Date','Due Date','Status','Priority','Task Name','Stage','Platform','PIC','Support','Document','PIC Notes','PM Notes'];
+  const data=rows.map(t=>[t.id,t.createdDate,t.dueDate,t.status,t.priority,t.taskName,t.stage,t.platform,t.pic,t.support,t.document,t.picNotes,t.pmNotes]);
   const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='task_tracker_export.csv'; a.click(); URL.revokeObjectURL(a.href);
 }
