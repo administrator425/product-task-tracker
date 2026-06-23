@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Task Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter','ui-sans-serif','system-ui'] } } }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+  <style>
+    /* ---- Gantt (Timeline) theming ---- */
+    #ganttWrap .gantt .grid-background{fill:transparent}
+    #ganttWrap .gantt .grid-row{fill:#ffffff}
+    #ganttWrap .gantt .grid-row:nth-child(even){fill:#f8fafc}
+    #ganttWrap .gantt .row-line{stroke:#eef2f7}
+    #ganttWrap .gantt .tick{stroke:#eef2f7}
+    #ganttWrap .gantt .tick.thick{stroke:#e2e8f0}
+    #ganttWrap .gantt .today-highlight{fill:#eef2ff;opacity:.8}
+    #ganttWrap .gantt .upper-text,#ganttWrap .gantt .lower-text{fill:#64748b;font-size:11px}
+    #ganttWrap .gantt .bar{stroke:none}
+    #ganttWrap .gantt .bar-label{fill:#ffffff;font-weight:600}
+    #ganttWrap .gantt .bar-label.big{fill:#475569}
+    #ganttWrap .gantt .arrow{stroke:#cbd5e1}
+    #ganttWrap .gantt .handle{fill:#1e293b;opacity:.45}
+    #ganttWrap .gantt .popup-wrapper{background:#0f172a;color:#fff;border-radius:8px;box-shadow:0 12px 30px -10px rgba(2,6,23,.5)}
+    .dark #ganttWrap .gantt .grid-row{fill:#0f172a}
+    .dark #ganttWrap .gantt .grid-row:nth-child(even){fill:#131f37}
+    .dark #ganttWrap .gantt .row-line{stroke:#1e293b}
+    .dark #ganttWrap .gantt .tick{stroke:#1e293b}
+    .dark #ganttWrap .gantt .tick.thick{stroke:#334155}
+    .dark #ganttWrap .gantt .today-highlight{fill:#1e293b;opacity:.75}
+    .dark #ganttWrap .gantt .upper-text,.dark #ganttWrap .gantt .lower-text{fill:#94a3b8}
+    .dark #ganttWrap .gantt .bar-label.big{fill:#cbd5e1}
+    .dark #ganttWrap .gantt .handle{fill:#e2e8f0;opacity:.55}
+    /* ---- FullCalendar theming ---- */
+    #calendarRoot{--fc-border-color:#e5e7eb;--fc-page-bg-color:transparent;--fc-neutral-bg-color:#f8fafc;--fc-today-bg-color:#eef2ff;--fc-now-indicator-color:#4f46e5}
+    #calendarRoot .fc{font-size:13px}
+    #calendarRoot .fc .fc-toolbar-title{font-size:1.05rem;font-weight:700;color:#111827}
+    #calendarRoot .fc .fc-button{font-weight:600;text-transform:capitalize;box-shadow:none!important;border-radius:8px}
+    #calendarRoot .fc .fc-button-primary{background:#4f46e5;border-color:#4f46e5}
+    #calendarRoot .fc .fc-button-primary:hover{background:#4338ca;border-color:#4338ca}
+    #calendarRoot .fc .fc-button-primary:disabled{background:#c7d2fe;border-color:#c7d2fe}
+    #calendarRoot .fc .fc-button-primary:not(:disabled).fc-button-active{background:#3730a3;border-color:#3730a3}
+    #calendarRoot .fc .fc-col-header-cell-cushion{color:#64748b;font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.04em;padding:8px 4px}
+    #calendarRoot .fc .fc-daygrid-day-number{color:#334155;font-weight:500;padding:6px}
+    #calendarRoot .fc .fc-day-today .fc-daygrid-day-number{color:#4f46e5;font-weight:700}
+    #calendarRoot .fc .fc-daygrid-day.fc-day-other{background:#f8fafc}
+    #calendarRoot .fc-event{cursor:pointer;border:none;border-radius:6px;padding:1px 5px;font-weight:500;font-size:11px}
+    #calendarRoot .fc .fc-daygrid-more-link{color:#4f46e5;font-weight:600}
+    .dark #calendarRoot{--fc-border-color:#1e293b;--fc-neutral-bg-color:#0f172a;--fc-today-bg-color:#1e293b;--fc-page-bg-color:transparent}
+    .dark #calendarRoot .fc .fc-toolbar-title{color:#f1f5f9}
+    .dark #calendarRoot .fc .fc-col-header-cell-cushion{color:#94a3b8}
+    .dark #calendarRoot .fc .fc-daygrid-day-number{color:#cbd5e1}
+    .dark #calendarRoot .fc .fc-day-today .fc-daygrid-day-number{color:#a5b4fc}
+    .dark #calendarRoot .fc .fc-daygrid-day.fc-day-other{background:#0b1220}
+    .dark #calendarRoot .fc-day-other .fc-daygrid-day-number{color:#475569}
+    .dark #calendarRoot .fc .fc-daygrid-more-link{color:#a5b4fc}
+
+    body{font-family:Inter,system-ui,sans-serif}
+    ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}.dark ::-webkit-scrollbar-thumb{background:#475569}
+    .hide{display:none!important}
+    .scrollbar-thin::-webkit-scrollbar{width:6px;height:6px}
+    .card-drag-ghost{opacity:.4}
+    .card-drag-chosen{box-shadow:0 8px 24px -8px rgba(79,70,229,.45)}
+    .tt-card{transition:box-shadow .15s ease, transform .15s ease}
+    .tt-card:hover{transform:translateY(-1px)}
+    .nav-active{background:#eef2ff;color:#4338ca}
+    .dark .nav-active{background:rgba(67,56,202,.25);color:#c7d2fe}
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 dark:bg-slate-950 dark:text-slate-100 h-screen overflow-hidden">
+
+  <div id="loading" class="fixed inset-0 z-[100] bg-white/90 dark:bg-slate-950/90 flex flex-col items-center justify-center">
+    <div class="w-10 h-10 rounded-full border-[3px] border-indigo-100 border-t-indigo-600 animate-spin mb-4"></div>
+    <div class="font-semibold text-gray-700 dark:text-slate-200">Memuat task tracker…</div>
+    <div class="text-xs text-gray-400 mt-1">Mengambil data dari Spreadsheet</div>
+  </div>
+
+  <div id="toast" class="fixed right-5 bottom-5 z-[120] hide px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium"></div>
+
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-[260px] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 hidden md:flex flex-col shrink-0">
+      <div class="h-16 px-5 flex items-center border-b border-gray-100 dark:border-slate-800">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center mr-2.5">
+          <span class="material-icons-round text-[20px]">task_alt</span>
+        </div>
+        <div>
+          <div class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span></div>
+          <div class="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Divisi Produk</div>
+        </div>
+      </div>
+
+      <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+        <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">space_dashboard</span> Dashboard
+        </button>
+        <button onclick="switchView('kanban')" id="nav-kanban" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">view_kanban</span> Kanban Status
+        </button>
+        <button onclick="switchView('list')" id="nav-list" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">table_rows</span> Task List
+        </button>
+        <button onclick="switchView('timeline')" id="nav-timeline" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">view_timeline</span> Timeline
+        </button>
+        <button onclick="switchView('calendar')" id="nav-calendar" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">calendar_month</span> Calendar
+        </button>
+        <button onclick="switchView('communication')" id="nav-communication" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">forum</span> Komunikasi
+        </button>
+        <button onclick="switchView('activity')" id="nav-activity" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">history_edu</span> Riwayat Aktivitas
+        </button>
+        <button onclick="switchView('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">tune</span> Dropdown Master
+        </button>
+      </nav>
+
+      <div class="p-3 border-t border-gray-100 dark:border-slate-800 space-y-2.5">
+        <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-800/70">
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Mode User</div>
+            <span id="roleBadge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Member</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="userAvatar" class="inline-flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-semibold w-8 h-8 text-xs shrink-0">?</span>
+            <select id="currentUser" onchange="setCurrentUser(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200"></select>
+          </div>
+          <div id="myTasksBadge" class="mt-2 text-[11px] font-medium text-gray-500 dark:text-slate-400"></div>
+        </div>
+        <div id="managerFocusBox" class="hide p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40">
+          <div class="text-[10px] font-bold text-amber-600 dark:text-amber-300 uppercase tracking-widest mb-1.5 flex items-center gap-1"><span class="material-icons-round text-[14px]">supervisor_account</span>Fokus PIC</div>
+          <select id="managerFocusPic" onchange="setManagerFocus(this.value)" class="w-full bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 rounded-lg px-2.5 py-2 text-sm font-medium outline-none"></select>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 flex flex-col min-w-0">
+      <header class="h-16 bg-white/95 dark:bg-slate-900/95 border-b border-gray-200 dark:border-slate-800 px-4 md:px-6 flex items-center justify-between shrink-0 backdrop-blur">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <button onclick="toggleMobileSidebar()" class="md:hidden w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+            <span class="material-icons-round text-[20px]">menu</span>
+          </button>
+          <span id="pageIcon" class="hidden sm:inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">space_dashboard</span></span>
+          <div class="min-w-0">
+            <h1 id="pageTitle" class="text-lg md:text-xl font-semibold tracking-tight text-gray-900 dark:text-white truncate">Dashboard</h1>
+            <p id="pageSubtitle" class="text-xs text-gray-500 hidden sm:block">Pantau progress, deadline, dan komunikasi task tim.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative hidden lg:block">
+            <span class="material-icons-round absolute left-3 top-2.5 text-gray-400 text-[18px]">search</span>
+            <input id="globalSearch" oninput="onSearchInput()" placeholder="Cari task, PIC, dokumen…" class="w-[280px] pl-9 pr-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 border-0 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
+          </div>
+          <button onclick="toggleTheme()" class="w-9 h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center text-gray-500 dark:text-slate-300 hover:bg-gray-50">
+            <span id="themeIcon" class="material-icons-round text-[18px]">dark_mode</span>
+          </button>
+          <button onclick="openTaskModal()" class="h-9 px-3 md:px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center gap-1.5">
+            <span class="material-icons-round text-[18px]">add</span><span class="hidden sm:inline">Tambah Task</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="flex-1 overflow-y-auto p-4 md:p-6">
+        <div id="filterBar" class="hide max-w-[1700px] mx-auto mb-4 flex flex-wrap items-center gap-2"></div>
+        <!-- DASHBOARD -->
+        <div id="dashboardView" class="view space-y-5 max-w-[1500px] mx-auto">
+          <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3" id="kpiGrid"></div>
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div class="xl:col-span-2 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h2 class="font-semibold text-gray-900 dark:text-white">Beban Kerja per PIC</h2>
+                <span class="text-xs text-gray-400 font-medium">Aktif + selesai</span>
+              </div>
+              <div class="h-[320px]"><canvas id="chartPic"></canvas></div>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
+              <h2 class="font-semibold text-gray-900 dark:text-white mb-4">Komposisi Status</h2>
+              <div class="h-[320px]"><canvas id="chartStatus"></canvas></div>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 h-[380px] flex flex-col">
+              <h2 class="font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5 mb-3 text-sm"><span class="material-icons-round text-[18px]">warning_amber</span> Deadline Kritis</h2>
+              <div id="deadlineList" class="space-y-2 overflow-y-auto pr-1 flex-1 scrollbar-thin"></div>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 h-[380px] flex flex-col">
+              <h2 class="font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 mb-3 text-sm"><span class="material-icons-round text-[18px] text-indigo-600">history</span> Update Terakhir</h2>
+              <div id="recentList" class="space-y-2 overflow-y-auto pr-1 flex-1 scrollbar-thin"></div>
+            </div>
+            <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 h-[380px] flex flex-col">
+              <h2 class="font-semibold text-gray-900 dark:text-white flex items-center gap-1.5 mb-3 text-sm"><span class="material-icons-round text-[18px] text-indigo-600">analytics</span> Stage Paling Padat</h2>
+              <div id="stageSummary" class="space-y-3 overflow-y-auto pr-1 flex-1 scrollbar-thin"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KANBAN -->
+        <div id="kanbanView" class="view hide space-y-3 h-full max-w-[1700px] mx-auto">
+          <p class="text-[11px] text-gray-400 font-medium hidden sm:block px-1">Tarik kartu antar kolom untuk mengubah status.</p>
+          <div id="kanbanBoard" class="flex gap-3 overflow-x-auto pb-4 min-h-[calc(100vh-210px)]"></div>
+        </div>
+
+        <!-- LIST -->
+        <div id="listView" class="view hide space-y-4 max-w-[1600px] mx-auto">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm whitespace-nowrap">
+                <thead class="bg-gray-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200 dark:border-slate-700">
+                  <tr>
+                    <th class="px-4 py-3">Task</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Stage</th><th class="px-4 py-3">PIC</th><th class="px-4 py-3">Platform</th><th class="px-4 py-3">Priority</th><th class="px-4 py-3">Due</th><th class="px-4 py-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="taskTable" class="divide-y divide-gray-100 dark:divide-slate-800"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TIMELINE -->
+        <div id="timelineView" class="view hide space-y-4 max-w-[1700px] mx-auto">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="font-medium text-xs flex items-center gap-1.5 text-gray-500"><span class="material-icons-round text-[18px]">view_timeline</span>Skala</span>
+            <button onclick="setGanttMode('Day')" id="gmode-Day" class="gmode px-3 py-1.5 text-sm rounded-lg font-medium border">Hari</button>
+            <button onclick="setGanttMode('Week')" id="gmode-Week" class="gmode px-3 py-1.5 text-sm rounded-lg font-medium border">Minggu</button>
+            <button onclick="setGanttMode('Month')" id="gmode-Month" class="gmode px-3 py-1.5 text-sm rounded-lg font-medium border">Bulan</button>
+            <span class="ml-auto text-[11px] text-gray-400 font-medium hidden sm:inline">Klik bar = detail • tarik/ulur = ubah jadwal</span>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 overflow-x-auto">
+            <div id="ganttWrap"></div>
+          </div>
+        </div>
+
+        <!-- CALENDAR -->
+        <div id="calendarView" class="view hide space-y-4 max-w-[1200px] mx-auto">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4">
+            <div id="calendarRoot"></div>
+          </div>
+          <p class="text-[11px] text-gray-400 font-medium px-1">Task ditempatkan pada rentang Start → Due. Klik untuk detail, tarik untuk menggeser jadwal.</p>
+        </div>
+
+        <!-- COMMUNICATION -->
+        <div id="communicationView" class="view hide max-w-[1200px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 lg:col-span-1 h-[calc(100vh-150px)] flex flex-col">
+            <h2 class="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-1.5 text-sm"><span class="material-icons-round text-[18px] text-indigo-600">forum</span>Pilih Task</h2>
+            <input id="commSearch" oninput="renderCommunicationTasks()" placeholder="Cari task untuk diskusi…" class="w-full px-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 outline-none text-sm mb-3 focus:ring-2 focus:ring-indigo-300">
+            <div id="commTaskList" class="space-y-1.5 overflow-y-auto flex-1 pr-1 scrollbar-thin"></div>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 lg:col-span-2 h-[calc(100vh-150px)] flex flex-col overflow-hidden">
+            <div id="commHeader" class="p-4 border-b border-gray-100 dark:border-slate-800"></div>
+            <div id="commMessages" class="flex-1 overflow-y-auto p-4 space-y-2.5 bg-gray-50/60 dark:bg-slate-950/40 scrollbar-thin"></div>
+            <div class="p-3 border-t border-gray-100 dark:border-slate-800 flex gap-2">
+              <textarea id="commInput" rows="2" placeholder="Tulis komentar/update…" class="flex-1 resize-none rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"></textarea>
+              <button onclick="sendCommunicationComment()" class="px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"><span class="material-icons-round text-[20px]">send</span></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SETTINGS -->
+        <div id="settingsView" class="view hide max-w-[1300px] mx-auto space-y-4">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="flex-1">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">build_circle</span> Inisialisasi Spreadsheet</h2>
+              <p class="text-sm text-gray-500 mt-1">Jalankan sekali setelah deploy untuk memastikan sheet <b>Main</b>, <b>OPTIONS</b>, <b>COMMENTS</b>, <b>ACTIVITY</b>, header, dan dropdown sudah siap. Aman diulang — data yang sudah ada tidak dihapus.</p>
+            </div>
+            <button id="btnSetup" onclick="runSetup()" class="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">play_arrow</span> Jalankan Setup</button>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Dropdown Master</h2>
+            <p class="text-sm text-gray-500 mt-1">Kelola pilihan Status, Priority, Stage, Platform, PIC, Support, Approval Gate. Perubahan diterapkan juga sebagai data validation di Spreadsheet.</p>
+          </div>
+          <div id="settingsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- ACTIVITY -->
+        <div id="activityView" class="view hide max-w-[1300px] mx-auto space-y-4">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 flex flex-wrap items-center gap-3">
+            <div class="flex-1 min-w-[200px]">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Riwayat Aktivitas</h2>
+              <p class="text-sm text-gray-500 mt-0.5">Catatan siapa membuat, mengubah, menghapus task & komentar. Tersimpan di sheet <b>ACTIVITY</b>.</p>
+            </div>
+            <input id="activitySearch" oninput="renderActivity()" placeholder="Cari user / task / aksi…" class="filter-input min-w-[220px]">
+            <button onclick="refreshActivity()" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[16px]">refresh</span> Muat Ulang</button>
+          </div>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm whitespace-nowrap">
+                <thead class="bg-gray-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200 dark:border-slate-700">
+                  <tr><th class="px-4 py-3">Waktu</th><th class="px-4 py-3">User</th><th class="px-4 py-3">Aksi</th><th class="px-4 py-3">Task ID</th><th class="px-4 py-3">Detail</th></tr>
+                </thead>
+                <tbody id="activityTable" class="divide-y divide-gray-100 dark:divide-slate-800"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Task Modal -->
+  <div id="taskModal" class="fixed inset-0 z-[90] hide flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-gray-900/50" onclick="closeTaskModal()"></div>
+    <div class="relative w-full max-w-4xl max-h-[92vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-800 flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+        <div>
+          <h2 id="modalTitle" class="text-base font-semibold text-gray-900 dark:text-white">Tambah Task</h2>
+          <p id="modalSub" class="text-xs text-gray-500 mt-0.5">Isi detail task sesuai database terbaru.</p>
+        </div>
+        <button onclick="closeTaskModal()" class="w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-400"><span class="material-icons-round text-[20px]">close</span></button>
+      </div>
+
+      <div class="overflow-y-auto p-5 scrollbar-thin">
+        <form id="taskForm" onsubmit="event.preventDefault(); saveTaskFromModal();" class="space-y-4">
+          <input type="hidden" id="fieldId">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div class="lg:col-span-2">
+              <label class="form-label">Task Name</label>
+              <input id="fieldTaskName" class="form-control" placeholder="Contoh: QC 50 video pembahasan BAPPENAS" required>
+            </div>
+            <div>
+              <label class="form-label">Task ID</label>
+              <input id="fieldIdDisplay" class="form-control bg-gray-100 dark:bg-slate-800" placeholder="Auto" disabled>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div><label class="form-label">Status</label><select id="fieldStatus" class="form-control"></select></div>
+            <div><label class="form-label">Priority</label><select id="fieldPriority" class="form-control"></select></div>
+            <div><label class="form-label">Stage</label><select id="fieldStage" class="form-control"></select></div>
+            <div><label class="form-label">Approval Gate</label><select id="fieldApprovalGate" class="form-control"></select></div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div><label class="form-label">Platform</label><select id="fieldPlatform" class="form-control"></select></div>
+            <div><label class="form-label">PIC</label><select id="fieldPic" class="form-control"></select></div>
+            <div class="md:col-span-2"><label class="form-label">Support</label><select id="fieldSupport" class="form-control" multiple></select><p class="text-[11px] text-gray-400 mt-1">Ctrl/Cmd untuk pilih lebih dari satu.</p></div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div><label class="form-label">Created Date</label><input id="fieldCreatedDate" type="date" class="form-control"></div>
+            <div><label class="form-label">Start Date</label><input id="fieldStartDate" type="date" class="form-control"></div>
+            <div><label class="form-label">Due Date</label><input id="fieldDueDate" type="date" class="form-control"></div>
+          </div>
+          <div>
+            <label class="form-label">Document</label>
+            <input id="fieldDocument" class="form-control" placeholder="Link Google Docs/Sheets/Canva atau nama dokumen acuan">
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="form-label">PIC Notes</label><textarea id="fieldPicNotes" rows="3" class="form-control" placeholder="Catatan dari PIC…"></textarea></div>
+            <div><label class="form-label">PM Notes</label><textarea id="fieldPmNotes" rows="3" class="form-control" placeholder="Catatan PM/Manager…"></textarea></div>
+          </div>
+        </form>
+
+        <div id="modalCommentsBox" class="hide mt-5 border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
+            <div class="font-semibold text-sm flex items-center gap-1.5 text-gray-900 dark:text-white"><span class="material-icons-round text-[18px] text-indigo-600">chat</span> Komunikasi Task</div>
+          </div>
+          <div id="modalComments" class="p-4 bg-gray-50/60 dark:bg-slate-950/40 max-h-[240px] overflow-y-auto space-y-2.5 scrollbar-thin"></div>
+          <div class="p-3 flex gap-2 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+            <input id="modalCommentInput" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300" placeholder="Tambahkan komentar singkat…">
+            <button onclick="sendModalComment()" class="px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Kirim</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
+        <button id="deleteBtn" onclick="deleteTaskFromModal()" class="hide px-3 py-2 rounded-lg border border-rose-200 text-rose-600 dark:border-rose-900/50 dark:text-rose-400 font-semibold text-sm hover:bg-rose-50">Hapus</button>
+        <div class="ml-auto flex gap-2">
+          <button onclick="closeTaskModal()" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-sm hover:bg-gray-50">Tutup</button>
+          <button onclick="saveTaskFromModal()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Simpan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
+const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
+const API_BASE = '/api/rpc';
+function callApi(action, args){
+  return fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: action, args: args || [] })
+  }).then(function(r){
+    return r.text().then(function(txt){
+      var data = null;
+      try { data = txt ? JSON.parse(txt) : null; } catch(e){ data = null; }
+      if(!r.ok){ throw new Error((data && data.message) || ('HTTP ' + r.status)); }
+      if(data && data.__error){ throw new Error(data.message || 'API error'); }
+      return data;
+    });
+  });
+}
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker'];
+function makeRunner(){
+  var onSuccess = null, onFailure = null;
+  var runner = {
+    withSuccessHandler: function(fn){ onSuccess = fn; return runner; },
+    withFailureHandler: function(fn){ onFailure = fn; return runner; }
+  };
+  BACKEND_ACTIONS.forEach(function(name){
+    runner[name] = function(){
+      var args = Array.prototype.slice.call(arguments);
+      var ok = onSuccess, fail = onFailure;     // snapshot handler chain ini
+      onSuccess = null; onFailure = null;       // reset untuk pemanggilan berikutnya
+      callApi(name, args).then(function(res){ if(ok) ok(res); })
+        .catch(function(err){ if(fail) fail(err); else console.error('[api]', name, err); });
+      return runner;
+    };
+  });
+  return runner;
+}
+// Pakai GAS native bila berjalan di dalam Apps Script; selain itu pakai Vercel API.
+const GAS = GAS_NATIVE || makeRunner();
+const IS_GAS = true; // selalu ada backend sekarang (GAS native ATAU Vercel API)
+const TODAY = new Date(); TODAY.setHours(0,0,0,0);
+let state = {
+  tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
+  managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
+  filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
+  selectedTaskId: null, comments: [], chartPic: null, chartStatus: null, sortables: [],
+  gantt: null, calendar: null, ganttMode: 'Day'
+};
+
+const dummyOptions = {
+  status:['Todo','In progress','Review PM','Hold','Done'], priority:['Urgent','High','Normal','Low'],
+  stage:['RnD','Develop Materi','Develop Soal','QC Konten','Input','Liveclass','Report','Data & Intelligence','Manajemen Sistem','Manajemen Guru'],
+  platform:['All Platform','Cerebrum','JadiASN','JadiPPPK','JadiBUMN','JadiSekdin','JadiBeasiswa','JadiOJK','JadiPCPM','JadiPrajurit','JadiPolisi','Jago TPA','Siadu','Markaz','Toefl Academy'],
+  pic:['Nynda','Andika','Alya','Kiki','Bilar','Ali','Dhea','Uma','Arifah'], support:['Nynda','Andika','Alya','Kiki','Bilar','Ali','Dhea','Uma','Arifah'], approvalGate:['No','Yes','Need Approval','Approved','Rejected']
+};
+const dummyTasks = [
+  {id:'TSK-001',createdDate:'2026-06-02',dueDate:'2026-06-02',startDate:'2026-06-02',status:'Done',priority:'High',taskName:'QC 50 video pembahasan BAPPENAS',stage:'QC Konten',platform:'JadiASN',pic:'Uma',support:'',document:'Paket 5 - M. Alfian',approvalGate:'No',lastUpdate:'2026-06-02 10:10',picNotes:'Selesai QC.',pmNotes:''},
+  {id:'TSK-002',createdDate:'2026-06-03',dueDate:'2026-06-20',startDate:'2026-06-03',status:'In progress',priority:'Urgent',taskName:'Membuat dashboard task tracker divisi produk',stage:'Manajemen Sistem',platform:'All Platform',pic:'Ali',support:'Nynda, Kiki',document:'Spreadsheet Task Management',approvalGate:'Need Approval',lastUpdate:'2026-06-17 09:20',picNotes:'Backend siap.',pmNotes:'Pastikan dropdown ikut database.'},
+  {id:'TSK-003',createdDate:'2026-06-08',dueDate:'2026-06-18',startDate:'2026-06-08',status:'Todo',priority:'Normal',taskName:'Membuat 12 soal TIU ASN',stage:'Develop Soal',platform:'JadiASN',pic:'Andika',support:'Uma',document:'',approvalGate:'No',lastUpdate:'2026-06-16 14:00',picNotes:'',pmNotes:''},
+  {id:'TSK-004',createdDate:'2026-06-10',dueDate:'2026-06-17',startDate:'2026-06-10',status:'Review PM',priority:'High',taskName:'Review materi liveclass numerik',stage:'Liveclass',platform:'JadiASN',pic:'Ali',support:'',document:'',approvalGate:'Need Approval',lastUpdate:'2026-06-17 08:00',picNotes:'Menunggu review PM.',pmNotes:''}
+];
+
+function init() {
+  applyTheme();
+  injectUtilityClasses();
+  if (IS_GAS) {
+    GAS.withSuccessHandler(data => {
+      state.tasks = data.tasks || [];
+      state.options = Object.assign({}, dummyOptions, data.options || {});
+      state.activity = data.activity || [];
+      if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
+      afterLoad();
+    }).withFailureHandler(err => {
+      showToast('Gagal memuat data: ' + (err.message || err), false);
+      state.tasks = []; state.options = dummyOptions; afterLoad();
+    }).getBootstrapData();
+  } else {
+    state.tasks = dummyTasks; state.options = dummyOptions;
+    state.activity = [{timestamp:'2026-06-17 09:20',user:'Ali',action:'Update Task',taskId:'TSK-002',detail:'Backend siap.'}];
+    afterLoad();
+  }
+}
+
+function afterLoad() {
+  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll();
+  if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose);}
+  document.getElementById('loading').classList.add('hide');
+}
+
+/* ---------- Role scoping ---------- */
+function isManager(user){return state.managers.map(m=>String(m).toLowerCase()).includes(String(user||'').toLowerCase());}
+function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
+function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
+function scopedTasks(){
+  if(isManager(state.currentUser)){
+    if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
+    return [...state.tasks];
+  }
+  return state.tasks.filter(t=>ownsTask(t,state.currentUser));
+}
+function applyRoleUI(){
+  const mgr=isManager(state.currentUser);
+  const badge=document.getElementById('roleBadge');
+  if(badge){badge.textContent=mgr?'Manager':'Member'; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+(mgr?'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300');}
+  const av=document.getElementById('userAvatar'); if(av){av.textContent=initials(state.currentUser); av.style.background=avatarBg(state.currentUser); av.style.color=avatarFg(state.currentUser);}
+  document.getElementById('managerFocusBox').classList.toggle('hide',!mgr);
+  document.getElementById('nav-activity').classList.toggle('hide',!mgr);
+  if(!mgr && state.activeView==='activity') switchView('dashboard');
+  if(!mgr) state.managerFocus='';
+  const mine=state.tasks.filter(t=>ownsTask(t,state.currentUser));
+  const mineActive=mine.filter(t=>!isDone(t));
+  const el=document.getElementById('myTasksBadge');
+  if(el) el.textContent = mgr ? `Melihat semua task (${state.tasks.length})` : `${mineActive.length} task aktif Anda • ${mine.length} total`;
+}
+
+/* ---------- Theme / chrome ---------- */
+function applyTheme(){
+  const dark = localStorage.getItem('theme') === 'dark';
+  document.documentElement.classList.toggle('dark', dark);
+  document.body.classList.toggle('bg-gray-50', !dark);
+  const icon = document.getElementById('themeIcon'); if(icon) icon.textContent = dark ? 'light_mode' : 'dark_mode';
+}
+function toggleTheme(){localStorage.setItem('theme', document.documentElement.classList.contains('dark')?'light':'dark'); applyTheme(); renderAll();}
+function toggleMobileSidebar(){const s=document.getElementById('sidebar');['hidden','absolute','z-[80]','h-full','shadow-2xl'].forEach(c=>s.classList.toggle(c));}
+function showToast(msg, ok=true){const el=document.getElementById('toast');el.textContent=msg;el.className='fixed right-5 bottom-5 z-[120] px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium '+(ok?'bg-emerald-600':'bg-rose-600');setTimeout(()=>el.classList.add('hide'),3000);}
+
+function injectUtilityClasses(){
+  document.querySelectorAll('.filter-select').forEach(el=>el.className+=' bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200 min-w-[140px]');
+  document.querySelectorAll('.filter-input').forEach(el=>el.className+=' bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200');
+  document.querySelectorAll('.form-label').forEach(el=>el.className+=' block text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1.5');
+  document.querySelectorAll('.form-control').forEach(el=>el.className+=' w-full rounded-lg bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none px-3 py-2 text-sm');
+}
+
+/* ---------- Selects ---------- */
+function populateUserSelect(){
+  const select = document.getElementById('currentUser');
+  select.innerHTML = (state.options.pic || []).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  if(!(state.options.pic||[]).includes(state.currentUser)) state.currentUser = (state.options.pic||['Nynda'])[0];
+  select.value = state.currentUser;
+}
+function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();}
+function populateManagerFocus(){const el=document.getElementById('managerFocusPic');if(!el)return;el.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');el.value=state.managerFocus;}
+function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;applyRoleUI();renderAll();}
+
+function populateModalDropdowns(){
+  fillSelect('fieldStatus', state.options.status, null, 'Todo');
+  fillSelect('fieldPriority', state.options.priority, null, 'Normal');
+  fillSelect('fieldStage', state.options.stage, null);
+  fillSelect('fieldApprovalGate', state.options.approvalGate, null, 'No');
+  fillSelect('fieldPlatform', state.options.platform, null);
+  fillSelect('fieldPic', state.options.pic, null, state.currentUser);
+  const support = document.getElementById('fieldSupport');
+  support.innerHTML = (state.options.support || state.options.pic || []).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+}
+function fillSelect(id, values=[], placeholder=null, defaultValue=''){
+  const el=document.getElementById(id); if(!el) return;
+  const old=el.value;
+  el.innerHTML = (placeholder!==null?`<option value="">${placeholder}</option>`:'') + values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(old && values.includes(old)) el.value=old; else if(defaultValue) el.value=defaultValue;
+}
+
+/* ---------- View switching ---------- */
+function switchView(view){
+  state.activeView=view;
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hide'));
+  document.getElementById(view+'View').classList.remove('hide');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('nav-active'));
+  const nav=document.getElementById('nav-'+view); if(nav) nav.classList.add('nav-active');
+  const meta={
+    dashboard:['Dashboard','Pantau progress, deadline, dan komunikasi task tim.','space_dashboard'],
+    kanban:['Kanban Status','Kelola task per status. Tarik kartu untuk ubah status.','view_kanban'],
+    list:['Task List','Lihat dan filter seluruh database task.','table_rows'],
+    timeline:['Timeline','Lihat jadwal task sebagai Gantt. Tarik untuk ubah jadwal.','view_timeline'],
+    calendar:['Calendar','Lihat task pada kalender berdasarkan Start → Due.','calendar_month'],
+    communication:['Komunikasi','Diskusi dan update per task tersimpan di sheet COMMENTS.','forum'],
+    settings:['Dropdown Master','Kelola pilihan dropdown untuk UI dan Spreadsheet.','tune'],
+    activity:['Riwayat Aktivitas','Audit log perubahan task untuk pemantauan manager.','history_edu']
+  };
+  document.getElementById('pageTitle').textContent=meta[view][0];
+  document.getElementById('pageSubtitle').textContent=meta[view][1];
+  document.querySelector('#pageIcon .material-icons-round').textContent=meta[view][2];
+  renderAll();
+}
+
+// Hanya render view yang sedang tampil → hemat kerja & lebih cepat.
+function renderActiveView(){
+  const v=state.activeView;
+  if(v==='dashboard') renderDashboard();
+  else if(v==='kanban') renderBoard();
+  else if(v==='list') renderTable();
+  else if(v==='timeline') renderTimeline();
+  else if(v==='calendar') renderCalendar();
+  else if(v==='communication') renderCommunicationTasks();
+  else if(v==='settings') renderSettings();
+  else if(v==='activity') renderActivity();
+}
+function renderAll(){ renderActiveView(); renderFilterBar(); }
+let _searchTimer=null;
+function onSearchInput(){clearTimeout(_searchTimer); _searchTimer=setTimeout(renderActiveView,220);}
+function mergeTask(task){if(!task)return; const i=state.tasks.findIndex(x=>x.id===task.id); if(i>=0) state.tasks[i]=task; else state.tasks.push(task);}
+function globalSearchValue(){return (document.getElementById('globalSearch')?.value || document.getElementById('mobileSearch')?.value || '').toLowerCase().trim();}
+function applyQuickFilter(arr){
+  const qf=state.quickFilter;
+  if(qf==='mine') return arr.filter(t=>ownsTask(t,state.currentUser));
+  if(qf==='overdue') return arr.filter(isLate);
+  if(qf==='duesoon') return arr.filter(t=>!isDone(t)&&daysToDue(t)>=0&&daysToDue(t)<=3);
+  return arr;
+}
+function baseFilteredTasks(){
+  let scoped=applyQuickFilter(scopedTasks());
+  const q=globalSearchValue();
+  if(!q) return scoped;
+  return scoped.filter(t => Object.values(t).join(' ').toLowerCase().includes(q));
+}
+function same(a,b){return String(a||'').toLowerCase()===String(b||'').toLowerCase();}
+
+/* ---------- Quick filter pills ---------- */
+const QUICK_PILLS=[['all','Semua'],['mine','Tugas Saya'],['overdue','Overdue'],['duesoon','Due ≤3 hari']];
+function applyQuickFilterCount(qf){
+  const arr=scopedTasks();
+  if(qf==='mine') return arr.filter(t=>ownsTask(t,state.currentUser)).length;
+  if(qf==='overdue') return arr.filter(isLate).length;
+  if(qf==='duesoon') return arr.filter(t=>!isDone(t)&&daysToDue(t)>=0&&daysToDue(t)<=3).length;
+  return arr.length;
+}
+function setQuickFilter(qf){state.quickFilter=qf; renderAll();}
+
+/* ---------- Shared filter bar (multi-select) ---------- */
+const FILTER_FIELDS=[['status','Status'],['priority','Priority'],['stage','Stage'],['platform','Platform'],['pic','PIC']];
+const FILTER_VIEWS=['kanban','list','timeline','calendar'];
+function fieldFilterDropdown(field,label){
+  const opts=state.options[field]||[];
+  const sel=state.filters[field]||[];
+  const open=state.openFilter===field;
+  const items=opts.length?opts.map(o=>`<label class="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer text-sm">
+      <input type="checkbox" ${sel.some(v=>same(v,o))?'checked':''} onchange="toggleFieldFilter('${field}','${escapeAttr(o)}',this.checked)" class="accent-indigo-600 w-4 h-4">
+      <span class="truncate">${escapeHtml(o)}</span></label>`).join(''):'<div class="px-3 py-2 text-xs text-gray-400">Tidak ada opsi</div>';
+  const active=sel.length>0;
+  const btn=active?'border-indigo-300 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800':'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 hover:bg-gray-50';
+  return `<div class="ms relative">
+    <button type="button" onclick="toggleMsPanel('${field}')" class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-medium ${btn}">
+      <span>${label}</span>${active?`<span class="text-[11px] bg-indigo-600 text-white rounded-full px-1.5 leading-5">${sel.length}</span>`:''}
+      <span class="material-icons-round text-[16px] opacity-60">expand_more</span>
+    </button>
+    <div class="ms-panel ${open?'':'hide'} absolute left-0 top-full mt-1 z-40 w-56 max-h-72 overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl py-1 scrollbar-thin">${items}</div>
+  </div>`;
+}
+function renderFilterBar(){
+  const bar=document.getElementById('filterBar'); if(!bar) return;
+  const show=FILTER_VIEWS.includes(state.activeView);
+  bar.classList.toggle('hide',!show);
+  if(!show){bar.innerHTML=''; return;}
+  const counts={all:applyQuickFilterCount('all'),mine:applyQuickFilterCount('mine'),overdue:applyQuickFilterCount('overdue'),duesoon:applyQuickFilterCount('duesoon')};
+  const pills=QUICK_PILLS.map(([k,label])=>{
+    const on=state.quickFilter===k;
+    const base=on?'bg-indigo-600 text-white border-indigo-600':'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:bg-gray-50';
+    return `<button onclick="setQuickFilter('${k}')" class="px-3 h-9 text-sm rounded-full font-medium border ${base}">${label}<span class="ml-1.5 text-[11px] opacity-70">${counts[k]}</span></button>`;
+  }).join('');
+  const ms=FILTER_FIELDS.map(([f,l])=>fieldFilterDropdown(f,l)).join('');
+  const totalSel=FILTER_FIELDS.reduce((n,[f])=>n+(state.filters[f]||[]).length,0)+(state.filters.dueStart?1:0)+(state.filters.dueEnd?1:0);
+  bar.innerHTML=`
+    <div class="flex items-center gap-1.5 flex-wrap">${pills}</div>
+    <span class="w-px h-6 bg-gray-200 dark:bg-slate-700 mx-1 hidden md:inline-block"></span>
+    <div class="flex items-center gap-1.5 flex-wrap">${ms}
+      <input type="date" value="${state.filters.dueStart}" onchange="setDueFilter('dueStart',this.value)" title="Due dari" class="h-9 px-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-600 dark:text-slate-300">
+      <input type="date" value="${state.filters.dueEnd}" onchange="setDueFilter('dueEnd',this.value)" title="Due sampai" class="h-9 px-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-gray-600 dark:text-slate-300">
+      ${totalSel?`<button onclick="resetFilters()" class="h-9 px-3 rounded-lg border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-sm font-medium hover:bg-rose-50 dark:hover:bg-rose-900/20 flex items-center gap-1"><span class="material-icons-round text-[15px]">filter_alt_off</span>Reset</button>`:''}
+    </div>
+    <input id="mobileSearch" oninput="document.getElementById('globalSearch').value=this.value;onSearchInput()" placeholder="Cari…" class="lg:hidden h-9 px-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm flex-1 min-w-[140px]">
+    ${state.activeView==='list'?`<button onclick="exportCsv()" class="ml-auto h-9 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[16px]">download</span> CSV</button>`:''}`;
+}
+function toggleMsPanel(field){state.openFilter=(state.openFilter===field?'':field); renderFilterBar();}
+function toggleFieldFilter(field,value,checked){
+  const arr=state.filters[field]; const i=arr.findIndex(v=>same(v,value));
+  if(checked && i<0) arr.push(value); else if(!checked && i>=0) arr.splice(i,1);
+  renderFilterBar(); renderActiveView();
+}
+function setDueFilter(key,val){state.filters[key]=val; renderFilterBar(); renderActiveView();}
+function resetFilters(){state.filters={status:[],priority:[],stage:[],platform:[],pic:[],dueStart:'',dueEnd:''}; state.openFilter=''; renderFilterBar(); renderActiveView();}
+function msOutsideClose(e){if(!state.openFilter) return; if(e.target && e.target.isConnected===false) return; if(!e.target.closest('.ms')){state.openFilter=''; renderFilterBar();}}
+
+/* ---------- Field filtering applied to Kanban/List/Timeline/Calendar ---------- */
+function applyFieldFilters(arr){
+  const f=state.filters;
+  if(f.status.length) arr=arr.filter(t=>f.status.some(v=>same(t.status,v)));
+  if(f.priority.length) arr=arr.filter(t=>f.priority.some(v=>same(t.priority,v)));
+  if(f.stage.length) arr=arr.filter(t=>f.stage.some(v=>same(t.stage,v)));
+  if(f.platform.length) arr=arr.filter(t=>f.platform.some(v=>same(t.platform,v)));
+  if(f.pic.length) arr=arr.filter(t=>f.pic.some(v=>ownsTask(t,v)));
+  if(f.dueStart) arr=arr.filter(t=>t.dueDate && t.dueDate>=f.dueStart);
+  if(f.dueEnd) arr=arr.filter(t=>t.dueDate && t.dueDate<=f.dueEnd);
+  return arr;
+}
+function viewTasks(){return applyFieldFilters(baseFilteredTasks());}
+
+/* ---------- Quick inline update (1 field, ringan) ---------- */
+function quickUpdate(ev, id, field, value){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  const prev=t[field]; if(same(prev,value)) return;
+  t[field]=value; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
+  if(IS_GAS){
+    GAS.withSuccessHandler(res=>{
+      if(!res || !res.success){showToast((res&&res.message)||'Gagal menyimpan',false); t[field]=prev; renderAll(); return;}
+      mergeTask(res.task); showToast(res.message); applyRoleUI(); renderAll();
+    }).withFailureHandler(err=>{showToast(err.message||err,false); t[field]=prev; renderAll();}).quickUpdateField(id, field, value, state.currentUser);
+  } else { showToast('Tersimpan (preview)'); applyRoleUI(); renderAll(); }
+}
+function inlineSelect(field, t){
+  const opts=state.options[field]||[];
+  const cur=t[field]||'';
+  const options=opts.map(o=>`<option value="${escapeAttr(o)}" ${same(o,cur)?'selected':''}>${escapeHtml(o)}</option>`).join('');
+  return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
+}
+
+/* ---------- Dashboard ---------- */
+function renderDashboard(){
+  const tasks=baseFilteredTasks();
+  const active=tasks.filter(t=>!isDone(t));
+  const late=active.filter(isLate);
+  const dueToday=active.filter(t=>daysToDue(t)===0);
+  const urgent=active.filter(t=>['urgent','high'].includes(String(t.priority||'').toLowerCase()));
+  const dueSoon=active.filter(t=>daysToDue(t)>=0 && daysToDue(t)<=3);
+  const data=[
+    ['Total Task',tasks.length,'receipt_long','bg-gray-100 text-gray-600'],
+    ['Aktif',active.length,'pending_actions','bg-indigo-100 text-indigo-600'],
+    ['Done',tasks.filter(isDone).length,'task_alt','bg-emerald-100 text-emerald-600'],
+    ['Overdue',late.length,'warning_amber','bg-rose-100 text-rose-600'],
+    ['Due Hari Ini',dueToday.length,'today','bg-pink-100 text-pink-600'],
+    ['Urgent/High',urgent.length,'priority_high','bg-orange-100 text-orange-600'],
+    ['Due ≤ 3 hari',dueSoon.length,'event_busy','bg-violet-100 text-violet-600']
+  ];
+  document.getElementById('kpiGrid').innerHTML=data.map(k=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4"><div class="w-9 h-9 ${k[3]} rounded-lg flex items-center justify-center mb-3"><span class="material-icons-round text-[18px]">${k[2]}</span></div><div class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">${k[0]}</div><div class="text-2xl font-bold mt-0.5 text-gray-900 dark:text-white">${k[1]}</div></div>`).join('');
+  renderDeadlineList(active); renderRecentList(tasks); renderStageSummary(tasks); renderCharts();
+}
+function renderDeadlineList(tasks){
+  const list=tasks.filter(t=>t.dueDate).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)).slice(0,20);
+  document.getElementById('deadlineList').innerHTML = list.length ? list.map(t=>taskMiniCard(t,true)).join('') : emptyState('Tidak ada deadline aktif.');
+}
+function renderRecentList(tasks){
+  const list=[...tasks].sort((a,b)=>String(b.lastUpdate||'').localeCompare(String(a.lastUpdate||''))).slice(0,18);
+  document.getElementById('recentList').innerHTML = list.length ? list.map(t=>taskMiniCard(t,false)).join('') : emptyState('Belum ada update.');
+}
+function renderStageSummary(tasks){
+  const counts=countBy(tasks,'stage'); const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const max=Math.max(...entries.map(e=>e[1]),1);
+  document.getElementById('stageSummary').innerHTML=entries.length?entries.map(([name,val])=>`<div><div class="flex justify-between text-sm font-medium mb-1"><span class="text-gray-700 dark:text-slate-300">${escapeHtml(name||'Tanpa Stage')}</span><span class="text-gray-500">${val}</span></div><div class="h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden"><div class="h-full bg-indigo-600 rounded-full" style="width:${(val/max)*100}%"></div></div></div>`).join(''):emptyState('Belum ada data stage.');
+}
+function renderCharts(){
+  const tasks=baseFilteredTasks();
+  const dark=document.documentElement.classList.contains('dark');
+  Chart.defaults.color=dark?'#cbd5e1':'#64748b'; Chart.defaults.borderColor=dark?'#1e293b':'#e5e7eb'; Chart.defaults.font.family='Inter';
+  const byPic=countBy(tasks,'pic'); const picLabels=Object.keys(byPic); const picVals=Object.values(byPic);
+  const picCtx=document.getElementById('chartPic'); if(picCtx){ if(state.chartPic) state.chartPic.destroy(); state.chartPic=new Chart(picCtx,{type:'bar',data:{labels:picLabels,datasets:[{label:'Jumlah Task',data:picVals,borderRadius:8,backgroundColor:'#4f46e5'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}}}});}
+  const byStatus=countBy(tasks,'status'); const sLabels=Object.keys(byStatus); const sVals=Object.values(byStatus);
+  const stCtx=document.getElementById('chartStatus'); if(stCtx){ if(state.chartStatus) state.chartStatus.destroy(); state.chartStatus=new Chart(stCtx,{type:'doughnut',data:{labels:sLabels,datasets:[{data:sVals,backgroundColor:sLabels.map(statusHex),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:14}}}}});}
+}
+
+/* ---------- Kanban (per Status) ---------- */
+function renderBoard(){
+  state.sortables.forEach(s=>{try{s.destroy();}catch(e){}}); state.sortables=[];
+  const tasks=viewTasks();
+  const statuses=[...(state.options.status||[])];
+  if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status)))) statuses.push('Tanpa Status');
+  const board=document.getElementById('kanbanBoard');
+  board.innerHTML=statuses.map(status=>{
+    const col=tasks.filter(t=>matchStatus(t,status,statuses)).sort(cardSort);
+    const m=statusMeta(status);
+    return `<div class="w-[300px] shrink-0 flex flex-col rounded-xl p-2 bg-gray-100 dark:bg-slate-900/70 max-h-[calc(100vh-200px)]">
+      <div class="flex items-center justify-between px-2 py-1.5 mb-1 shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="w-2 h-2 rounded-full shrink-0" style="background:${m.dot}"></span>
+          <h3 class="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-slate-300 truncate">${escapeHtml(status)}</h3>
+          <span class="text-[11px] font-semibold text-gray-500 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-1.5 rounded">${col.length}</span>
+        </div>
+      </div>
+      <div class="kanban-col space-y-2 rounded-lg p-1 flex-1 overflow-y-auto scrollbar-thin min-h-[120px]" data-status="${escapeAttr(status)}">
+        ${col.length?col.map(taskCard).join(''):'<div class="rounded-md border-2 border-dashed border-gray-300 dark:border-slate-700 py-7 text-center"><p class="text-xs text-gray-400 italic">Tarik kartu ke sini</p></div>'}
+      </div>
+    </div>`;
+  }).join('');
+  if(window.Sortable){
+    board.querySelectorAll('.kanban-col').forEach(colEl=>{
+      const s=Sortable.create(colEl,{group:'tasks',draggable:'[data-task-id]',animation:150,ghostClass:'card-drag-ghost',chosenClass:'card-drag-chosen',
+        onEnd:(evt)=>{
+          const id=evt.item.dataset.taskId;
+          const newStatus=evt.to.dataset.status;
+          if(evt.from===evt.to){return;}
+          if(newStatus==='Tanpa Status'){renderBoard();return;}
+          updateTaskStatus(id,newStatus);
+        }});
+      state.sortables.push(s);
+    });
+  }
+}
+function priorityWeight(p){const v=String(p||'').toLowerCase(); return v==='urgent'?0:v==='high'?1:v==='normal'?2:v==='low'?3:4;}
+function cardSort(a,b){
+  const pw=priorityWeight(a.priority)-priorityWeight(b.priority); if(pw) return pw;
+  const ad=a.dueDate||'9999-12-31', bd=b.dueDate||'9999-12-31'; if(ad!==bd) return ad<bd?-1:1;
+  return String(b.lastUpdate||'').localeCompare(String(a.lastUpdate||''));
+}
+function matchStatus(t,status,statuses){
+  if(status==='Tanpa Status') return !t.status || !statuses.filter(s=>s!=='Tanpa Status').some(s=>same(s,t.status));
+  return same(t.status,status);
+}
+function taskCard(t){
+  const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
+  const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'');
+  return `<div data-task-id="${escapeAttr(t.id)}" onclick="openTaskModal('${escapeAttr(t.id)}')" class="tt-card bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ring-gray-200 dark:ring-slate-700 hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
+    <div class="flex items-start justify-between gap-2">
+      <span class="text-[10px] font-mono text-gray-400">${escapeHtml(t.id||'-')}</span>
+      ${overdue?'<span class="text-[10px] font-bold text-rose-600">TELAT</span>':(today?'<span class="text-[10px] font-bold text-pink-600">HARI INI</span>':(t.approvalGate && !same(t.approvalGate,'No')?`<span class="text-[10px] font-semibold text-amber-600">${escapeHtml(t.approvalGate)}</span>`:''))}
+    </div>
+    <p class="text-[13px] font-medium leading-snug text-gray-800 dark:text-slate-100 mt-1.5 line-clamp-3">${escapeHtml(t.taskName||'-')}</p>
+    <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
+      ${priorityPill(t.priority)}
+      ${t.platform?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform)}</span>`:''}
+      ${t.stage?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage)}</span>`:''}
+    </div>
+    <div class="flex items-center justify-between mt-3 pt-2.5 border-t border-gray-100 dark:border-slate-700">
+      ${avatar(t.pic)}
+      <span class="text-[11px] font-medium ${overdue?'text-rose-600':'text-gray-500'} flex items-center gap-1">${t.dueDate?'<span class="material-icons-round text-[13px]">event</span>'+formatDateHuman(t.dueDate):'No due'}</span>
+    </div>
+  </div>`;
+}
+function updateTaskStatus(id,newStatus){ quickUpdate(null, id, 'status', newStatus); }
+
+/* ---------- List ---------- */
+function renderTable(){
+  const tasks=viewTasks();
+  const rows=tasks.map(t=>{
+    const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
+    const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
+    return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
+    <td class="px-4 py-3"><div class="font-medium text-gray-900 dark:text-white line-clamp-1">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')} • ${escapeHtml(t.lastUpdate||'-')}</div></td>
+    <td class="px-4 py-3">${inlineSelect('status', t)}</td>
+    <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
+    <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
+    <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform||'-')}</td>
+    <td class="px-4 py-3">${inlineSelect('priority', t)}</td>
+    <td class="px-4 py-3 font-medium ${overdue?'text-rose-600':(today?'text-pink-600':'text-gray-600 dark:text-slate-300')}">${t.dueDate?formatDateHuman(t.dueDate):'-'}</td>
+    <td class="px-4 py-3 text-right"><span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Buka</span></td>
+  </tr>`;}).join('');
+  document.getElementById('taskTable').innerHTML=rows || `<tr><td colspan="8" class="px-4 py-14 text-center text-gray-400 font-medium">Tidak ada task sesuai filter.</td></tr>`;
+}
+
+/* ---------- Timeline (Gantt) ---------- */
+function slug(s){return String(s||'tanpa-status').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'tanpa-status';}
+function fmtDate(d){if(!d)return''; if(typeof d==='string')return d.slice(0,10); const dt=(d instanceof Date)?d:new Date(d); if(isNaN(dt))return''; const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),day=String(dt.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day;}
+function addDaysStr(s,n){const d=new Date(String(s).slice(0,10)+'T00:00:00'); if(isNaN(d))return s; d.setDate(d.getDate()+n); return fmtDate(d);}
+function setGanttMode(m){state.ganttMode=m; renderTimeline();}
+function updateGanttModeButtons(){['Day','Week','Month'].forEach(m=>{const b=document.getElementById('gmode-'+m); if(!b)return; const on=state.ganttMode===m; b.className='gmode px-3 py-1.5 text-sm rounded-lg font-medium border '+(on?'bg-indigo-600 text-white border-indigo-600':'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:bg-gray-50');});}
+function renderTimeline(){
+  updateGanttModeButtons();
+  const wrap=document.getElementById('ganttWrap'); if(!wrap) return;
+  const tasks=viewTasks().filter(t=>t.dueDate||t.startDate);
+  if(!window.Gantt){wrap.innerHTML=emptyState('Komponen timeline belum termuat. Pastikan ada koneksi internet, lalu muat ulang.'); return;}
+  if(!tasks.length){wrap.innerHTML=emptyState('Tidak ada task dengan tanggal untuk ditampilkan.'); state.gantt=null; return;}
+  wrap.innerHTML='<svg id="ganttSvg"></svg>';
+  const colorById={}; tasks.forEach(t=>{colorById[String(t.id)]=statusHex(t.status);});
+  const data=tasks.map(t=>{
+    let start=t.startDate||t.createdDate||t.dueDate;
+    let end=t.dueDate||start;
+    start=fmtDate(start); end=fmtDate(end);
+    if(end<start) end=start;
+    return {id:String(t.id), name:(t.taskName||t.id||'').slice(0,60), start:start, end:end, progress:isDone(t)?100:0, custom_class:'gv-'+slug(t.status)};
+  });
+  try{
+    state.gantt=new Gantt('#ganttSvg', data, {
+      view_mode: state.ganttMode, bar_height: 22, bar_corner_radius: 6, padding: 18,
+      on_click: task=>openTaskModal(task.id),
+      on_date_change: (task,start,end)=>rescheduleTask(task.id, fmtDate(start), fmtDate(end)),
+      custom_popup_html: task=>`<div class="px-3 py-2 text-xs"><div class="font-semibold mb-0.5">${escapeHtml(task.name)}</div><div style="opacity:.8">${task.start} → ${task.end}</div></div>`
+    });
+    requestAnimationFrame(()=>colorizeGantt(colorById));
+    setTimeout(()=>colorizeGantt(colorById),60);
+  }catch(e){ wrap.innerHTML=emptyState('Gagal memuat timeline: '+(e.message||e)); }
+}
+function colorizeGantt(colorById){
+  const wrap=document.getElementById('ganttWrap'); if(!wrap) return;
+  wrap.querySelectorAll('.bar-wrapper').forEach(w=>{
+    const id=w.getAttribute('data-id'); const hex=colorById[id]; if(!hex) return;
+    const bar=w.querySelector('.bar'); if(bar){bar.style.fill=hex; bar.style.stroke='none';}
+    const prog=w.querySelector('.bar-progress'); if(prog) prog.style.fill=shadeColor(hex,-16);
+  });
+}
+
+/* ---------- Calendar ---------- */
+function renderCalendar(){
+  const el=document.getElementById('calendarRoot'); if(!el) return;
+  if(!window.FullCalendar){el.innerHTML=emptyState('Komponen kalender belum termuat. Pastikan ada koneksi internet, lalu muat ulang.'); return;}
+  if(state.calendar){try{state.calendar.destroy();}catch(e){} state.calendar=null;}
+  el.innerHTML='';
+  const tasks=viewTasks().filter(t=>t.dueDate||t.startDate);
+  const events=tasks.map(t=>{
+    const start=fmtDate(t.startDate||t.dueDate);
+    const due=fmtDate(t.dueDate||t.startDate);
+    const end=addDaysStr(due,1); // FullCalendar end eksklusif
+    const hex=statusHex(t.status);
+    return {id:String(t.id), title:(t.taskName||t.id), start:start, end:end, allDay:true, backgroundColor:hex, borderColor:hex, textColor:'#ffffff'};
+  });
+  try{
+    state.calendar=new FullCalendar.Calendar(el,{
+      initialView:'dayGridMonth', height:'auto', editable:true, eventStartEditable:true, eventDurationEditable:true,
+      firstDay:1, events:events,
+      headerToolbar:{left:'prev,next today',center:'title',right:''},
+      eventClick:info=>{if(info.jsEvent&&info.jsEvent.preventDefault)info.jsEvent.preventDefault(); openTaskModal(info.event.id);},
+      eventDrop:info=>{const s=fmtDate(info.event.start); const e=info.event.end?addDaysStr(fmtDate(info.event.end),-1):s; rescheduleTask(info.event.id,s,e);},
+      eventResize:info=>{const s=fmtDate(info.event.start); const e=info.event.end?addDaysStr(fmtDate(info.event.end),-1):s; rescheduleTask(info.event.id,s,e);}
+    });
+    state.calendar.render();
+  }catch(e){ el.innerHTML=emptyState('Gagal memuat kalender: '+(e.message||e)); }
+}
+
+function rescheduleTask(id, startStr, dueStr){
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  const ps=t.startDate, pd=t.dueDate;
+  t.startDate=startStr; t.dueDate=dueStr; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
+  if(IS_GAS){
+    GAS.withSuccessHandler(res=>{
+      if(!res || !res.success){showToast((res&&res.message)||'Gagal menyimpan jadwal',false); t.startDate=ps; t.dueDate=pd; renderAll(); return;}
+      mergeTask(res.task); showToast(res.message); applyRoleUI(); renderAll();
+    }).withFailureHandler(err=>{showToast(err.message||err,false); t.startDate=ps; t.dueDate=pd; renderAll();}).quickUpdateDates(id, startStr, dueStr, state.currentUser);
+  } else { showToast('Jadwal diperbarui (preview)'); renderAll(); }
+}
+
+/* ---------- Communication ---------- */
+function renderCommunicationTasks(){
+  const q=(document.getElementById('commSearch')?.value||'').toLowerCase();
+  const arr=scopedTasks().filter(t=>!q || Object.values(t).join(' ').toLowerCase().includes(q)).sort((a,b)=>String(b.lastUpdate||'').localeCompare(String(a.lastUpdate||''))).slice(0,120);
+  const selected=state.selectedTaskId || (arr[0] && arr[0].id); if(selected && !state.selectedTaskId) selectCommunicationTask(selected);
+  document.getElementById('commTaskList').innerHTML=arr.map(t=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="font-medium text-sm text-gray-900 dark:text-white truncate">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task.');
+}
+function selectCommunicationTask(id){state.selectedTaskId=id;loadComments(id);renderCommunicationPanel();}
+function renderCommunicationPanel(){
+  const t=state.tasks.find(x=>x.id===state.selectedTaskId);
+  if(!t){document.getElementById('commHeader').innerHTML='<div class="font-medium text-gray-400 text-sm">Pilih task terlebih dahulu.</div>';document.getElementById('commMessages').innerHTML='';return;}
+  document.getElementById('commHeader').innerHTML=`<div class="flex items-start justify-between gap-3"><div><div class="text-[11px] font-mono text-gray-400">${escapeHtml(t.id)}</div><div class="font-semibold text-base mt-0.5 text-gray-900 dark:text-white">${escapeHtml(t.taskName)}</div><div class="text-xs text-gray-500 mt-1">PIC: <b>${escapeHtml(t.pic||'-')}</b> • Stage: <b>${escapeHtml(t.stage||'-')}</b></div></div>${statusChip(t.status)}</div>`;
+  renderComments('commMessages', state.comments);
+}
+function loadComments(taskId, cb){
+  if(!taskId){state.comments=[];renderCommunicationPanel();return;}
+  if(IS_GAS){GAS.withSuccessHandler(c=>{state.comments=c||[];renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast('Gagal memuat komentar: '+(err.message||err),false)).getComments(taskId);}
+  else {state.comments=[{timestamp:'2026-06-17 09:00',author:'Nynda',message:'Pastikan database mengikuti kolom terbaru.'}]; renderCommunicationPanel(); if(cb)cb();}
+}
+function sendCommunicationComment(){
+  const msg=document.getElementById('commInput').value.trim(); if(!state.selectedTaskId||!msg) return;
+  sendComment(state.selectedTaskId,msg,()=>{document.getElementById('commInput').value='';});
+}
+
+/* ---------- Task Modal ---------- */
+function openTaskModal(id=''){
+  populateModalDropdowns();
+  const t=id?state.tasks.find(x=>x.id===id):null;
+  document.getElementById('taskModal').classList.remove('hide');
+  document.getElementById('modalTitle').textContent=t?'Edit Task':'Tambah Task';
+  document.getElementById('deleteBtn').classList.toggle('hide',!t);
+  setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan'); setVal('fieldTaskName', t?.taskName||'');
+  setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldStartDate', t?.startDate||''); setVal('fieldDueDate', t?.dueDate||'');
+  setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||''); setVal('fieldApprovalGate', t?.approvalGate||'No');
+  setVal('fieldPlatform', t?.platform||''); setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
+  const selectedSupport=String(t?.support||'').split(',').map(x=>x.trim()).filter(Boolean);
+  [...document.getElementById('fieldSupport').options].forEach(o=>o.selected=selectedSupport.includes(o.value));
+  document.getElementById('modalCommentsBox').classList.toggle('hide',!t);
+  if(t){loadModalComments(t.id);}
+}
+function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
+function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
+function getVal(id){return document.getElementById(id)?.value || '';}
+function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),startDate:getVal('fieldStartDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),approvalGate:getVal('fieldApprovalGate'),platform:getVal('fieldPlatform'),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
+function saveTaskFromModal(){
+  const task=modalTask(); if(!task.taskName){showToast('Task Name wajib diisi.',false);return;}
+  task.actor=state.currentUser;
+  document.getElementById('loading').classList.remove('hide');
+  if(IS_GAS){GAS.withSuccessHandler(res=>{document.getElementById('loading').classList.add('hide'); if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).saveTask(task);}
+  else { if(!task.id) task.id='TSK-'+String(state.tasks.length+1).padStart(3,'0'); task.lastUpdate=todayStr()+' 10:00'; task.support=task.support.join(', '); const idx=state.tasks.findIndex(t=>t.id===task.id); if(idx>=0) state.tasks[idx]=task; else state.tasks.push(task); document.getElementById('loading').classList.add('hide'); showToast('Task tersimpan (preview).'); closeTaskModal(); applyRoleUI(); renderAll(); }
+}
+function deleteTaskFromModal(){
+  const id=getVal('fieldId'); if(!id || !confirm('Hapus task '+id+'?')) return;
+  if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteTask(id,state.currentUser);}
+  else {state.tasks=state.tasks.filter(t=>t.id!==id);showToast('Task dihapus (preview).');closeTaskModal();applyRoleUI();renderAll();}
+}
+function loadModalComments(id){
+  if(IS_GAS){GAS.withSuccessHandler(c=>renderComments('modalComments',c||[])).withFailureHandler(err=>showToast('Gagal memuat komentar: '+(err.message||err),false)).getComments(id);}
+  else renderComments('modalComments',[{timestamp:'2026-06-17 09:00',author:'Nynda',message:'Komentar contoh di mode preview.'}]);
+}
+function sendModalComment(){const id=getVal('fieldId'); const msg=document.getElementById('modalCommentInput').value.trim(); if(!id||!msg)return; sendComment(id,msg,()=>{document.getElementById('modalCommentInput').value=''; loadModalComments(id);});}
+function sendComment(taskId,message,cb){
+  if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} showToast(res.message); state.comments=res.comments||[]; renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId,author:state.currentUser,message});}
+  else {state.comments.push({timestamp:todayStr()+' 12:00',author:state.currentUser,message}); renderCommunicationPanel(); showToast('Komentar tersimpan (preview).'); if(cb)cb();}
+}
+function renderComments(targetId,comments){
+  const target=document.getElementById(targetId); if(!target) return;
+  target.innerHTML=(comments&&comments.length)?comments.map(c=>`<div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg p-3"><div class="flex justify-between gap-3 mb-1"><span class="font-semibold text-sm text-gray-900 dark:text-white flex items-center gap-1.5">${avatar(c.author)}${escapeHtml(c.author||'-')}</span><span class="text-[11px] text-gray-400">${escapeHtml(c.timestamp||'-')}</span></div><div class="text-sm leading-relaxed text-gray-600 dark:text-slate-300">${escapeHtml(c.message||'')}</div></div>`).join(''):emptyState('Belum ada komentar untuk task ini.');
+}
+
+/* ---------- Settings ---------- */
+function renderSettings(){
+  const names={status:'Status',priority:'Priority',stage:'Stage',platform:'Platform',pic:'PIC',support:'Support',approvalGate:'Approval Gate'};
+  document.getElementById('settingsGrid').innerHTML=Object.keys(names).map(type=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="p-4 border-b border-gray-100 dark:border-slate-800"><div class="font-semibold text-gray-900 dark:text-white">${names[type]}</div><div class="flex gap-2 mt-2.5"><input id="new-${type}" placeholder="Tambah opsi…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"><button onclick="addOption('${type}')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Add</button></div></div><div class="p-3 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin">${(state.options[type]||[]).map(v=>`<div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800"><span class="font-medium text-sm text-gray-700 dark:text-slate-200">${escapeHtml(v)}</span><button onclick="removeOption('${type}','${escapeAttr(v)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`).join('')}</div></div>`).join('');
+}
+function addOption(type){const input=document.getElementById('new-'+type); const value=input.value.trim(); if(!value)return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).saveOption(type,value);} else {state.options[type]=[...(state.options[type]||[]),value]; renderSettings(); populateModalDropdowns(); renderAll();}}
+function removeOption(type,value){if(!confirm('Nonaktifkan opsi '+value+'?'))return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption(type,value);} else {state.options[type]=(state.options[type]||[]).filter(v=>v!==value); renderSettings(); renderAll();}}
+
+/* ---------- Activity ---------- */
+function renderActivity(){
+  const tbody=document.getElementById('activityTable'); if(!tbody) return;
+  const q=(document.getElementById('activitySearch')?.value||'').toLowerCase().trim();
+  let rows=[...(state.activity||[])];
+  if(q) rows=rows.filter(r=>[r.timestamp,r.user,r.action,r.taskId,r.detail].join(' ').toLowerCase().includes(q));
+  const actionPill=a=>{const v=String(a||'').toLowerCase();let c='bg-gray-100 text-gray-700';if(v.includes('create'))c='bg-emerald-100 text-emerald-700';else if(v.includes('update'))c='bg-blue-100 text-blue-700';else if(v.includes('delete'))c='bg-rose-100 text-rose-700';else if(v.includes('comment'))c='bg-amber-100 text-amber-700';return `<span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${c}">${escapeHtml(a||'-')}</span>`;};
+  tbody.innerHTML=rows.length?rows.map(r=>`<tr class="hover:bg-gray-50 dark:hover:bg-slate-800/70"><td class="px-4 py-3 text-gray-500 font-medium">${escapeHtml(r.timestamp||'-')}</td><td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(r.user)}<span class="font-medium text-gray-800 dark:text-slate-200">${escapeHtml(r.user||'-')}</span></div></td><td class="px-4 py-3">${actionPill(r.action)}</td><td class="px-4 py-3 font-mono text-gray-500">${escapeHtml(r.taskId||'-')}</td><td class="px-4 py-3 max-w-[420px] truncate" title="${escapeAttr(r.detail||'')}">${escapeHtml(r.detail||'-')}</td></tr>`).join(''):`<tr><td colspan="5" class="px-4 py-14 text-center text-gray-400 font-medium">Belum ada aktivitas tercatat.</td></tr>`;
+}
+function refreshActivity(){
+  if(IS_GAS){GAS.withSuccessHandler(a=>{state.activity=a||[];renderActivity();showToast('Riwayat aktivitas dimuat ulang.');}).withFailureHandler(err=>showToast(err.message||err,false)).getActivityLog(200);}
+  else renderActivity();
+}
+
+/* ---------- Setup / inisialisasi spreadsheet ---------- */
+function runSetup(){
+  if(!confirm('Jalankan inisialisasi spreadsheet sekarang?\n\nMembuat sheet Main, OPTIONS, COMMENTS, ACTIVITY beserta header & dropdown bila belum ada. Data yang sudah ada TIDAK dihapus.')) return;
+  const btn=document.getElementById('btnSetup');
+  const orig=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true; btn.classList.add('opacity-60','cursor-not-allowed'); btn.innerHTML='<span class="material-icons-round text-[18px]">hourglass_top</span> Menyiapkan…';}
+  function restore(){ if(btn){btn.disabled=false; btn.classList.remove('opacity-60','cursor-not-allowed'); btn.innerHTML=orig;} }
+  GAS.withSuccessHandler(res=>{
+    restore();
+    showToast((res&&res.message)||'Setup selesai.', !(res&&res.success===false));
+    // Muat ulang data agar sheet/dropdown terbaru langsung tampil.
+    GAS.withSuccessHandler(data=>{
+      state.tasks=data.tasks||[];
+      state.options=Object.assign({},dummyOptions,data.options||{});
+      state.activity=data.activity||[];
+      if(data.meta&&data.meta.managers&&data.meta.managers.length) state.managers=data.meta.managers;
+      afterLoad();
+    }).withFailureHandler(()=>{}).getBootstrapData();
+  }).withFailureHandler(err=>{
+    restore();
+    showToast('Setup gagal: '+(err.message||err), false);
+  }).setupTaskTracker();
+}
+
+/* ---------- Misc ---------- */
+function exportCsv(){
+  const rows=viewTasks(); const headers=['Task ID','Created Date','Due Date','Start Date','Status','Priority','Task Name','Stage','Platform','PIC','Support','Document','Approval Gate','Last Update','PIC Notes','PM Notes'];
+  const data=rows.map(t=>[t.id,t.createdDate,t.dueDate,t.startDate,t.status,t.priority,t.taskName,t.stage,t.platform,t.pic,t.support,t.document,t.approvalGate,t.lastUpdate,t.picNotes,t.pmNotes]);
+  const csv=[headers,...data].map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='task_tracker_export.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------- Helpers ---------- */
+function isDone(t){return String(t.status||'').toLowerCase()==='done';}
+function isLate(t){return !isDone(t) && t.dueDate && parseDate(t.dueDate)<TODAY;}
+function daysToDue(t){if(!t.dueDate)return 9999; return Math.ceil((parseDate(t.dueDate)-TODAY)/86400000);}
+function parseDate(s){const d=new Date(s+'T00:00:00'); return isNaN(d)?new Date(8640000000000000):d;}
+function todayStr(){const d=new Date(); return d.toISOString().slice(0,10);}
+function formatDateHuman(s){if(!s)return'-'; const d=parseDate(s); return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});}
+function countBy(arr,key){return arr.reduce((a,t)=>{const k=t[key]||'Tanpa Data'; a[k]=(a[k]||0)+1; return a;},{});}
+
+// SATU sumber warna status untuk kanban, list, chart, timeline, & calendar.
+const STATUS_PALETTE={
+  'todo':'#6366f1','to do':'#6366f1','backlog':'#6366f1',
+  'in progress':'#3b82f6','in-progress':'#3b82f6','progress':'#3b82f6',
+  'review pm':'#f59e0b','review':'#f59e0b','in review':'#f59e0b',
+  'hold':'#a855f7','on hold':'#a855f7',
+  'done':'#22c55e','selesai':'#22c55e',
+  'tanpa status':'#94a3b8','no status':'#94a3b8'
+};
+const STATUS_FALLBACK=['#0ea5e9','#14b8a6','#ec4899','#f97316','#8b5cf6','#84cc16','#06b6d4','#ef4444'];
+function statusHex(s){
+  const k=String(s||'').toLowerCase().trim();
+  if(STATUS_PALETTE[k]) return STATUS_PALETTE[k];
+  if(!k) return '#94a3b8';
+  let h=0; for(let i=0;i<k.length;i++) h=(h*31+k.charCodeAt(i))>>>0;
+  return STATUS_FALLBACK[h%STATUS_FALLBACK.length];
+}
+function statusMeta(s){return {dot:statusHex(s)};}
+function shadeColor(hex,percent){
+  const n=parseInt(String(hex).replace('#',''),16); if(isNaN(n))return hex;
+  let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  r=Math.max(0,Math.min(255,Math.round(r+(percent/100)*255)));
+  g=Math.max(0,Math.min(255,Math.round(g+(percent/100)*255)));
+  b=Math.max(0,Math.min(255,Math.round(b+(percent/100)*255)));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+function statusChip(status){const hex=statusHex(status); return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700"><span class="w-1.5 h-1.5 rounded-full" style="background:${hex}"></span>${escapeHtml(status||'No Status')}</span>`;}
+function priorityPill(text){if(!text)return''; const v=String(text).toLowerCase(); let cls='bg-gray-50 border-gray-200 text-gray-700 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200'; if(v==='urgent')cls='bg-red-50 border-red-200 text-red-700'; else if(v==='high')cls='bg-orange-50 border-orange-200 text-orange-700'; else if(v==='normal')cls='bg-indigo-50 border-indigo-200 text-indigo-700'; return `<span class="inline-flex items-center h-5 px-1.5 rounded border text-[11px] font-semibold ${cls}">${escapeHtml(text)}</span>`;}
+function taskMiniCard(t,showDue){return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 cursor-pointer hover:bg-gray-100"><div class="flex justify-between gap-3 items-start"><div class="font-medium text-sm leading-snug line-clamp-2 text-gray-800 dark:text-slate-100">${escapeHtml(t.taskName||'-')}</div>${statusChip(t.status)}</div><div class="mt-1.5 text-[11px] text-gray-500 font-medium flex justify-between items-center"><span class="flex items-center gap-1.5">${avatar(t.pic)} ${escapeHtml(t.platform||'-')}</span><span class="${isLate(t)?'text-rose-600':''}">${showDue?formatDateHuman(t.dueDate):escapeHtml(t.lastUpdate||'-')}</span></div></div>`;}
+function emptyState(text){return `<div class="h-full min-h-[120px] flex items-center justify-center text-center text-gray-400 font-medium text-sm p-6">${escapeHtml(text)}</div>`;}
+
+const AV_PALETTE=[['#e0e7ff','#4338ca'],['#fee2e2','#b91c1c'],['#ffedd5','#c2410c'],['#fef9c3','#a16207'],['#dcfce7','#15803d'],['#cffafe','#0e7490'],['#f3e8ff','#7e22ce'],['#fce7f3','#be185d']];
+function avHash(name){let h=0;const s=String(name||'');for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h%AV_PALETTE.length;}
+function avatarBg(name){return AV_PALETTE[avHash(name)][0];}
+function avatarFg(name){return AV_PALETTE[avHash(name)][1];}
+function initials(name){const s=String(name||'').trim(); if(!s)return'?'; const p=s.split(/\s+/); return (p.length>1?p[0][0]+p[1][0]:s.slice(0,2)).toUpperCase();}
+function avatar(name){if(!name)return '<span class="inline-flex items-center justify-center rounded-full bg-gray-100 text-gray-400 w-6 h-6 text-[10px] font-semibold">–</span>'; return `<span class="inline-flex items-center justify-center rounded-full w-6 h-6 text-[10px] font-semibold" style="background:${avatarBg(name)};color:${avatarFg(name)}" title="${escapeAttr(name)}">${escapeHtml(initials(name))}</span>`;}
+function escapeHtml(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function escapeAttr(s){return escapeHtml(s).replace(/`/g,'&#96;');}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

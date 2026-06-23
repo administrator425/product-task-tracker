@@ -1,0 +1,16 @@
+{
+  "name": "task-tracker-vercel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Product Task Tracker — UI statis + Vercel serverless API yang menulis ke Google Spreadsheet yang sama (pengganti deploy Apps Script).",
+  "scripts": {
+    "dev": "vercel dev",
+    "test": "node test/logic.test.js"
+  },
+  "dependencies": {
+    "googleapis": "^173.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
