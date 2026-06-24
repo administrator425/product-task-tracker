@@ -437,7 +437,7 @@ function callApi(action, args){
 function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },50); }
 function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
 // Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
-var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' };
+var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' };
 function applyEmailUser(email){ var u=EMAIL_TO_USER[String(email||'').trim().toLowerCase()]; if(u){ try{ localStorage.setItem('tt_current_user', u); }catch(e){} } }
 function submitLogin(){
   var email=(document.getElementById('loginEmail')||{}).value||'';
