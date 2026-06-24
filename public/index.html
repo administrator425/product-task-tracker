@@ -73,6 +73,9 @@
     body{font-family:Inter,system-ui,sans-serif}
     ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}.dark ::-webkit-scrollbar-thumb{background:#475569}
     .hide{display:none!important}
+    .dark select{color:#e2e8f0}
+    .dark select option{background-color:#1e293b;color:#e2e8f0}
+    .dark .form-control,.dark .filter-input,.dark .filter-select{color:#e2e8f0}
     .scrollbar-thin::-webkit-scrollbar{width:6px;height:6px}
     .card-drag-ghost{opacity:.4}
     .card-drag-chosen{box-shadow:0 8px 24px -8px rgba(79,70,229,.45)}
@@ -99,8 +102,9 @@
         <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">lock</span></div>
         <div class="text-lg font-bold text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span></div>
       </div>
-      <p class="text-sm text-gray-500 mb-4">Masukkan password tim untuk mengakses.</p>
+      <p class="text-sm text-gray-500 mb-4">Masukkan email &amp; password tim untuk mengakses.</p>
       <form onsubmit="event.preventDefault(); submitLogin();">
+        <input id="loginEmail" type="email" placeholder="Email (mis. nama@cerebrum.id)" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 mb-2 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
         <input id="loginPw" type="password" placeholder="Password" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
         <div id="loginErr" class="hide text-sm text-rose-600 mt-2">Password salah. Coba lagi.</div>
         <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk</button>
@@ -197,6 +201,7 @@
 
       <section class="flex-1 overflow-y-auto p-4 md:p-6">
         <div id="deadlineReminder" class="hide max-w-[1700px] mx-auto mb-4"></div>
+        <div id="deadlineFocusBar" class="hide max-w-[1700px] mx-auto mb-4"></div>
         <div id="filterBar" class="hide max-w-[1700px] mx-auto mb-4 flex flex-wrap items-center gap-2"></div>
         <!-- DASHBOARD -->
         <div id="dashboardView" class="view space-y-5 max-w-[1500px] mx-auto">
@@ -240,7 +245,7 @@
         <div id="listView" class="view hide space-y-4 max-w-[1600px] mx-auto">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden">
             <div class="overflow-x-auto">
-              <table class="w-full text-left text-sm whitespace-nowrap">
+              <table class="w-full text-left text-sm">
                 <thead class="bg-gray-50 dark:bg-slate-800 text-xs uppercase tracking-wider text-gray-500 font-semibold border-b border-gray-200 dark:border-slate-700">
                   <tr>
                     <th class="px-4 py-3">Task</th><th class="px-4 py-3">Status</th><th class="px-4 py-3">Stage</th><th class="px-4 py-3">PIC</th><th class="px-4 py-3">Platform</th><th class="px-4 py-3">Priority</th><th class="px-4 py-3">Due</th><th class="px-4 py-3 text-right">Aksi</th>
@@ -368,7 +373,7 @@
             <div><label class="form-label">Stage</label><select id="fieldStage" class="form-control"></select></div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div><label class="form-label">Platform</label><select id="fieldPlatform" class="form-control"></select></div>
+            <div><label class="form-label">Platform</label><select id="fieldPlatform" class="form-control" multiple></select><p class="text-[11px] text-gray-400 mt-1">Ctrl/Cmd untuk pilih lebih dari satu.</p></div>
             <div><label class="form-label">PIC</label><select id="fieldPic" class="form-control"></select></div>
             <div class="md:col-span-2"><label class="form-label">Support</label><select id="fieldSupport" class="form-control" multiple></select><p class="text-[11px] text-gray-400 mt-1">Ctrl/Cmd untuk pilih lebih dari satu.</p></div>
           </div>
@@ -431,11 +436,15 @@ function callApi(action, args){
 }
 function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },50); }
 function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
+// Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
+var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' };
+function applyEmailUser(email){ var u=EMAIL_TO_USER[String(email||'').trim().toLowerCase()]; if(u){ try{ localStorage.setItem('tt_current_user', u); }catch(e){} } }
 function submitLogin(){
+  var email=(document.getElementById('loginEmail')||{}).value||'';
   var pw=(document.getElementById('loginPw')||{}).value||'';
   fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json','x-app-password':pw},body:JSON.stringify({action:'login',args:[]})})
     .then(function(r){ return r.json(); }).then(function(d){
-      if(d && d.success){ try{ sessionStorage.setItem('tt_app_pw', pw); }catch(e){} location.reload(); }
+      if(d && d.success){ try{ sessionStorage.setItem('tt_app_pw', pw); localStorage.setItem('tt_user_email', email); }catch(e){} applyEmailUser(email); location.reload(); }
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
@@ -466,7 +475,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commFilters: {unreadOnly:false, pic:'', status:''}, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -505,7 +514,7 @@ function init() {
 }
 
 function afterLoad() {
-  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder();
+  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad();
   if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); });}
   document.getElementById('loading').classList.add('hide');
 }
@@ -560,9 +569,17 @@ function renderDeadlineReminder(){
   if(today.length) parts.push(`<b>${today.length}</b> jatuh tempo hari ini`);
   const danger=overdue.length>0;
   box.classList.remove('hide');
-  box.innerHTML=`<div class="flex items-center gap-3 p-3 rounded-xl border ${danger?'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-900/40':'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40'}"><span class="material-icons-round ${danger?'text-rose-600':'text-amber-600'}">${danger?'warning':'schedule'}</span><div class="flex-1 text-sm text-gray-700 dark:text-slate-200">Pengingat untuk <b>${escapeHtml(state.currentUser||'')}</b>: ${parts.join(' dan ')}.</div><button onclick="switchView('list')" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold ${danger?'bg-rose-600 hover:bg-rose-700':'bg-amber-600 hover:bg-amber-700'} text-white">Lihat</button><button onclick="dismissDeadlineReminder()" class="shrink-0 w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-gray-400"><span class="material-icons-round text-[18px]">close</span></button></div>`;
+  box.innerHTML=`<div class="flex items-center gap-3 p-3 rounded-xl border ${danger?'bg-rose-50 border-rose-200 dark:bg-rose-900/20 dark:border-rose-900/40':'bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40'}"><span class="material-icons-round ${danger?'text-rose-600':'text-amber-600'}">${danger?'warning':'schedule'}</span><div class="flex-1 text-sm text-gray-700 dark:text-slate-200">Pengingat untuk <b>${escapeHtml(state.currentUser||'')}</b>: ${parts.join(' dan ')}.</div><button onclick="focusDeadlines()" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold ${danger?'bg-rose-600 hover:bg-rose-700':'bg-amber-600 hover:bg-amber-700'} text-white">Lihat</button><button onclick="dismissDeadlineReminder()" class="shrink-0 w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-gray-400"><span class="material-icons-round text-[18px]">close</span></button></div>`;
 }
 function dismissDeadlineReminder(){ state._deadlineDismissed=true; const box=document.getElementById('deadlineReminder'); if(box){ box.classList.add('hide'); box.innerHTML=''; } }
+function focusDeadlines(){ state.deadlineFocus=true; switchView('list'); }
+function clearDeadlineFocus(){ state.deadlineFocus=false; renderDeadlineFocusBar(); renderAll(); }
+function renderDeadlineFocusBar(){
+  const b=document.getElementById('deadlineFocusBar'); if(!b) return;
+  if(!state.deadlineFocus){ b.classList.add('hide'); b.innerHTML=''; return; }
+  b.classList.remove('hide');
+  b.innerHTML=`<div class="flex items-center gap-3 p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800"><span class="material-icons-round text-indigo-600 text-[18px]">center_focus_strong</span><div class="flex-1 text-sm text-indigo-800 dark:text-indigo-200">Mode fokus deadline: hanya menampilkan task <b>overdue</b> &amp; <b>jatuh tempo hari ini</b>.</div><button onclick="clearDeadlineFocus()" class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Tampilkan semua</button></div>`;
+}
 
 function injectUtilityClasses(){
   document.querySelectorAll('.filter-select').forEach(el=>el.className+=' bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200 min-w-[140px]');
@@ -586,7 +603,8 @@ function populateModalDropdowns(){
   fillSelect('fieldStatus', state.options.status, null, 'Todo');
   fillSelect('fieldPriority', state.options.priority, null, 'Normal');
   fillSelect('fieldStage', state.options.stage, null);
-  fillSelect('fieldPlatform', state.options.platform, null);
+  const _platSel=document.getElementById('fieldPlatform');
+  if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   fillSelect('fieldPic', state.options.pic, null, state.currentUser);
   const support = document.getElementById('fieldSupport');
   support.innerHTML = (state.options.support || state.options.pic || []).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
@@ -602,6 +620,7 @@ function fillSelect(id, values=[], placeholder=null, defaultValue=''){
 function switchView(view){
   state.activeView=view;
   closeMobileSidebar();
+  renderDeadlineFocusBar();
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hide'));
   document.getElementById(view+'View').classList.remove('hide');
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('nav-active'));
@@ -731,7 +750,11 @@ function applyFieldFilters(arr){
   if(f.dueEnd) arr=arr.filter(t=>t.dueDate && t.dueDate<=f.dueEnd);
   return arr;
 }
-function viewTasks(){return applyFieldFilters(baseFilteredTasks());}
+function viewTasks(){
+  let arr=applyFieldFilters(baseFilteredTasks());
+  if(state.deadlineFocus) arr=arr.filter(t=>isLate(t) || (!isDone(t)&&daysToDue(t)===0));
+  return arr;
+}
 
 /* ---------- Quick inline update (1 field, ringan) ---------- */
 function quickUpdate(ev, id, field, value){
@@ -750,7 +773,7 @@ function inlineSelect(field, t){
   const opts=state.options[field]||[];
   const cur=t[field]||'';
   const options=opts.map(o=>`<option value="${escapeAttr(o)}" ${same(o,cur)?'selected':''}>${escapeHtml(o)}</option>`).join('');
-  return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
+  return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium text-gray-700 dark:text-slate-200 bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
 }
 
 /* ---------- Dashboard ---------- */
@@ -800,8 +823,10 @@ function renderCharts(){
 function renderBoard(){
   state.sortables.forEach(s=>{try{s.destroy();}catch(e){}}); state.sortables=[];
   const tasks=viewTasks();
-  const statuses=[...(state.options.status||[])];
-  if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status)))) statuses.push('Tanpa Status');
+  let statuses=[...(state.options.status||[])];
+  if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status))) && !statuses.some(s=>same(s,'Tanpa Status'))) statuses.push('Tanpa Status');
+  const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Done','Hold'];
+  statuses.sort((a,b)=>{const ia=KANBAN_ORDER.findIndex(o=>same(o,a)),ib=KANBAN_ORDER.findIndex(o=>same(o,b));return (ia<0?99:ia)-(ib<0?99:ib);});
   const board=document.getElementById('kanbanBoard');
   board.innerHTML=statuses.map(status=>{
     const col=tasks.filter(t=>matchStatus(t,status,statuses)).sort(cardSort);
@@ -872,7 +897,7 @@ function renderTable(){
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
-    <td class="px-4 py-3"><div class="font-medium text-gray-900 dark:text-white line-clamp-1">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}</div></td>
+    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}</div></td>
     <td class="px-4 py-3">${inlineSelect('status', t)}</td>
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
     <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
@@ -988,6 +1013,7 @@ function totalUnreadTasks(){
   const byTask=commentEntriesByTask(), readMap=getCommReadMap();
   return Object.keys(byTask).reduce((n,id)=>n+(unreadCountForTask(id,byTask,readMap)>0?1:0),0);
 }
+function notifyUnreadOnLoad(){ const n=totalUnreadTasks(); if(n>0) showToast('Ada '+n+' task dengan komentar baru untuk Anda. Cek menu Komunikasi.', true); }
 function updateCommNavBadge(){
   const nav=document.getElementById('nav-communication'); if(!nav) return;
   let badge=document.getElementById('commNavBadge');
@@ -1063,7 +1089,9 @@ function openTaskModal(id=''){
   setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan'); setVal('fieldTaskName', t?.taskName||'');
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
   setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||'');
-  setVal('fieldPlatform', t?.platform||''); setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
+  setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
+  const selectedPlatform=String(t?.platform||'').split(',').map(x=>x.trim()).filter(Boolean);
+  [...document.getElementById('fieldPlatform').options].forEach(o=>o.selected=selectedPlatform.includes(o.value));
   const selectedSupport=String(t?.support||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldSupport').options].forEach(o=>o.selected=selectedSupport.includes(o.value));
   document.getElementById('modalCommentsBox').classList.toggle('hide',!t);
@@ -1072,7 +1100,7 @@ function openTaskModal(id=''){
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:getVal('fieldPlatform'),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
+function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
 function saveTaskFromModal(){
   const task=modalTask(); if(!task.taskName){showToast('Task Name wajib diisi.',false);return;}
   task.actor=state.currentUser;
