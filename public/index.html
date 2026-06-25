@@ -148,6 +148,9 @@
         <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">space_dashboard</span> Dashboard
         </button>
+        <button onclick="switchView('extdash')" id="nav-extdash" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">dashboard_customize</span> Dashboard Lain
+        </button>
         <button onclick="switchView('kanban')" id="nav-kanban" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">view_kanban</span> Kanban Status
         </button>
@@ -321,6 +324,13 @@
         </div>
 
         <!-- SETTINGS -->
+        <!-- DASHBOARD LAIN (tautan ke dashboard eksternal) -->
+        <div id="extdashView" class="view hide max-w-[1500px] mx-auto space-y-4">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4">
+            <p class="text-sm text-gray-500">Kumpulan dashboard & monitoring lain (di luar task tracker). Klik untuk membuka di tab baru.</p>
+          </div>
+          <div id="extdashGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+        </div>
         <div id="settingsView" class="view hide max-w-[1300px] mx-auto space-y-4">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3">
             <div class="flex-1">
@@ -715,6 +725,7 @@ function switchView(view){
   const nav=document.getElementById('nav-'+view); if(nav) nav.classList.add('nav-active');
   const meta={
     dashboard:['Dashboard','Pantau progress, deadline, dan komunikasi task tim.','space_dashboard'],
+    extdash:['Dashboard Lain','Kumpulan dashboard & monitoring eksternal.','dashboard_customize'],
     kanban:['Kanban Status','Kelola task per status. Tarik kartu untuk ubah status.','view_kanban'],
     list:['Task List','Lihat dan filter seluruh database task.','table_rows'],
     timeline:['Timeline','Lihat jadwal task sebagai Gantt. Tarik untuk ubah jadwal.','view_timeline'],
@@ -740,6 +751,7 @@ function renderActiveView(){
   else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
   else if(v==='settings'){ renderSettings(); renderPinAdmin(); }
   else if(v==='activity') renderActivity();
+  else if(v==='extdash') renderExternalDashboards();
 }
 function renderAll(){ renderActiveView(); renderFilterBar(); }
 let _searchTimer=null;
@@ -1246,6 +1258,15 @@ function renderComments(targetId,comments){
 }
 
 /* ---------- Settings ---------- */
+// Daftar dashboard eksternal. Tambah baris baru di sini untuk dashboard lain ke depannya.
+const EXTERNAL_DASHBOARDS=[
+  {title:'Monitoring Liveclass', desc:'Pantau jadwal & progress liveclass divisi produk.', icon:'live_tv', url:'https://script.google.com/a/macros/officecerebrum.com/s/AKfycbyT316LqY077YmfhPCAzEgyw9yUQ-pscC_hcW_e1T3mRliSZBhdXQPWxxorwkxD5FDLMA/exec'}
+  // Contoh tambah: ,{title:'Nama Dashboard', desc:'Keterangan', icon:'dashboard', url:'https://...'}
+];
+function renderExternalDashboards(){
+  const grid=document.getElementById('extdashGrid'); if(!grid) return;
+  grid.innerHTML = (EXTERNAL_DASHBOARDS&&EXTERNAL_DASHBOARDS.length) ? EXTERNAL_DASHBOARDS.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-center gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white">${escapeHtml(d.title||'Dashboard')}</div></div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
+}
 function renderPinAdmin(){
   const card=document.getElementById('pinAdminCard'); if(!card) return;
   if(String(state.currentUser||'').toLowerCase()!=='dev'){ card.classList.add('hide'); return; }
