@@ -38,8 +38,8 @@ const HANDLERS = {
   setUserPin: (user, pin) => backend.setUserPin(user, pin),
   deleteUserPin: (user) => backend.deleteUserPin(user),
   listPinUsers: () => backend.listPinUsers(),
-  addUserLink: (user, title, url) => backend.addUserLink(user, title, url),
-  updateUserLink: (user, row, title, url) => backend.updateUserLink(user, row, title, url),
+  addUserLink: (user, title, url, folder) => backend.addUserLink(user, title, url, folder),
+  updateUserLink: (user, row, title, url, folder) => backend.updateUserLink(user, row, title, url, folder),
   deleteUserLink: (user, row) => backend.deleteUserLink(user, row),
 };
 

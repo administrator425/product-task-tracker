@@ -336,15 +336,21 @@
         </div>
         <!-- LINK SAYA (link pribadi per mode user) -->
         <div id="mylinksView" class="view hide max-w-[1100px] mx-auto space-y-4">
-          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4">
-            <div class="flex flex-col sm:flex-row gap-2">
-              <input id="newLinkTitle" placeholder="Judul (mis. Drive Data Analyst)" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
-              <input id="newLinkUrl" placeholder="https://..." class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
-              <button onclick="addLink()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shrink-0">Tambah Link</button>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 space-y-3">
+            <div class="relative">
+              <span class="material-icons-round text-[18px] text-gray-400 absolute left-3 top-1/2 -translate-y-1/2">search</span>
+              <input id="linkSearch" oninput="renderMyLinks()" placeholder="Cari link (judul, URL, atau folder)…" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 pl-10 pr-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
             </div>
-            <p id="myLinksFor" class="text-[11px] text-gray-400 mt-2"></p>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input id="newLinkTitle" placeholder="Judul" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <input id="newLinkUrl" placeholder="https://..." class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <input id="newLinkFolder" list="linkFolders" placeholder="Folder (mis. Drive)" class="sm:w-44 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <datalist id="linkFolders"></datalist>
+              <button onclick="addLink()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shrink-0">Tambah</button>
+            </div>
+            <p id="myLinksFor" class="text-[11px] text-gray-400"></p>
           </div>
-          <div id="myLinksList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+          <div id="myLinksList" class="space-y-4"></div>
         </div>
         <div id="settingsView" class="view hide max-w-[1300px] mx-auto space-y-4">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1286,24 +1292,39 @@ function renderExternalDashboards(){
   grid.innerHTML = (EXTERNAL_DASHBOARDS&&EXTERNAL_DASHBOARDS.length) ? EXTERNAL_DASHBOARDS.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-center gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white">${escapeHtml(d.title||'Dashboard')}</div></div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
 }
 function findLinkByRow(row){ return (state.links||[]).find(l=>String(l.row)===String(row)); }
+function linkCard(l){
+  return `<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[18px]">link</span></div><div class="flex-1 min-w-0"><a href="${escapeAttr(l.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-sm text-gray-900 dark:text-white hover:text-indigo-600 truncate block">${escapeHtml(l.title||l.url)}</a><div class="text-[11px] text-gray-400 truncate">${escapeHtml(l.url)}</div></div><button onclick="editLink(${l.row})" class="text-gray-400 hover:text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">edit</span></button><button onclick="deleteLink(${l.row})" class="text-rose-500 hover:text-rose-600 shrink-0"><span class="material-icons-round text-[18px]">delete</span></button></div>`;
+}
 function renderMyLinks(){
   const list=document.getElementById('myLinksList'); if(!list) return;
   const me=state.currentUser;
   const forEl=document.getElementById('myLinksFor'); if(forEl) forEl.textContent='Link pribadi untuk mode: '+me;
-  const mine=(state.links||[]).filter(l=>String(l.user||'').toLowerCase()===String(me||'').toLowerCase());
-  list.innerHTML = mine.length ? mine.map(l=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[18px]">link</span></div><div class="flex-1 min-w-0"><a href="${escapeAttr(l.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-sm text-gray-900 dark:text-white hover:text-indigo-600 truncate block">${escapeHtml(l.title||l.url)}</a><div class="text-[11px] text-gray-400 truncate">${escapeHtml(l.url)}</div></div><button onclick="editLink(${l.row})" class="text-gray-400 hover:text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">edit</span></button><button onclick="deleteLink(${l.row})" class="text-rose-500 hover:text-rose-600 shrink-0"><span class="material-icons-round text-[18px]">delete</span></button></div>`).join('') : emptyState('Belum ada link. Tambahkan di atas.');
+  let mine=(state.links||[]).filter(l=>String(l.user||'').toLowerCase()===String(me||'').toLowerCase());
+  // datalist folder (saran folder yang sudah ada)
+  const allFolders=[...new Set(mine.map(l=>l.folder||'Umum'))].sort((a,b)=>a.localeCompare(b));
+  const dl=document.getElementById('linkFolders'); if(dl) dl.innerHTML=allFolders.map(f=>`<option value="${escapeAttr(f)}"></option>`).join('');
+  // filter pencarian
+  const q=(document.getElementById('linkSearch')?.value||'').toLowerCase().trim();
+  if(q) mine=mine.filter(l=>[l.title,l.url,l.folder].join(' ').toLowerCase().includes(q));
+  if(!mine.length){ list.innerHTML=emptyState(q?'Tidak ada link yang cocok dengan pencarian.':'Belum ada link. Tambahkan di atas.'); return; }
+  // kelompokkan per folder
+  const groups={};
+  mine.forEach(l=>{ const f=l.folder||'Umum'; (groups[f]=groups[f]||[]).push(l); });
+  const fkeys=Object.keys(groups).sort((a,b)=> a==='Umum'?1 : b==='Umum'?-1 : a.localeCompare(b));
+  list.innerHTML=fkeys.map(f=>`<div><div class="flex items-center gap-2 mb-2 px-1"><span class="material-icons-round text-[18px] text-amber-500">folder</span><h3 class="text-sm font-bold text-gray-700 dark:text-slate-200">${escapeHtml(f)}</h3><span class="text-[11px] text-gray-400 bg-gray-100 dark:bg-slate-800 rounded-full px-2 py-0.5">${groups[f].length}</span></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${groups[f].map(l=>linkCard(l)).join('')}</div></div>`).join('');
 }
 function addLink(){
-  const t=(document.getElementById('newLinkTitle')||{}).value||''; const u=(document.getElementById('newLinkUrl')||{}).value||'';
+  const t=(document.getElementById('newLinkTitle')||{}).value||''; const u=(document.getElementById('newLinkUrl')||{}).value||''; const f=(document.getElementById('newLinkFolder')||{}).value||'';
   if(!u.trim()){ showToast('URL wajib diisi.', false); return; }
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah link', false); return; } state.links=res.links||state.links; const a=document.getElementById('newLinkTitle'),b=document.getElementById('newLinkUrl'); if(a)a.value=''; if(b)b.value=''; showToast(res.message||'Link ditambahkan.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).addUserLink(state.currentUser, t.trim(), u.trim());
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah link', false); return; } state.links=res.links||state.links; ['newLinkTitle','newLinkUrl','newLinkFolder'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';}); showToast(res.message||'Link ditambahkan.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).addUserLink(state.currentUser, t.trim(), u.trim(), f.trim());
 }
 function editLink(row){
   const l=findLinkByRow(row); if(!l) return;
   const nt=prompt('Judul:', l.title||''); if(nt===null) return;
   const nu=prompt('URL:', l.url||''); if(nu===null) return;
+  const nf=prompt('Folder (kosongkan = Umum):', l.folder||''); if(nf===null) return;
   if(!String(nu).trim()){ showToast('URL wajib diisi.', false); return; }
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah link', false); return; } state.links=res.links||state.links; showToast(res.message||'Link diperbarui.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateUserLink(state.currentUser, row, String(nt).trim(), String(nu).trim());
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah link', false); return; } state.links=res.links||state.links; showToast(res.message||'Link diperbarui.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateUserLink(state.currentUser, row, String(nt).trim(), String(nu).trim(), String(nf).trim());
 }
 function deleteLink(row){
   const l=findLinkByRow(row); if(!l) return;

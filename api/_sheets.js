@@ -820,42 +820,44 @@ async function listPinUsers() {
 
 async function ensureLinksSheet() {
   await ensureSheetExists(CONFIG.LINKS_SHEET);
-  const head = await valuesGet(`${CONFIG.LINKS_SHEET}!A1:C1`);
-  if (!head.length || !head[0] || !head[0][0]) {
-    await valuesUpdate(`${CONFIG.LINKS_SHEET}!A1:C1`, [['User', 'Title', 'URL']]);
-  }
+  const head = await valuesGet(`${CONFIG.LINKS_SHEET}!A1:D1`);
+  const h0 = head[0] || [];
+  if (!h0[0]) await valuesUpdate(`${CONFIG.LINKS_SHEET}!A1:D1`, [['User', 'Title', 'URL', 'Folder']]);
+  else if (!h0[3]) await valuesUpdate(`${CONFIG.LINKS_SHEET}!D1`, [['Folder']]);
 }
 
 async function getAllLinks() {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.LINKS_SHEET}!A2:C`); } catch (e) { return []; }
+  try { rows = await valuesGet(`${CONFIG.LINKS_SHEET}!A2:D`); } catch (e) { return []; }
   return rows
-    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), url: String((r && r[2]) || '').trim() }))
+    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), url: String((r && r[2]) || '').trim(), folder: String((r && r[3]) || '').trim() }))
     .filter(l => l.user && l.url);
 }
 
-async function addUserLink(user, title, url) {
+async function addUserLink(user, title, url, folder) {
   user = String(user || '').trim();
   title = String(title || '').trim();
   url = String(url || '').trim();
+  folder = String(folder || '').trim();
   if (!user) return { success: false, message: 'User tidak boleh kosong.' };
   if (!url) return { success: false, message: 'URL wajib diisi.' };
   await ensureLinksSheet();
-  await valuesAppend(`${CONFIG.LINKS_SHEET}!A:C`, [[user, title || url, url]]);
+  await valuesAppend(`${CONFIG.LINKS_SHEET}!A:D`, [[user, title || url, url, folder]]);
   return { success: true, message: 'Link ditambahkan.', links: await getAllLinks() };
 }
 
-async function updateUserLink(user, row, title, url) {
+async function updateUserLink(user, row, title, url, folder) {
   user = String(user || '').trim();
   row = parseInt(row, 10);
   title = String(title || '').trim();
   url = String(url || '').trim();
+  folder = String(folder || '').trim();
   if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
   if (!url) return { success: false, message: 'URL wajib diisi.' };
   const cur = await valuesGet(`${CONFIG.LINKS_SHEET}!A${row}:A${row}`);
   const owner = String((cur[0] && cur[0][0]) || '').trim();
   if (owner.toLowerCase() !== user.toLowerCase()) return { success: false, message: 'Bukan link Anda.' };
-  await valuesUpdate(`${CONFIG.LINKS_SHEET}!B${row}:C${row}`, [[title || url, url]]);
+  await valuesUpdate(`${CONFIG.LINKS_SHEET}!B${row}:D${row}`, [[title || url, url, folder]]);
   return { success: true, message: 'Link diperbarui.', links: await getAllLinks() };
 }
 
