@@ -522,7 +522,7 @@ function init() {
 
 function afterLoad() {
   populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad();
-  if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); });}
+  if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); }); document.addEventListener('keydown', e=>{ if(e.key==='Escape' && state.activeView==='communication' && state.selectedTaskId && document.getElementById('taskModal').classList.contains('hide')){ closeCommChat(); } });}
   document.getElementById('loading').classList.add('hide');
 }
 
@@ -672,7 +672,7 @@ function renderActiveView(){
   else if(v==='list') renderTable();
   else if(v==='timeline') renderTimeline();
   else if(v==='calendar') renderCalendar();
-  else if(v==='communication') renderCommunicationTasks();
+  else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
   else if(v==='settings') renderSettings();
   else if(v==='activity') renderActivity();
 }
@@ -1033,7 +1033,8 @@ function unreadCountForTask(id, byTask, readMap){
 }
 function totalUnreadTasks(){
   const byTask=commentEntriesByTask(), readMap=getCommReadMap();
-  return Object.keys(byTask).reduce((n,id)=>n+(unreadCountForTask(id,byTask,readMap)>0?1:0),0);
+  const scopedIds=new Set(scopedTasks().map(t=>String(t.id)));   // hanya hitung komentar di task milik user
+  return Object.keys(byTask).reduce((n,id)=>n+((scopedIds.has(id) && unreadCountForTask(id,byTask,readMap)>0)?1:0),0);
 }
 function notifyUnreadOnLoad(){ const n=totalUnreadTasks(); if(n>0) showToast('Ada '+n+' task dengan komentar baru untuk Anda. Cek menu Komunikasi.', true); }
 function updateCommNavBadge(){
@@ -1089,6 +1090,7 @@ function renderCommunicationTasks(){
   document.getElementById('commTaskList').innerHTML=arr.map(({t,unread})=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${unread>0?'border-l-4 border-l-rose-500 ':''}${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="flex items-center gap-2"><div class="${unread>0?'font-bold':'font-medium'} text-sm text-gray-900 dark:text-white truncate flex-1">${escapeHtml(t.taskName||'-')}</div>${unread>0?`<span class="shrink-0 inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold"><span class="material-icons-round text-[12px]">chat</span>${unread}</span>`:''}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task sesuai filter.');
 }
 function selectCommunicationTask(id){state.selectedTaskId=id;loadComments(id);renderCommunicationPanel();}
+function closeCommChat(){ state.selectedTaskId=null; renderCommunicationPanel(); if(state.activeView==='communication') renderCommunicationTasks(); }
 function renderCommunicationPanel(){
   const t=state.tasks.find(x=>x.id===state.selectedTaskId);
   if(!t){document.getElementById('commHeader').innerHTML='<div class="font-medium text-gray-400 text-sm">Pilih task terlebih dahulu.</div>';document.getElementById('commMessages').innerHTML='';return;}
