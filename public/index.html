@@ -295,7 +295,7 @@
             <div id="commHeader" class="p-4 border-b border-gray-100 dark:border-slate-800"></div>
             <div id="commMessages" class="flex-1 overflow-y-auto p-4 space-y-2.5 bg-gray-50/60 dark:bg-slate-950/40 scrollbar-thin"></div>
             <div class="p-3 border-t border-gray-100 dark:border-slate-800 flex gap-2">
-              <textarea id="commInput" rows="2" placeholder="Tulis komentar/update…" class="flex-1 resize-none rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"></textarea>
+              <textarea id="commInput" rows="2" onkeydown="commInputKey(event)" placeholder="Tulis komentar/update… (Enter kirim, Shift+Enter baris baru)" class="flex-1 resize-none rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"></textarea>
               <button onclick="sendCommunicationComment()" class="px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"><span class="material-icons-round text-[20px]">send</span></button>
             </div>
           </div>
@@ -1077,12 +1077,16 @@ function renderCommunicationTasks(){
     .filter(t=>!q || Object.values(t).join(' ').toLowerCase().includes(q))
     .filter(t=>!f.pic || String(t.pic||'')===f.pic)
     .filter(t=>!f.status || String(t.status||'')===f.status)
-    .map(t=>({t, unread:unreadCountForTask(t.id, byTask, readMap)}))
+    .map(t=>({t, unread:unreadCountForTask(t.id, byTask, readMap), lastTs:latestCommentTs(byTask[t.id])}))
     .filter(o=>!f.unreadOnly || o.unread>0)
-    .sort((a,b)=>((b.unread>0)-(a.unread>0))||String(b.t.createdDate||'').localeCompare(String(a.t.createdDate||''))||String(b.t.id||'').localeCompare(String(a.t.id||'')))
+    .sort((a,b)=>{
+      const u=(b.unread>0)-(a.unread>0); if(u) return u;                                      // unread di atas
+      if(a.lastTs||b.lastTs) return String(b.lastTs||'').localeCompare(String(a.lastTs||'')); // komentar terbaru di atas
+      return String(b.t.createdDate||'').localeCompare(String(a.t.createdDate||''))||String(b.t.id||'').localeCompare(String(a.t.id||''));
+    })
     .slice(0,120);
-  const selected=state.selectedTaskId || (arr[0] && arr[0].t.id); if(selected && !state.selectedTaskId) selectCommunicationTask(selected);
-  document.getElementById('commTaskList').innerHTML=arr.map(({t,unread})=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="flex items-center gap-2"><div class="font-medium text-sm text-gray-900 dark:text-white truncate flex-1">${escapeHtml(t.taskName||'-')}</div>${unread>0?`<span class="shrink-0 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">${unread}</span>`:''}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task sesuai filter.');
+  // Sengaja TIDAK auto-pilih task — biar user memilih sendiri.
+  document.getElementById('commTaskList').innerHTML=arr.map(({t,unread})=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${unread>0?'border-l-4 border-l-rose-500 ':''}${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="flex items-center gap-2"><div class="${unread>0?'font-bold':'font-medium'} text-sm text-gray-900 dark:text-white truncate flex-1">${escapeHtml(t.taskName||'-')}</div>${unread>0?`<span class="shrink-0 inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold"><span class="material-icons-round text-[12px]">chat</span>${unread}</span>`:''}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task sesuai filter.');
 }
 function selectCommunicationTask(id){state.selectedTaskId=id;loadComments(id);renderCommunicationPanel();}
 function renderCommunicationPanel(){
@@ -1096,6 +1100,7 @@ function loadComments(taskId, cb){
   if(IS_GAS){GAS.withSuccessHandler(c=>{state.comments=c||[]; markTaskCommReadFromComments(taskId, state.comments); renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast('Gagal memuat komentar: '+(err.message||err),false)).getComments(taskId);}
   else {state.comments=[{timestamp:'2026-06-17 09:00',author:'Nynda',message:'Pastikan database mengikuti kolom terbaru.'}]; markTaskCommReadFromComments(taskId, state.comments); renderCommunicationPanel(); if(cb)cb();}
 }
+function commInputKey(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendCommunicationComment(); } }
 function sendCommunicationComment(){
   const msg=document.getElementById('commInput').value.trim(); if(!state.selectedTaskId||!msg) return;
   sendComment(state.selectedTaskId,msg,()=>{document.getElementById('commInput').value='';});
