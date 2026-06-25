@@ -332,6 +332,11 @@
               <button id="btnFixIds" onclick="runFixIds()" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">tag</span> Buat Task ID kosong</button>
             </div>
           </div>
+          <div id="pinAdminCard" class="hide bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">pin</span> Atur PIN User (Mode Dev)</h2>
+            <p class="text-sm text-gray-500 mt-1 mb-3">Set/ubah PIN 4 digit tiap user (termasuk manager). PIN disimpan ter-hash di sheet AUTH tersembunyi. User yang punya PIN akan diminta PIN saat mode-nya dipilih.</p>
+            <div id="pinAdminList" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2"></div>
+          </div>
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Dropdown Master</h2>
             <p class="text-sm text-gray-500 mt-1">Kelola pilihan Status, Priority, Stage, Platform, PIC, Support, Approval Gate. Perubahan diterapkan juga sebagai data validation di Spreadsheet.</p>
@@ -733,7 +738,7 @@ function renderActiveView(){
   else if(v==='timeline') renderTimeline();
   else if(v==='calendar') renderCalendar();
   else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
-  else if(v==='settings') renderSettings();
+  else if(v==='settings'){ renderSettings(); renderPinAdmin(); }
   else if(v==='activity') renderActivity();
 }
 function renderAll(){ renderActiveView(); renderFilterBar(); }
@@ -896,11 +901,24 @@ function renderCharts(){
   const tasks=baseFilteredTasks();
   const dark=document.documentElement.classList.contains('dark');
   Chart.defaults.color=dark?'#cbd5e1':'#64748b'; Chart.defaults.borderColor=dark?'#1e293b':'#e5e7eb'; Chart.defaults.font.family='Inter';
-  const byPic=countBy(tasks,'pic'); const picLabels=Object.keys(byPic);
   const priList=(state.options.priority||['Urgent','High','Normal','Low']);
   const priColor=p=>{const k=String(p||'').toLowerCase().trim(); return ({urgent:'#ef4444',high:'#f97316',normal:'#3b82f6',medium:'#3b82f6',low:'#94a3b8'})[k]||'#8b5cf6';};
-  const priDatasets=priList.map(pr=>({label:pr,data:picLabels.map(pic=>tasks.filter(t=>same(t.pic,pic)&&same(t.priority,pr)).length),backgroundColor:priColor(pr),borderRadius:6,stack:'beban'}));
-  const picCtx=document.getElementById('chartPic'); if(picCtx){ if(state.chartPic) state.chartPic.destroy(); state.chartPic=new Chart(picCtx,{type:'bar',data:{labels:picLabels,datasets:priDatasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,boxHeight:10,padding:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});}
+  const picCtx=document.getElementById('chartPic');
+  if(picCtx){
+    if(state.chartPic) state.chartPic.destroy();
+    let cfg;
+    if(isManager(state.currentUser)){
+      // Manager: stacked per Priority, x = PIC (tanpa "Tanpa Data")
+      const byPic=countBy(tasks,'pic'); const picLabels=Object.keys(byPic).filter(p=>p && p!=='Tanpa Data');
+      const priDatasets=priList.map(pr=>({label:pr,data:picLabels.map(pic=>tasks.filter(t=>same(t.pic,pic)&&same(t.priority,pr)).length),backgroundColor:priColor(pr),borderRadius:6,stack:'beban'}));
+      cfg={type:'bar',data:{labels:picLabels,datasets:priDatasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,boxHeight:10,padding:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}};
+    } else {
+      // User biasa: 4 bar per Priority (task milik dia)
+      const data=priList.map(pr=>tasks.filter(t=>same(t.priority,pr)).length);
+      cfg={type:'bar',data:{labels:priList,datasets:[{label:'Jumlah Task',data:data,backgroundColor:priList.map(priColor),borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}}}};
+    }
+    state.chartPic=new Chart(picCtx,cfg);
+  }
   const byStatus=countBy(tasks,'status'); const sLabels=Object.keys(byStatus); const sVals=Object.values(byStatus);
   const stCtx=document.getElementById('chartStatus'); if(stCtx){ if(state.chartStatus) state.chartStatus.destroy(); state.chartStatus=new Chart(stCtx,{type:'doughnut',data:{labels:sLabels,datasets:[{data:sVals,backgroundColor:sLabels.map(statusHex),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:14}}}}});}
 }
@@ -1228,6 +1246,24 @@ function renderComments(targetId,comments){
 }
 
 /* ---------- Settings ---------- */
+function renderPinAdmin(){
+  const card=document.getElementById('pinAdminCard'); if(!card) return;
+  if(String(state.currentUser||'').toLowerCase()!=='dev'){ card.classList.add('hide'); return; }
+  card.classList.remove('hide');
+  const users=(state.options.pic||[]);
+  const hasPin=u=>(state.pinUsers||[]).some(x=>String(x).toLowerCase()===String(u).toLowerCase());
+  const list=document.getElementById('pinAdminList'); if(!list) return;
+  list.innerHTML=users.map((u,i)=>`<div class="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-slate-800"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-800 dark:text-slate-200 truncate">${escapeHtml(u)}</div><div class="text-[10px] ${hasPin(u)?'text-emerald-600':'text-gray-400'}">${hasPin(u)?'PIN sudah diset':'belum diset'}</div></div><input id="pinIn-${i}" type="password" inputmode="numeric" maxlength="4" placeholder="4 digit" class="w-20 text-center rounded-md bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2 py-1.5 text-sm outline-none"><button onclick="savePinFor(${i})" class="px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold">Set</button></div>`).join('');
+}
+function savePinFor(i){
+  const users=(state.options.pic||[]); const user=users[i]; if(!user) return;
+  const inp=document.getElementById('pinIn-'+i); const pin=inp?inp.value:'';
+  if(!/^\d{4}$/.test(pin)){ showToast('PIN harus 4 digit angka.', false); return; }
+  GAS.withSuccessHandler(res=>{
+    showToast((res&&res.message)||'PIN disimpan.', !(res&&res.success===false));
+    if(res&&res.success){ if(!(state.pinUsers||[]).some(x=>String(x).toLowerCase()===String(user).toLowerCase())) state.pinUsers=(state.pinUsers||[]).concat([user]); if(inp) inp.value=''; renderPinAdmin(); }
+  }).withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).setUserPin(user, pin);
+}
 function renderSettings(){
   const names={status:'Status',priority:'Priority',stage:'Stage',platform:'Platform',pic:'PIC',support:'Support'};
   document.getElementById('settingsGrid').innerHTML=Object.keys(names).map(type=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="p-4 border-b border-gray-100 dark:border-slate-800"><div class="font-semibold text-gray-900 dark:text-white">${names[type]}</div><div class="flex gap-2 mt-2.5"><input id="new-${type}" placeholder="Tambah opsi…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"><button onclick="addOption('${type}')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Add</button></div></div><div class="p-3 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin">${(state.options[type]||[]).map(v=>`<div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800"><span class="font-medium text-sm text-gray-700 dark:text-slate-200">${escapeHtml(v)}</span><button onclick="removeOption('${type}','${escapeAttr(v)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`).join('')}</div></div>`).join('');
