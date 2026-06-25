@@ -112,6 +112,25 @@
     </div>
   </div>
 
+  <!-- PIN gate (verifikasi pindah mode user / akses Dev) -->
+  <div id="pinGate" class="hide fixed inset-0 z-[135] bg-slate-950/80 flex items-center justify-center p-4">
+    <div class="w-full max-w-xs bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-5">
+      <div class="flex items-center gap-2.5 mb-1">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">pin</span></div>
+        <div class="text-base font-bold text-gray-900 dark:text-white">Masukkan PIN</div>
+      </div>
+      <p class="text-sm text-gray-500 mb-3">Untuk masuk ke <b id="pinLabel">mode</b>.</p>
+      <form onsubmit="event.preventDefault(); submitPin();">
+        <input id="pinInput" type="password" inputmode="numeric" maxlength="4" onkeydown="pinInputKey(event)" placeholder="• • • •" class="w-full text-center tracking-[0.5em] rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-lg">
+        <div id="pinErr" class="hide text-sm text-rose-600 mt-2">PIN salah.</div>
+        <div class="flex gap-2 mt-4">
+          <button type="button" onclick="closePinModal(true)" class="flex-1 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-sm">Batal</button>
+          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div class="flex h-screen">
     <!-- Sidebar -->
     <aside id="sidebar" class="w-[260px] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 hidden md:flex flex-col shrink-0">
@@ -160,7 +179,7 @@
           </div>
           <div class="flex items-center gap-2">
             <span id="userAvatar" class="inline-flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-semibold w-8 h-8 text-xs shrink-0">?</span>
-            <select id="currentUser" onchange="setCurrentUser(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200"></select>
+            <select id="currentUser" onchange="requestUserSwitch(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200"></select>
           </div>
           <div id="myTasksBadge" class="mt-2 text-[11px] font-medium text-gray-500 dark:text-slate-400"></div>
         </div>
@@ -441,7 +460,7 @@ function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.clas
 function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
 // Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
 var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' };
-function applyEmailUser(email){ var u=EMAIL_TO_USER[String(email||'').trim().toLowerCase()]; if(u){ try{ localStorage.setItem('tt_current_user', u); }catch(e){} } }
+function applyEmailUser(email){ var e=String(email||'').trim().toLowerCase(); if(typeof DEV_EMAILS!=='undefined' && DEV_EMAILS.map(function(x){return String(x).toLowerCase();}).includes(e)){ try{ localStorage.setItem('tt_current_user','Dev'); }catch(_){ } return; } var u=EMAIL_TO_USER[e]; if(u){ try{ localStorage.setItem('tt_current_user', u); }catch(_){ } } }
 // Email developer/admin: akses penuh (lihat semua task) + bebas pilih mode apa pun, lewati pembatasan.
 var DEV_EMAILS = ['akbaralqahri@gmail.com'];
 function isDevEmail(){ var e=loginEmail(); return !!e && DEV_EMAILS.map(function(x){return String(x).toLowerCase();}).includes(String(e).trim().toLowerCase()); }
@@ -454,7 +473,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','listPinUsers'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -481,7 +500,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -507,6 +526,7 @@ function init() {
       state.options = Object.assign({}, dummyOptions, data.options || {});
       state.activity = data.activity || [];
       state.commentsSummary = data.commentsSummary || [];
+      state.pinUsers = data.pinUsers || [];
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
@@ -528,7 +548,7 @@ function afterLoad() {
 
 /* ---------- Role scoping ---------- */
 function baseName(s){return String(s||'').replace(/\s*\(.*?\)\s*$/,'').trim().toLowerCase();}
-function isManager(user){if(isDevEmail()) return true; const u=baseName(user), uf=String(user||'').toLowerCase(); return state.managers.some(m=>{const mf=String(m).toLowerCase(); return mf===uf || baseName(m)===u;});}
+function isManager(user){if(String(user||'').toLowerCase()==='dev') return true; const u=baseName(user), uf=String(user||'').toLowerCase(); return state.managers.some(m=>{const mf=String(m).toLowerCase(); return mf===uf || baseName(m)===u;});}
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 function scopedTasks(){
@@ -541,7 +561,8 @@ function scopedTasks(){
 function applyRoleUI(){
   const mgr=isManager(state.currentUser);
   const badge=document.getElementById('roleBadge');
-  if(badge){badge.textContent=mgr?'Manager':'Member'; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+(mgr?'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300');}
+  const roleLbl=String(state.currentUser||'').toLowerCase()==='dev'?'Dev':(mgr?'Manager':'Member');
+  if(badge){badge.textContent=roleLbl; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+(mgr?'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300');}
   const av=document.getElementById('userAvatar'); if(av){av.textContent=initials(state.currentUser); av.style.background=avatarBg(state.currentUser); av.style.color=avatarFg(state.currentUser);}
   document.getElementById('managerFocusBox').classList.toggle('hide',!mgr);
   document.getElementById('nav-activity').classList.toggle('hide',!mgr);
@@ -614,13 +635,50 @@ function populateUserSelect(){
   else if(email) allowed = pics.filter(p=>!claimed.includes(baseName(p)));     // login email lain -> user "diklaim" disembunyikan
   else allowed = pics.slice();                                                 // belum login email -> bebas
   if(!allowed.length) allowed = pics;
-  select.innerHTML = allowed.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  if(!locked) allowed = ['Dev'].concat(allowed);   // mode Dev untuk yang tidak terkunci (akses via PIN; dev email tanpa PIN)
+  select.innerHTML = allowed.map(p=>`<option value="${escapeHtml(p)}">${p==='Dev'?'Dev (lihat semua)':escapeHtml(p)}</option>`).join('');
   if(locked){ const lm=pics.find(p=>baseName(p)===baseName(locked)); if(lm) state.currentUser=lm; }
   if(!allowed.includes(state.currentUser)){ const match=allowed.find(p=>baseName(p)===baseName(state.currentUser)); state.currentUser = match || allowed[0]; }
   select.value = state.currentUser;
   select.disabled = !!locked;
 }
 function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
+function requestUserSwitch(value){
+  if(!value || value===state.currentUser) return;
+  if(value==='Dev'){
+    if(isDevEmail()){ setCurrentUser('Dev'); return; }
+    openPinModal('__dev__','Dev','Mode Dev'); return;
+  }
+  if((state.pinUsers||[]).some(u=>String(u).toLowerCase()===String(value).toLowerCase())){
+    openPinModal(value, value, value); return;
+  }
+  setCurrentUser(value);
+}
+function openPinModal(verifyUser, target, label){
+  state._pinPending={verifyUser:verifyUser, target:target};
+  const g=document.getElementById('pinGate'); if(!g) return;
+  const lbl=document.getElementById('pinLabel'); if(lbl) lbl.textContent=label||target;
+  const inp=document.getElementById('pinInput'); if(inp) inp.value='';
+  const err=document.getElementById('pinErr'); if(err) err.classList.add('hide');
+  g.classList.remove('hide');
+  setTimeout(function(){ const i=document.getElementById('pinInput'); if(i) i.focus(); },50);
+}
+function closePinModal(revert){
+  const g=document.getElementById('pinGate'); if(g) g.classList.add('hide');
+  if(revert){ const sel=document.getElementById('currentUser'); if(sel) sel.value=state.currentUser; }
+  state._pinPending=null;
+}
+function submitPin(){
+  const p=state._pinPending; if(!p) return;
+  const pin=(document.getElementById('pinInput')||{}).value||'';
+  const err=document.getElementById('pinErr');
+  if(!/^\d{4}$/.test(pin)){ if(err){ err.textContent='PIN harus 4 digit angka.'; err.classList.remove('hide'); } return; }
+  GAS.withSuccessHandler(function(res){
+    if(res && res.ok){ const t=p.target; closePinModal(false); setCurrentUser(t); }
+    else { if(err){ err.textContent='PIN salah.'; err.classList.remove('hide'); } }
+  }).withFailureHandler(function(e){ if(err){ err.textContent='Gagal verifikasi: '+(e.message||e); err.classList.remove('hide'); } }).verifyPin(p.verifyUser, pin);
+}
+function pinInputKey(e){ if(e.key==='Enter'){ e.preventDefault(); submitPin(); } else if(e.key==='Escape'){ closePinModal(true); } }
 function populateManagerFocus(){const el=document.getElementById('managerFocusPic');if(!el)return;el.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');el.value=state.managerFocus;}
 function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;applyRoleUI();renderAll();}
 
@@ -838,8 +896,11 @@ function renderCharts(){
   const tasks=baseFilteredTasks();
   const dark=document.documentElement.classList.contains('dark');
   Chart.defaults.color=dark?'#cbd5e1':'#64748b'; Chart.defaults.borderColor=dark?'#1e293b':'#e5e7eb'; Chart.defaults.font.family='Inter';
-  const byPic=countBy(tasks,'pic'); const picLabels=Object.keys(byPic); const picVals=Object.values(byPic);
-  const picCtx=document.getElementById('chartPic'); if(picCtx){ if(state.chartPic) state.chartPic.destroy(); state.chartPic=new Chart(picCtx,{type:'bar',data:{labels:picLabels,datasets:[{label:'Jumlah Task',data:picVals,borderRadius:8,backgroundColor:'#4f46e5'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}}}});}
+  const byPic=countBy(tasks,'pic'); const picLabels=Object.keys(byPic);
+  const priList=(state.options.priority||['Urgent','High','Normal','Low']);
+  const priColor=p=>{const k=String(p||'').toLowerCase().trim(); return ({urgent:'#ef4444',high:'#f97316',normal:'#3b82f6',medium:'#3b82f6',low:'#94a3b8'})[k]||'#8b5cf6';};
+  const priDatasets=priList.map(pr=>({label:pr,data:picLabels.map(pic=>tasks.filter(t=>same(t.pic,pic)&&same(t.priority,pr)).length),backgroundColor:priColor(pr),borderRadius:6,stack:'beban'}));
+  const picCtx=document.getElementById('chartPic'); if(picCtx){ if(state.chartPic) state.chartPic.destroy(); state.chartPic=new Chart(picCtx,{type:'bar',data:{labels:picLabels,datasets:priDatasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,boxHeight:10,padding:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}});}
   const byStatus=countBy(tasks,'status'); const sLabels=Object.keys(byStatus); const sVals=Object.values(byStatus);
   const stCtx=document.getElementById('chartStatus'); if(stCtx){ if(state.chartStatus) state.chartStatus.destroy(); state.chartStatus=new Chart(stCtx,{type:'doughnut',data:{labels:sLabels,datasets:[{data:sVals,backgroundColor:sLabels.map(statusHex),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:10,boxHeight:10,padding:14}}}}});}
 }
@@ -1204,6 +1265,7 @@ function runSetup(){
       state.options=Object.assign({},dummyOptions,data.options||{});
       state.activity=data.activity||[];
       state.commentsSummary=data.commentsSummary||[];
+      state.pinUsers=data.pinUsers||[];
       if(data.meta&&data.meta.managers&&data.meta.managers.length) state.managers=data.meta.managers;
       afterLoad();
     }).withFailureHandler(()=>{}).getBootstrapData();

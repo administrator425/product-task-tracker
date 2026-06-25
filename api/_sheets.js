@@ -18,7 +18,7 @@
 
 const { google } = require('googleapis');
 const crypto = require('crypto');
-const DEFAULT_PIN = String(process.env.DEFAULT_PIN || '3108').trim();
+const DEV_PIN = String(process.env.DEV_PIN || '3108').trim();
 const PIN_SALT = String(process.env.PIN_SALT || 'pt_pin_salt_v1');
 function hashPin(user, pin) {
   return crypto.createHash('sha256').update(String(user || '').toLowerCase().trim() + ':' + String(pin || '') + ':' + PIN_SALT).digest('hex');
@@ -578,17 +578,19 @@ async function getAllCommentsLite() {
 }
 
 async function getBootstrapData() {
-  const [tasks, options, activity, commentsSummary] = await Promise.all([
+  const [tasks, options, activity, commentsSummary, pinUsers] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
     getAllCommentsLite(),
+    listPinUsers(),
   ]);
   return {
     tasks,
     options,
     activity,
     commentsSummary,
+    pinUsers,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
@@ -720,12 +722,16 @@ async function readAuthRaw() {
   } catch (e) { return []; }
 }
 
-// Verifikasi PIN di server. Jika user belum punya PIN khusus, pakai DEFAULT_PIN.
+// Verifikasi PIN di server.
+//  - Mode Dev (user === '__dev__'): cocokkan dengan DEV_PIN (default 3108).
+//  - Mode user biasa: jika user punya PIN khusus -> wajib cocok; jika belum -> bebas (tanpa PIN).
 async function verifyPin(user, pin) {
+  user = String(user || '').trim();
+  if (user === '__dev__') return { ok: String(pin || '').trim() === DEV_PIN };
   const rows = await readAuthRaw();
-  const found = rows.find(r => r.user.toLowerCase() === String(user || '').toLowerCase().trim());
-  const expected = found ? found.hash : hashPin(user, DEFAULT_PIN);
-  return { ok: hashPin(user, pin) === expected };
+  const found = rows.find(r => r.user.toLowerCase() === user.toLowerCase());
+  if (!found) return { ok: true, noPin: true };
+  return { ok: hashPin(user, pin) === found.hash };
 }
 
 // Set/ubah PIN seorang user (dipanggil oleh dev). Hanya hash yang disimpan.
