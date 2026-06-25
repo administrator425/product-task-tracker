@@ -151,6 +151,9 @@
         <button onclick="switchView('extdash')" id="nav-extdash" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">dashboard_customize</span> Dashboard Lain
         </button>
+        <button onclick="switchView('mylinks')" id="nav-mylinks" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">bookmark</span> Link Saya
+        </button>
         <button onclick="switchView('kanban')" id="nav-kanban" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">view_kanban</span> Kanban Status
         </button>
@@ -331,6 +334,18 @@
           </div>
           <div id="extdashGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
         </div>
+        <!-- LINK SAYA (link pribadi per mode user) -->
+        <div id="mylinksView" class="view hide max-w-[1100px] mx-auto space-y-4">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4">
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input id="newLinkTitle" placeholder="Judul (mis. Drive Data Analyst)" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <input id="newLinkUrl" placeholder="https://..." class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <button onclick="addLink()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shrink-0">Tambah Link</button>
+            </div>
+            <p id="myLinksFor" class="text-[11px] text-gray-400 mt-2"></p>
+          </div>
+          <div id="myLinksList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        </div>
         <div id="settingsView" class="view hide max-w-[1300px] mx-auto space-y-4">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3">
             <div class="flex-1">
@@ -488,7 +503,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -515,7 +530,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -542,6 +557,7 @@ function init() {
       state.activity = data.activity || [];
       state.commentsSummary = data.commentsSummary || [];
       state.pinUsers = data.pinUsers || [];
+      state.links = data.links || [];
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
@@ -726,6 +742,7 @@ function switchView(view){
   const meta={
     dashboard:['Dashboard','Pantau progress, deadline, dan komunikasi task tim.','space_dashboard'],
     extdash:['Dashboard Lain','Kumpulan dashboard & monitoring eksternal.','dashboard_customize'],
+    mylinks:['Link Saya','Kumpulan link pribadi Anda yang sering diakses.','bookmark'],
     kanban:['Kanban Status','Kelola task per status. Tarik kartu untuk ubah status.','view_kanban'],
     list:['Task List','Lihat dan filter seluruh database task.','table_rows'],
     timeline:['Timeline','Lihat jadwal task sebagai Gantt. Tarik untuk ubah jadwal.','view_timeline'],
@@ -752,6 +769,7 @@ function renderActiveView(){
   else if(v==='settings'){ renderSettings(); renderPinAdmin(); }
   else if(v==='activity') renderActivity();
   else if(v==='extdash') renderExternalDashboards();
+  else if(v==='mylinks') renderMyLinks();
 }
 function renderAll(){ renderActiveView(); renderFilterBar(); }
 let _searchTimer=null;
@@ -1267,6 +1285,31 @@ function renderExternalDashboards(){
   const grid=document.getElementById('extdashGrid'); if(!grid) return;
   grid.innerHTML = (EXTERNAL_DASHBOARDS&&EXTERNAL_DASHBOARDS.length) ? EXTERNAL_DASHBOARDS.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-center gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white">${escapeHtml(d.title||'Dashboard')}</div></div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
 }
+function findLinkByRow(row){ return (state.links||[]).find(l=>String(l.row)===String(row)); }
+function renderMyLinks(){
+  const list=document.getElementById('myLinksList'); if(!list) return;
+  const me=state.currentUser;
+  const forEl=document.getElementById('myLinksFor'); if(forEl) forEl.textContent='Link pribadi untuk mode: '+me;
+  const mine=(state.links||[]).filter(l=>String(l.user||'').toLowerCase()===String(me||'').toLowerCase());
+  list.innerHTML = mine.length ? mine.map(l=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[18px]">link</span></div><div class="flex-1 min-w-0"><a href="${escapeAttr(l.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-sm text-gray-900 dark:text-white hover:text-indigo-600 truncate block">${escapeHtml(l.title||l.url)}</a><div class="text-[11px] text-gray-400 truncate">${escapeHtml(l.url)}</div></div><button onclick="editLink(${l.row})" class="text-gray-400 hover:text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">edit</span></button><button onclick="deleteLink(${l.row})" class="text-rose-500 hover:text-rose-600 shrink-0"><span class="material-icons-round text-[18px]">delete</span></button></div>`).join('') : emptyState('Belum ada link. Tambahkan di atas.');
+}
+function addLink(){
+  const t=(document.getElementById('newLinkTitle')||{}).value||''; const u=(document.getElementById('newLinkUrl')||{}).value||'';
+  if(!u.trim()){ showToast('URL wajib diisi.', false); return; }
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah link', false); return; } state.links=res.links||state.links; const a=document.getElementById('newLinkTitle'),b=document.getElementById('newLinkUrl'); if(a)a.value=''; if(b)b.value=''; showToast(res.message||'Link ditambahkan.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).addUserLink(state.currentUser, t.trim(), u.trim());
+}
+function editLink(row){
+  const l=findLinkByRow(row); if(!l) return;
+  const nt=prompt('Judul:', l.title||''); if(nt===null) return;
+  const nu=prompt('URL:', l.url||''); if(nu===null) return;
+  if(!String(nu).trim()){ showToast('URL wajib diisi.', false); return; }
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah link', false); return; } state.links=res.links||state.links; showToast(res.message||'Link diperbarui.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateUserLink(state.currentUser, row, String(nt).trim(), String(nu).trim());
+}
+function deleteLink(row){
+  const l=findLinkByRow(row); if(!l) return;
+  if(!confirm('Hapus link "'+(l.title||l.url)+'"?')) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus link', false); return; } state.links=res.links||state.links; showToast(res.message||'Link dihapus.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteUserLink(state.currentUser, row);
+}
 function renderPinAdmin(){
   const card=document.getElementById('pinAdminCard'); if(!card) return;
   if(String(state.currentUser||'').toLowerCase()!=='dev'){ card.classList.add('hide'); return; }
@@ -1339,6 +1382,7 @@ function runSetup(){
       state.activity=data.activity||[];
       state.commentsSummary=data.commentsSummary||[];
       state.pinUsers=data.pinUsers||[];
+      state.links=data.links||[];
       if(data.meta&&data.meta.managers&&data.meta.managers.length) state.managers=data.meta.managers;
       afterLoad();
     }).withFailureHandler(()=>{}).getBootstrapData();

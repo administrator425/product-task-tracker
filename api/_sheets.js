@@ -30,6 +30,7 @@ const CONFIG = {
   COMMENTS_SHEET: 'COMMENTS',
   ACTIVITY_SHEET: 'ACTIVITY',
   AUTH_SHEET: 'AUTH',
+  LINKS_SHEET: 'LINKS',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -618,12 +619,13 @@ async function getAllCommentsLite() {
 }
 
 async function getBootstrapData() {
-  const [tasks, options, activity, commentsSummary, pinUsers] = await Promise.all([
+  const [tasks, options, activity, commentsSummary, pinUsers, links] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
     getAllCommentsLite(),
     listPinUsers(),
+    getAllLinks(),
   ]);
   return {
     tasks,
@@ -631,6 +633,7 @@ async function getBootstrapData() {
     activity,
     commentsSummary,
     pinUsers,
+    links,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
@@ -811,12 +814,72 @@ async function listPinUsers() {
   return rows.map(r => r.user);
 }
 
+/* ------------------------------------------------------------------ */
+/* LINK per-user (sheet LINKS: User, Title, URL)                       */
+/* ------------------------------------------------------------------ */
+
+async function ensureLinksSheet() {
+  await ensureSheetExists(CONFIG.LINKS_SHEET);
+  const head = await valuesGet(`${CONFIG.LINKS_SHEET}!A1:C1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.LINKS_SHEET}!A1:C1`, [['User', 'Title', 'URL']]);
+  }
+}
+
+async function getAllLinks() {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.LINKS_SHEET}!A2:C`); } catch (e) { return []; }
+  return rows
+    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), url: String((r && r[2]) || '').trim() }))
+    .filter(l => l.user && l.url);
+}
+
+async function addUserLink(user, title, url) {
+  user = String(user || '').trim();
+  title = String(title || '').trim();
+  url = String(url || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!url) return { success: false, message: 'URL wajib diisi.' };
+  await ensureLinksSheet();
+  await valuesAppend(`${CONFIG.LINKS_SHEET}!A:C`, [[user, title || url, url]]);
+  return { success: true, message: 'Link ditambahkan.', links: await getAllLinks() };
+}
+
+async function updateUserLink(user, row, title, url) {
+  user = String(user || '').trim();
+  row = parseInt(row, 10);
+  title = String(title || '').trim();
+  url = String(url || '').trim();
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (!url) return { success: false, message: 'URL wajib diisi.' };
+  const cur = await valuesGet(`${CONFIG.LINKS_SHEET}!A${row}:A${row}`);
+  const owner = String((cur[0] && cur[0][0]) || '').trim();
+  if (owner.toLowerCase() !== user.toLowerCase()) return { success: false, message: 'Bukan link Anda.' };
+  await valuesUpdate(`${CONFIG.LINKS_SHEET}!B${row}:C${row}`, [[title || url, url]]);
+  return { success: true, message: 'Link diperbarui.', links: await getAllLinks() };
+}
+
+async function deleteUserLink(user, row) {
+  user = String(user || '').trim();
+  row = parseInt(row, 10);
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  const cur = await valuesGet(`${CONFIG.LINKS_SHEET}!A${row}:A${row}`);
+  const owner = String((cur[0] && cur[0][0]) || '').trim();
+  if (owner.toLowerCase() !== user.toLowerCase()) return { success: false, message: 'Bukan link Anda.' };
+  const meta = await getSheetMeta();
+  const sheetId = meta[CONFIG.LINKS_SHEET] && meta[CONFIG.LINKS_SHEET].sheetId;
+  if (sheetId == null) return { success: false, message: 'Sheet LINKS tidak ditemukan.' };
+  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }]);
+  return { success: true, message: 'Link dihapus.', links: await getAllLinks() };
+}
+
 async function setupTaskTracker() {
   await ensureTaskHeaders();
   await ensureOptionsSheet();
   await ensureCommentsSheet();
   await ensureActivitySheet();
   await ensureAuthSheet();
+  await ensureLinksSheet();
   await applySheetValidations().catch(() => {});
   return {
     success: true,
@@ -862,6 +925,8 @@ module.exports = {
   setupTaskTracker, assignMissingTaskIds,
   // auth (PIN)
   verifyPin, setUserPin, deleteUserPin, listPinUsers,
+  // link per-user
+  addUserLink, updateUserLink, deleteUserLink, getAllLinks,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };

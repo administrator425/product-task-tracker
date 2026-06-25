@@ -38,6 +38,9 @@ const HANDLERS = {
   setUserPin: (user, pin) => backend.setUserPin(user, pin),
   deleteUserPin: (user) => backend.deleteUserPin(user),
   listPinUsers: () => backend.listPinUsers(),
+  addUserLink: (user, title, url) => backend.addUserLink(user, title, url),
+  updateUserLink: (user, row, title, url) => backend.updateUserLink(user, row, title, url),
+  deleteUserLink: (user, row) => backend.deleteUserLink(user, row),
 };
 
 async function readJsonBody(req) {
