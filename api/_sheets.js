@@ -17,12 +17,19 @@
  */
 
 const { google } = require('googleapis');
+const crypto = require('crypto');
+const DEFAULT_PIN = String(process.env.DEFAULT_PIN || '3108').trim();
+const PIN_SALT = String(process.env.PIN_SALT || 'pt_pin_salt_v1');
+function hashPin(user, pin) {
+  return crypto.createHash('sha256').update(String(user || '').toLowerCase().trim() + ':' + String(pin || '') + ':' + PIN_SALT).digest('hex');
+}
 
 const CONFIG = {
   TASK_SHEET: process.env.MAIN_SHEET_NAME || 'Main',
   OPTIONS_SHEET: 'OPTIONS',
   COMMENTS_SHEET: 'COMMENTS',
   ACTIVITY_SHEET: 'ACTIVITY',
+  AUTH_SHEET: 'AUTH',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -687,11 +694,67 @@ async function applySheetValidations() {
   if (requests.length) await batchUpdate(requests);
 }
 
+/* ------------------------------------------------------------------ */
+/* PIN per-user (sheet AUTH tersembunyi, hash, validasi di server)     */
+/* ------------------------------------------------------------------ */
+
+async function ensureAuthSheet() {
+  const p = await ensureSheetExists(CONFIG.AUTH_SHEET);
+  const head = await valuesGet(`${CONFIG.AUTH_SHEET}!A1:B1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.AUTH_SHEET}!A1:B1`, [['User', 'PinHash']]);
+  }
+  try {
+    if (p && p.sheetId != null) {
+      await batchUpdate([{ updateSheetProperties: { properties: { sheetId: p.sheetId, hidden: true }, fields: 'hidden' } }]);
+    }
+  } catch (e) { /* abaikan bila gagal menyembunyikan */ }
+}
+
+async function readAuthRaw() {
+  try {
+    const rows = await valuesGet(`${CONFIG.AUTH_SHEET}!A2:B`);
+    return rows
+      .map(r => ({ user: String((r && r[0]) || '').trim(), hash: String((r && r[1]) || '').trim() }))
+      .filter(r => r.user);
+  } catch (e) { return []; }
+}
+
+// Verifikasi PIN di server. Jika user belum punya PIN khusus, pakai DEFAULT_PIN.
+async function verifyPin(user, pin) {
+  const rows = await readAuthRaw();
+  const found = rows.find(r => r.user.toLowerCase() === String(user || '').toLowerCase().trim());
+  const expected = found ? found.hash : hashPin(user, DEFAULT_PIN);
+  return { ok: hashPin(user, pin) === expected };
+}
+
+// Set/ubah PIN seorang user (dipanggil oleh dev). Hanya hash yang disimpan.
+async function setUserPin(user, pin) {
+  user = String(user || '').trim();
+  pin = String(pin || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!/^\d{4}$/.test(pin)) return { success: false, message: 'PIN harus 4 digit angka.' };
+  await ensureAuthSheet();
+  const rows = await readAuthRaw();
+  const hash = hashPin(user, pin);
+  const idx = rows.findIndex(r => r.user.toLowerCase() === user.toLowerCase());
+  if (idx === -1) await valuesAppend(`${CONFIG.AUTH_SHEET}!A:B`, [[user, hash]]);
+  else await valuesUpdate(`${CONFIG.AUTH_SHEET}!B${idx + 2}`, [[hash]]);
+  return { success: true, message: `PIN untuk ${user} disimpan.` };
+}
+
+// Daftar user yang sudah punya PIN khusus (hash TIDAK dikirim).
+async function listPinUsers() {
+  const rows = await readAuthRaw();
+  return rows.map(r => r.user);
+}
+
 async function setupTaskTracker() {
   await ensureTaskHeaders();
   await ensureOptionsSheet();
   await ensureCommentsSheet();
   await ensureActivitySheet();
+  await ensureAuthSheet();
   await applySheetValidations().catch(() => {});
   return {
     success: true,
@@ -735,6 +798,8 @@ module.exports = {
   addComment, saveOption, deleteOption,
   // setup
   setupTaskTracker, assignMissingTaskIds,
+  // auth (PIN)
+  verifyPin, setUserPin, listPinUsers,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };

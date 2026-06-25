@@ -546,6 +546,8 @@ function applyRoleUI(){
   document.getElementById('managerFocusBox').classList.toggle('hide',!mgr);
   document.getElementById('nav-activity').classList.toggle('hide',!mgr);
   if(!mgr && state.activeView==='activity') switchView('dashboard');
+  const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr);
+  if(!mgr && state.activeView==='settings') switchView('dashboard');
   if(!mgr) state.managerFocus='';
   const mine=state.tasks.filter(t=>ownsTask(t,state.currentUser));
   const mineActive=mine.filter(t=>!isDone(t));

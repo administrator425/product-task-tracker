@@ -33,6 +33,9 @@ const HANDLERS = {
 
   setupTaskTracker: () => backend.setupTaskTracker(),
   assignMissingTaskIds: () => backend.assignMissingTaskIds(),
+  verifyPin: (user, pin) => backend.verifyPin(user, pin),
+  setUserPin: (user, pin) => backend.setUserPin(user, pin),
+  listPinUsers: () => backend.listPinUsers(),
 };
 
 async function readJsonBody(req) {
