@@ -62,9 +62,10 @@ const DEFAULT_OPTIONS = {
     'All Platform', 'Cerebrum', 'JadiASN', 'JadiPPPK', 'JadiBUMN', 'JadiSekdin',
     'JadiBeasiswa', 'JadiOJK', 'JadiPCPM', 'JadiPrajurit', 'JadiPolisi',
     'Jago TPA', 'Siadu', 'Markaz', 'Toefl Academy',
+    'IT', 'Marketing', 'Sales',
   ],
-  pic: ['Nynda', 'Andika', 'Alya', 'Kiki', 'Bilar', 'Ali', 'Dhea', 'Uma', 'Arifah'],
-  support: ['Nynda', 'Andika', 'Alya', 'Kiki', 'Bilar', 'Ali', 'Dhea', 'Uma', 'Arifah'],
+  pic: ['Nynda', 'Andika', 'Alya', 'Kiki', 'Bilar', 'Ali', 'Dhea', 'Uma', 'Arifah', 'Lintas Divisi'],
+  support: ['Nynda', 'Andika', 'Alya', 'Kiki', 'Bilar', 'Ali', 'Dhea', 'Uma', 'Arifah', 'Lintas Divisi'],
 };
 
 // Validasi dropdown di dalam Spreadsheet (header -> tipe opsi).
