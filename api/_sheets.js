@@ -875,6 +875,44 @@ async function deleteUserLink(user, row) {
   return { success: true, message: 'Link dihapus.', links: await getAllLinks() };
 }
 
+// Operasi massal pada kolom Folder milik 1 user: ganti semua link berfolder oldFolder -> newFolder.
+async function _bulkFolderOp(user, oldFolder, newFolder) {
+  await ensureLinksSheet();
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.LINKS_SHEET}!A2:D`); } catch (e) { rows = []; }
+  if (!rows.length) return { success: true, changed: 0, links: [] };
+  let changed = 0;
+  const dCol = rows.map(r => {
+    const u = String((r && r[0]) || '').trim();
+    const f = String((r && r[3]) || '').trim();
+    if (u.toLowerCase() === user.toLowerCase() && f === oldFolder) { changed++; return [newFolder]; }
+    return [f];
+  });
+  if (changed > 0) await valuesUpdate(`${CONFIG.LINKS_SHEET}!D2:D${rows.length + 1}`, dCol);
+  return { success: true, changed, links: await getAllLinks() };
+}
+
+async function renameUserFolder(user, oldFolder, newFolder) {
+  user = String(user || '').trim();
+  oldFolder = String(oldFolder || '').trim();
+  newFolder = String(newFolder || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!oldFolder) return { success: false, message: 'Folder asal tidak valid.' };
+  if (!newFolder) return { success: false, message: 'Nama folder baru wajib diisi.' };
+  const res = await _bulkFolderOp(user, oldFolder, newFolder);
+  return { ...res, message: `Folder "${oldFolder}" diganti jadi "${newFolder}" (${res.changed} link).` };
+}
+
+async function deleteUserFolder(user, folder) {
+  user = String(user || '').trim();
+  folder = String(folder || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!folder) return { success: false, message: 'Folder tidak valid.' };
+  // Pindahkan semua link di folder ini ke root (Umum). Link TIDAK dihapus.
+  const res = await _bulkFolderOp(user, folder, '');
+  return { ...res, message: `Folder "${folder}" dihapus. ${res.changed} link dipindah ke Umum (tidak terhapus).` };
+}
+
 async function setupTaskTracker() {
   await ensureTaskHeaders();
   await ensureOptionsSheet();
@@ -929,6 +967,7 @@ module.exports = {
   verifyPin, setUserPin, deleteUserPin, listPinUsers,
   // link per-user
   addUserLink, updateUserLink, deleteUserLink, getAllLinks,
+  renameUserFolder, deleteUserFolder,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };

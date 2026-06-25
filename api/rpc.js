@@ -41,6 +41,8 @@ const HANDLERS = {
   addUserLink: (user, title, url, folder) => backend.addUserLink(user, title, url, folder),
   updateUserLink: (user, row, title, url, folder) => backend.updateUserLink(user, row, title, url, folder),
   deleteUserLink: (user, row) => backend.deleteUserLink(user, row),
+  renameUserFolder: (user, oldFolder, newFolder) => backend.renameUserFolder(user, oldFolder, newFolder),
+  deleteUserFolder: (user, folder) => backend.deleteUserFolder(user, folder),
 };
 
 async function readJsonBody(req) {

@@ -178,7 +178,7 @@
       </nav>
 
       <div class="p-3 border-t border-gray-100 dark:border-slate-800 space-y-2.5">
-        <div class="p-3 rounded-xl bg-gray-50 dark:bg-slate-800/70">
+        <div id="modeUserBox" class="p-3 rounded-xl bg-gray-50 dark:bg-slate-800/70">
           <div class="flex items-center justify-between mb-2">
             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Mode User</div>
             <span id="roleBadge" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Member</span>
@@ -218,7 +218,7 @@
           <button onclick="toggleTheme()" class="w-9 h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex items-center justify-center text-gray-500 dark:text-slate-300 hover:bg-gray-50">
             <span id="themeIcon" class="material-icons-round text-[18px]">dark_mode</span>
           </button>
-          <button onclick="openTaskModal()" class="h-9 px-3 md:px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center gap-1.5">
+          <button id="btnAddTask" onclick="openTaskModal()" class="h-9 px-3 md:px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center gap-1.5">
             <span class="material-icons-round text-[18px]">add</span><span class="hidden sm:inline">Tambah Task</span>
           </button>
         </div>
@@ -465,7 +465,7 @@
         <button id="deleteBtn" onclick="deleteTaskFromModal()" class="hide px-3 py-2 rounded-lg border border-rose-200 text-rose-600 dark:border-rose-900/50 dark:text-rose-400 font-semibold text-sm hover:bg-rose-50">Hapus</button>
         <div class="ml-auto flex gap-2">
           <button onclick="closeTaskModal()" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-sm hover:bg-gray-50">Tutup</button>
-          <button onclick="saveTaskFromModal()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Simpan</button>
+          <button id="saveBtn" onclick="saveTaskFromModal()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Simpan</button>
         </div>
       </div>
     </div>
@@ -509,7 +509,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -556,6 +556,7 @@ const dummyTasks = [
 function init() {
   applyTheme();
   injectUtilityClasses();
+  detectViewLock();
   if (IS_GAS) {
     GAS.withSuccessHandler(data => {
       state.tasks = data.tasks || [];
@@ -586,31 +587,59 @@ function afterLoad() {
 /* ---------- Role scoping ---------- */
 function baseName(s){return String(s||'').replace(/\s*\(.*?\)\s*$/,'').trim().toLowerCase();}
 function isManager(user){if(String(user||'').toLowerCase()==='dev') return true; const u=baseName(user), uf=String(user||'').toLowerCase(); return state.managers.some(m=>{const mf=String(m).toLowerCase(); return mf===uf || baseName(m)===u;});}
+// Mode "Lintas Divisi" = akses lihat-saja untuk divisi lain (IT, Marketing, Sales):
+// melihat SEMUA task produk, tapi tidak bisa edit & hanya tab Dashboard/Kanban/List/Timeline/Calendar.
+const VIEWONLY_USER='Lintas Divisi';
+function isViewOnly(){ return baseName(state.currentUser)===baseName(VIEWONLY_USER); }
+function seesAll(){ return isManager(state.currentUser) || isViewOnly(); }
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 function scopedTasks(){
+  if(isViewOnly()) return [...state.tasks];                 // lihat semua (read-only)
   if(isManager(state.currentUser)){
     if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
     return [...state.tasks];
   }
   return state.tasks.filter(t=>ownsTask(t,state.currentUser));
 }
+// Deteksi link berbagi ?view=lintas → kunci ke mode lihat-saja (switcher disembunyikan).
+// ?view=normal atau ?unlock=1 untuk membuka kunci (berguna saat owner mau preview lalu kembali).
+function detectViewLock(){
+  try{
+    var sp=new URLSearchParams(location.search);
+    var v=(sp.get('view')||'').toLowerCase().replace(/[^a-z]/g,'');
+    if(v==='normal' || sp.has('unlock')){ try{ sessionStorage.removeItem('tt_lock_lintas'); }catch(_){ } return; }
+    var stored=false; try{ stored=sessionStorage.getItem('tt_lock_lintas')==='1'; }catch(_){ }
+    if(v==='lintas' || v==='lintasdivisi' || stored){
+      state.lockView=true; state.currentUser=VIEWONLY_USER;
+      try{ sessionStorage.setItem('tt_lock_lintas','1'); }catch(_){ }
+    }
+  }catch(_){ }
+}
 function applyRoleUI(){
+  const vo=isViewOnly();
   const mgr=isManager(state.currentUser);
   const badge=document.getElementById('roleBadge');
-  const roleLbl=String(state.currentUser||'').toLowerCase()==='dev'?'Dev':(mgr?'Manager':'Member');
-  if(badge){badge.textContent=roleLbl; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+(mgr?'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300');}
+  const roleLbl=vo?'Lihat Saja':(String(state.currentUser||'').toLowerCase()==='dev'?'Dev':(mgr?'Manager':'Member'));
+  if(badge){badge.textContent=roleLbl; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+(vo?'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100':(mgr?'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'));}
   const av=document.getElementById('userAvatar'); if(av){av.textContent=initials(state.currentUser); av.style.background=avatarBg(state.currentUser); av.style.color=avatarFg(state.currentUser);}
-  document.getElementById('managerFocusBox').classList.toggle('hide',!mgr);
-  document.getElementById('nav-activity').classList.toggle('hide',!mgr);
-  if(!mgr && state.activeView==='activity') switchView('dashboard');
-  const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr);
-  if(!mgr && state.activeView==='settings') switchView('dashboard');
+  document.getElementById('managerFocusBox').classList.toggle('hide',!mgr || vo);
+  document.getElementById('nav-activity').classList.toggle('hide',!mgr || vo);
+  const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
+  // Mode lihat-saja: sembunyikan tab Dashboard Lain, Link Saya, Komunikasi, dan tombol Tambah Task.
+  ['nav-extdash','nav-mylinks','nav-communication'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
+  const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
+  // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas).
+  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView);
+  // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
+  const hiddenForVo=['activity','settings','extdash','mylinks','communication'];
+  if(vo && hiddenForVo.includes(state.activeView)) switchView('dashboard');
+  else if(!mgr && (state.activeView==='activity'||state.activeView==='settings')) switchView('dashboard');
   if(!mgr) state.managerFocus='';
   const mine=state.tasks.filter(t=>ownsTask(t,state.currentUser));
   const mineActive=mine.filter(t=>!isDone(t));
   const el=document.getElementById('myTasksBadge');
-  if(el) el.textContent = mgr ? `Melihat semua task (${state.tasks.length})` : `${mineActive.length} task aktif Anda • ${mine.length} total`;
+  if(el) el.textContent = vo ? `Mode lihat saja • semua task (${state.tasks.length})` : (mgr ? `Melihat semua task (${state.tasks.length})` : `${mineActive.length} task aktif Anda • ${mine.length} total`);
 }
 
 /* ---------- Theme / chrome ---------- */
@@ -627,6 +656,7 @@ function toggleMobileSidebar(){const s=document.getElementById('sidebar'); if(s.
 function showToast(msg, ok=true){const el=document.getElementById('toast');el.textContent=msg;el.className='fixed right-5 bottom-5 z-[120] px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium '+(ok?'bg-emerald-600':'bg-rose-600');setTimeout(()=>el.classList.add('hide'),3000);}
 function renderDeadlineReminder(){
   const box=document.getElementById('deadlineReminder'); if(!box) return;
+  if(isViewOnly()){ box.classList.add('hide'); box.innerHTML=''; return; }
   if(state._deadlineDismissed){ box.classList.add('hide'); box.innerHTML=''; return; }
   const mine=scopedTasks();
   const overdue=mine.filter(t=>isLate(t));
@@ -660,6 +690,12 @@ function injectUtilityClasses(){
 function loginEmail(){ try{ return localStorage.getItem('tt_user_email'); }catch(_){ return null; } }
 function populateUserSelect(){
   const select = document.getElementById('currentUser');
+  if(state.lockView){   // diakses lewat link berbagi: kunci ke Lintas Divisi, sembunyikan switcher
+    state.currentUser=VIEWONLY_USER;
+    if(select){ select.innerHTML=`<option value="${escapeHtml(VIEWONLY_USER)}">${escapeHtml(VIEWONLY_USER)}</option>`; select.value=VIEWONLY_USER; select.disabled=true; }
+    const box=document.getElementById('modeUserBox'); if(box) box.classList.add('hide');
+    return;
+  }
   const pics = state.options.pic || ['Nynda'];
   const EMAP = (typeof EMAIL_TO_USER==='object' && EMAIL_TO_USER) ? EMAIL_TO_USER : {};
   const email = loginEmail();
@@ -883,6 +919,7 @@ function viewTasks(){
 /* ---------- Quick inline update (1 field, ringan) ---------- */
 function quickUpdate(ev, id, field, value){
   if(ev && ev.stopPropagation) ev.stopPropagation();
+  if(isViewOnly()) return;   // mode lihat-saja
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   const prev=t[field]; if(same(prev,value)) return;
   t[field]=value; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
@@ -894,8 +931,9 @@ function quickUpdate(ev, id, field, value){
   } else { showToast('Tersimpan (preview)'); applyRoleUI(); renderAll(); }
 }
 function inlineSelect(field, t){
-  const opts=state.options[field]||[];
   const cur=t[field]||'';
+  if(isViewOnly()) return `<span class="text-xs font-medium text-gray-700 dark:text-slate-200">${escapeHtml(cur||'—')}</span>`;
+  const opts=state.options[field]||[];
   const options=opts.map(o=>`<option value="${escapeAttr(o)}" ${same(o,cur)?'selected':''}>${escapeHtml(o)}</option>`).join('');
   return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium text-gray-700 dark:text-slate-200 bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
 }
@@ -943,8 +981,8 @@ function renderCharts(){
   if(picCtx){
     if(state.chartPic) state.chartPic.destroy();
     let cfg;
-    if(isManager(state.currentUser)){
-      // Manager: stacked per Priority, x = PIC (tanpa "Tanpa Data")
+    if(seesAll()){
+      // Manager / Lihat-saja: stacked per Priority, x = PIC (tanpa "Tanpa Data")
       const byPic=countBy(tasks,'pic'); const picLabels=Object.keys(byPic).filter(p=>p && p!=='Tanpa Data');
       const priDatasets=priList.map(pr=>({label:pr,data:picLabels.map(pic=>tasks.filter(t=>same(t.pic,pic)&&same(t.priority,pr)).length),backgroundColor:priColor(pr),borderRadius:6,stack:'beban'}));
       cfg={type:'bar',data:{labels:picLabels,datasets:priDatasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,boxHeight:10,padding:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}};
@@ -984,7 +1022,7 @@ function renderBoard(){
       </div>
     </div>`;
   }).join('');
-  if(window.Sortable){
+  if(window.Sortable && !isViewOnly()){
     board.querySelectorAll('.kanban-col').forEach(colEl=>{
       const s=Sortable.create(colEl,{group:'tasks',draggable:'[data-task-id]',animation:150,ghostClass:'card-drag-ghost',chosenClass:'card-drag-chosen',
         onEnd:(evt)=>{
@@ -1106,7 +1144,7 @@ function renderCalendar(){
   });
   try{
     state.calendar=new FullCalendar.Calendar(el,{
-      initialView:'dayGridMonth', height:'auto', editable:true, eventStartEditable:true, eventDurationEditable:true,
+      initialView:'dayGridMonth', height:'auto', editable:!isViewOnly(), eventStartEditable:!isViewOnly(), eventDurationEditable:!isViewOnly(),
       firstDay:1, events:events,
       headerToolbar:{left:'prev,next today',center:'title',right:''},
       eventClick:info=>{if(info.jsEvent&&info.jsEvent.preventDefault)info.jsEvent.preventDefault(); openTaskModal(info.event.id);},
@@ -1118,6 +1156,7 @@ function renderCalendar(){
 }
 
 function rescheduleTask(id, startStr, dueStr){
+  if(isViewOnly()) return;   // mode lihat-saja
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   const ps=t.startDate, pd=t.dueDate;
   t.startDate=startStr; t.dueDate=dueStr; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
@@ -1229,9 +1268,10 @@ function sendCommunicationComment(){
 function openTaskModal(id=''){
   populateModalDropdowns();
   const t=id?state.tasks.find(x=>x.id===id):null;
+  const vo=isViewOnly();
   document.getElementById('taskModal').classList.remove('hide');
-  document.getElementById('modalTitle').textContent=t?'Edit Task':'Tambah Task';
-  document.getElementById('deleteBtn').classList.toggle('hide',!t);
+  document.getElementById('modalTitle').textContent=vo?'Detail Task (lihat saja)':(t?'Edit Task':'Tambah Task');
+  document.getElementById('deleteBtn').classList.toggle('hide',!t || vo);
   setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan'); setVal('fieldTaskName', t?.taskName||'');
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
   setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||'');
@@ -1240,14 +1280,21 @@ function openTaskModal(id=''){
   [...document.getElementById('fieldPlatform').options].forEach(o=>o.selected=selectedPlatform.includes(o.value));
   const selectedSupport=String(t?.support||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldSupport').options].forEach(o=>o.selected=selectedSupport.includes(o.value));
-  document.getElementById('modalCommentsBox').classList.toggle('hide',!t);
-  if(t){loadModalComments(t.id);}
+  document.getElementById('modalCommentsBox').classList.toggle('hide',!t || vo);
+  if(t && !vo){loadModalComments(t.id);}
+  setModalReadonly(vo);
+}
+function setModalReadonly(ro){
+  const modal=document.getElementById('taskModal'); if(!modal) return;
+  modal.querySelectorAll('input,select,textarea').forEach(el=>{ if(el.id==='fieldIdDisplay') return; el.disabled=ro; });
+  const sb=document.getElementById('saveBtn'); if(sb) sb.classList.toggle('hide',ro);
 }
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
 function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
 function saveTaskFromModal(){
+  if(isViewOnly()) return;
   const task=modalTask(); if(!task.taskName){showToast('Task Name wajib diisi.',false);return;}
   task.actor=state.currentUser;
   document.getElementById('loading').classList.remove('hide');
@@ -1255,6 +1302,7 @@ function saveTaskFromModal(){
   else { if(!task.id) task.id='TSK-'+String(state.tasks.length+1).padStart(3,'0'); task.lastUpdate=todayStr()+' 10:00'; task.support=task.support.join(', '); const idx=state.tasks.findIndex(t=>t.id===task.id); if(idx>=0) state.tasks[idx]=task; else state.tasks.push(task); document.getElementById('loading').classList.add('hide'); showToast('Task tersimpan (preview).'); closeTaskModal(); applyRoleUI(); renderAll(); }
 }
 function deleteTaskFromModal(){
+  if(isViewOnly()) return;
   const id=getVal('fieldId'); if(!id || !confirm('Hapus task '+id+'?')) return;
   if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteTask(id,state.currentUser);}
   else {state.tasks=state.tasks.filter(t=>t.id!==id);showToast('Task dihapus (preview).');closeTaskModal();applyRoleUI();renderAll();}
@@ -1292,8 +1340,9 @@ function renderExternalDashboards(){
   grid.innerHTML = (EXTERNAL_DASHBOARDS&&EXTERNAL_DASHBOARDS.length) ? EXTERNAL_DASHBOARDS.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-center gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white">${escapeHtml(d.title||'Dashboard')}</div></div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
 }
 function findLinkByRow(row){ return (state.links||[]).find(l=>String(l.row)===String(row)); }
+function attrJs(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 function linkCard(l){
-  return `<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex items-center gap-3"><div class="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[18px]">link</span></div><div class="flex-1 min-w-0"><a href="${escapeAttr(l.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-sm text-gray-900 dark:text-white hover:text-indigo-600 truncate block">${escapeHtml(l.title||l.url)}</a><div class="text-[11px] text-gray-400 truncate">${escapeHtml(l.url)}</div></div><button onclick="editLink(${l.row})" class="text-gray-400 hover:text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">edit</span></button><button onclick="deleteLink(${l.row})" class="text-rose-500 hover:text-rose-600 shrink-0"><span class="material-icons-round text-[18px]">delete</span></button></div>`;
+  return `<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex items-center gap-2.5"><div class="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[18px]">link</span></div><div class="flex-1 min-w-0"><a href="${escapeAttr(l.url)}" target="_blank" rel="noopener noreferrer" class="font-medium text-sm text-gray-900 dark:text-white hover:text-indigo-600 truncate block">${escapeHtml(l.title||l.url)}</a><div class="text-[11px] text-gray-400 truncate">${escapeHtml(l.url)}</div></div><button title="Pindah folder" onclick="moveLink(${l.row})" class="text-gray-400 hover:text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">drive_file_move</span></button><button title="Edit" onclick="editLink(${l.row})" class="text-gray-400 hover:text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">edit</span></button><button title="Hapus" onclick="deleteLink(${l.row})" class="text-rose-500 hover:text-rose-600 shrink-0"><span class="material-icons-round text-[18px]">delete</span></button></div>`;
 }
 function renderMyLinks(){
   const list=document.getElementById('myLinksList'); if(!list) return;
@@ -1311,7 +1360,11 @@ function renderMyLinks(){
   const groups={};
   mine.forEach(l=>{ const f=l.folder||'Umum'; (groups[f]=groups[f]||[]).push(l); });
   const fkeys=Object.keys(groups).sort((a,b)=> a==='Umum'?1 : b==='Umum'?-1 : a.localeCompare(b));
-  list.innerHTML=fkeys.map(f=>`<div><div class="flex items-center gap-2 mb-2 px-1"><span class="material-icons-round text-[18px] text-amber-500">folder</span><h3 class="text-sm font-bold text-gray-700 dark:text-slate-200">${escapeHtml(f)}</h3><span class="text-[11px] text-gray-400 bg-gray-100 dark:bg-slate-800 rounded-full px-2 py-0.5">${groups[f].length}</span></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${groups[f].map(l=>linkCard(l)).join('')}</div></div>`).join('');
+  list.innerHTML=fkeys.map(f=>{
+    const isUmum=(f==='Umum');
+    const tools=isUmum?'':`<button title="Ubah nama folder" onclick="renameFolder('${attrJs(f)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">drive_file_rename_outline</span></button><button title="Hapus folder (link pindah ke Umum)" onclick="deleteFolder('${attrJs(f)}')" class="text-gray-400 hover:text-rose-600"><span class="material-icons-round text-[16px]">folder_delete</span></button>`;
+    return `<div><div class="flex items-center gap-2 mb-2 px-1"><span class="material-icons-round text-[18px] ${isUmum?'text-gray-400':'text-amber-500'}">${isUmum?'folder_open':'folder'}</span><h3 class="text-sm font-bold text-gray-700 dark:text-slate-200">${escapeHtml(f)}</h3><span class="text-[11px] text-gray-400 bg-gray-100 dark:bg-slate-800 rounded-full px-2 py-0.5">${groups[f].length}</span><div class="flex items-center gap-1 ml-1">${tools}</div></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${groups[f].map(l=>linkCard(l)).join('')}</div></div>`;
+  }).join('');
 }
 function addLink(){
   const t=(document.getElementById('newLinkTitle')||{}).value||''; const u=(document.getElementById('newLinkUrl')||{}).value||''; const f=(document.getElementById('newLinkFolder')||{}).value||'';
@@ -1330,6 +1383,24 @@ function deleteLink(row){
   const l=findLinkByRow(row); if(!l) return;
   if(!confirm('Hapus link "'+(l.title||l.url)+'"?')) return;
   GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus link', false); return; } state.links=res.links||state.links; showToast(res.message||'Link dihapus.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteUserLink(state.currentUser, row);
+}
+function moveLink(row){
+  const l=findLinkByRow(row); if(!l) return;
+  const nf=prompt('Pindahkan ke folder (kosongkan = Umum):', l.folder||''); if(nf===null) return;
+  if(String(nf).trim()===String(l.folder||'').trim()) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal memindahkan link', false); return; } state.links=res.links||state.links; showToast('Link dipindahkan.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateUserLink(state.currentUser, row, l.title, l.url, String(nf).trim());
+}
+function renameFolder(oldName){
+  if(oldName==='Umum'){ showToast('Folder "Umum" tidak bisa diubah.', false); return; }
+  const nn=prompt('Nama folder baru:', oldName); if(nn===null) return;
+  if(!nn.trim()){ showToast('Nama folder wajib diisi.', false); return; }
+  if(nn.trim()==='Umum'){ showToast('Untuk memindah link ke Umum, pakai tombol Hapus folder.', false); return; }
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah folder', false); return; } state.links=res.links||state.links; showToast(res.message||'Folder diubah.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).renameUserFolder(state.currentUser, oldName, nn.trim());
+}
+function deleteFolder(name){
+  if(name==='Umum'){ showToast('Folder "Umum" tidak bisa dihapus.', false); return; }
+  if(!confirm('Hapus folder "'+name+'"?\n\nLink di dalamnya TIDAK ikut terhapus — hanya dipindah ke "Umum".')) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus folder', false); return; } state.links=res.links||state.links; showToast(res.message||'Folder dihapus.'); renderMyLinks(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteUserFolder(state.currentUser, name);
 }
 function renderPinAdmin(){
   const card=document.getElementById('pinAdminCard'); if(!card) return;
