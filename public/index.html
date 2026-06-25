@@ -442,6 +442,9 @@ function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.cl
 // Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
 var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' };
 function applyEmailUser(email){ var u=EMAIL_TO_USER[String(email||'').trim().toLowerCase()]; if(u){ try{ localStorage.setItem('tt_current_user', u); }catch(e){} } }
+// Email developer/admin: akses penuh (lihat semua task) + bebas pilih mode apa pun, lewati pembatasan.
+var DEV_EMAILS = ['akbaralqahri@gmail.com'];
+function isDevEmail(){ var e=loginEmail(); return !!e && DEV_EMAILS.map(function(x){return String(x).toLowerCase();}).includes(String(e).trim().toLowerCase()); }
 function submitLogin(){
   var email=(document.getElementById('loginEmail')||{}).value||'';
   var pw=(document.getElementById('loginPw')||{}).value||'';
@@ -478,7 +481,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -503,6 +506,7 @@ function init() {
       state.tasks = data.tasks || [];
       state.options = Object.assign({}, dummyOptions, data.options || {});
       state.activity = data.activity || [];
+      state.commentsSummary = data.commentsSummary || [];
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
@@ -524,7 +528,7 @@ function afterLoad() {
 
 /* ---------- Role scoping ---------- */
 function baseName(s){return String(s||'').replace(/\s*\(.*?\)\s*$/,'').trim().toLowerCase();}
-function isManager(user){const u=baseName(user), uf=String(user||'').toLowerCase(); return state.managers.some(m=>{const mf=String(m).toLowerCase(); return mf===uf || baseName(m)===u;});}
+function isManager(user){if(isDevEmail()) return true; const u=baseName(user), uf=String(user||'').toLowerCase(); return state.managers.some(m=>{const mf=String(m).toLowerCase(); return mf===uf || baseName(m)===u;});}
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 function scopedTasks(){
@@ -593,12 +597,26 @@ function injectUtilityClasses(){
 }
 
 /* ---------- Selects ---------- */
+function loginEmail(){ try{ return localStorage.getItem('tt_user_email'); }catch(_){ return null; } }
 function populateUserSelect(){
   const select = document.getElementById('currentUser');
-  select.innerHTML = (state.options.pic || []).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
-  const pics=state.options.pic||['Nynda'];
-  if(!pics.includes(state.currentUser)){ const match=pics.find(p=>baseName(p)===baseName(state.currentUser)); state.currentUser = match || pics[0]; }
+  const pics = state.options.pic || ['Nynda'];
+  const EMAP = (typeof EMAIL_TO_USER==='object' && EMAIL_TO_USER) ? EMAIL_TO_USER : {};
+  const email = loginEmail();
+  const dev = isDevEmail();
+  const locked = (!dev && email) ? (EMAP[String(email).trim().toLowerCase()]||null) : null;
+  const claimed = Object.values(EMAP).map(u=>baseName(u));
+  let allowed;
+  if(dev) allowed = pics.slice();                                             // developer -> bebas pilih semua mode
+  else if(locked) allowed = pics.filter(p=>baseName(p)===baseName(locked));    // email terpetakan -> hanya user itu
+  else if(email) allowed = pics.filter(p=>!claimed.includes(baseName(p)));     // login email lain -> user "diklaim" disembunyikan
+  else allowed = pics.slice();                                                 // belum login email -> bebas
+  if(!allowed.length) allowed = pics;
+  select.innerHTML = allowed.map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  if(locked){ const lm=pics.find(p=>baseName(p)===baseName(locked)); if(lm) state.currentUser=lm; }
+  if(!allowed.includes(state.currentUser)){ const match=allowed.find(p=>baseName(p)===baseName(state.currentUser)); state.currentUser = match || allowed[0]; }
   select.value = state.currentUser;
+  select.disabled = !!locked;
 }
 function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();}
 function populateManagerFocus(){const el=document.getElementById('managerFocusPic');if(!el)return;el.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');el.value=state.managerFocus;}
@@ -836,7 +854,7 @@ function renderBoard(){
   board.innerHTML=statuses.map(status=>{
     const col=tasks.filter(t=>matchStatus(t,status,statuses)).sort(cardSort);
     const m=statusMeta(status);
-    return `<div class="w-[300px] shrink-0 flex flex-col rounded-xl p-2 bg-gray-100 dark:bg-slate-900/70 max-h-[calc(100vh-200px)]">
+    return `<div class="flex-1 min-w-[170px] flex flex-col rounded-xl p-2 bg-gray-100 dark:bg-slate-900/70 max-h-[calc(100vh-200px)]">
       <div class="flex items-center justify-between px-2 py-1.5 mb-1 shrink-0">
         <div class="flex items-center gap-2 min-w-0">
           <span class="w-2 h-2 rounded-full shrink-0" style="background:${m.dot}"></span>
@@ -1001,10 +1019,9 @@ function getCommReadMap(){ try{ return JSON.parse(localStorage.getItem(commReadK
 function setCommReadMap(m){ try{ localStorage.setItem(commReadKey(), JSON.stringify(m)); }catch(e){} }
 function commentEntriesByTask(){
   const map={};
-  (state.activity||[]).forEach(a=>{
-    if(String(a.action||'').toLowerCase()!=='comment') return;
-    const id=String(a.taskId||''); if(!id) return;
-    (map[id]=map[id]||[]).push({ts:String(a.timestamp||''), user:String(a.user||'')});
+  (state.commentsSummary||[]).forEach(c=>{
+    const id=String(c.taskId||''); if(!id) return;
+    (map[id]=map[id]||[]).push({ts:String(c.timestamp||''), user:String(c.author||'')});
   });
   return map;
 }
@@ -1124,7 +1141,7 @@ function loadModalComments(id){
 }
 function sendModalComment(){const id=getVal('fieldId'); const msg=document.getElementById('modalCommentInput').value.trim(); if(!id||!msg)return; sendComment(id,msg,()=>{document.getElementById('modalCommentInput').value=''; loadModalComments(id);});}
 function sendComment(taskId,message,cb){
-  if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} showToast(res.message); state.comments=res.comments||[]; renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId,author:state.currentUser,message});}
+  if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} showToast(res.message); state.comments=res.comments||[]; state.commentsSummary=(state.commentsSummary||[]).concat([{timestamp:todayStr()+' '+new Date().toTimeString().slice(0,5),taskId:taskId,author:state.currentUser}]); updateCommNavBadge(); renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId,author:state.currentUser,message});}
   else {state.comments.push({timestamp:todayStr()+' 12:00',author:state.currentUser,message}); renderCommunicationPanel(); showToast('Komentar tersimpan (preview).'); if(cb)cb();}
 }
 function renderComments(targetId,comments){
@@ -1177,6 +1194,7 @@ function runSetup(){
       state.tasks=data.tasks||[];
       state.options=Object.assign({},dummyOptions,data.options||{});
       state.activity=data.activity||[];
+      state.commentsSummary=data.commentsSummary||[];
       if(data.meta&&data.meta.managers&&data.meta.managers.length) state.managers=data.meta.managers;
       afterLoad();
     }).withFailureHandler(()=>{}).getBootstrapData();

@@ -562,16 +562,26 @@ async function getActivityLog(limit) {
 /* BOOTSTRAP                                                           */
 /* ------------------------------------------------------------------ */
 
+async function getAllCommentsLite() {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.COMMENTS_SHEET}!A2:D`); } catch (e) { return []; }
+  return rows
+    .map(r => ({ timestamp: formatDate(r && r[0], true), taskId: String((r && r[1]) || ''), author: String((r && r[2]) || '') }))
+    .filter(c => c.taskId);
+}
+
 async function getBootstrapData() {
-  const [tasks, options, activity] = await Promise.all([
+  const [tasks, options, activity, commentsSummary] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
+    getAllCommentsLite(),
   ]);
   return {
     tasks,
     options,
     activity,
+    commentsSummary,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
