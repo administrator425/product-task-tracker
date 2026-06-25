@@ -34,23 +34,24 @@ const CONFIG = {
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
-  LAST_COL_LETTER: 'N',
+  LAST_COL_LETTER: 'P',
 };
 
 const TASK_HEADERS = [
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority',
   'Task Name', 'Stage', 'Platform', 'PIC', 'Support', 'Document',
-  'PIC Notes', 'PM Notes',
+  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi',
 ];
 
-// Pemetaan field -> kolom (B..Q). Urutan tetap, sama seperti Apps Script.
+// Pemetaan field -> kolom (B..P). Urutan tetap.
 const COL = {
   taskId: 'B', createdDate: 'C', dueDate: 'D', status: 'E',
   priority: 'F', taskName: 'G', stage: 'H', platform: 'I', pic: 'J',
   support: 'K', document: 'L', picNotes: 'M', pmNotes: 'N',
+  divisiTujuan: 'O', kontakDivisi: 'P',
 };
 
-const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support'];
+const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support', 'division'];
 
 const DEFAULT_OPTIONS = {
   status: ['Todo', 'In progress', 'Review PM', 'Revisi', 'Hold', 'Done'],
@@ -67,12 +68,14 @@ const DEFAULT_OPTIONS = {
   ],
   pic: ['Nynda', 'Andika', 'Alya', 'Kiki', 'Bilar', 'Ali', 'Dhea', 'Uma', 'Arifah', 'Lintas Divisi'],
   support: ['Nynda', 'Andika', 'Alya', 'Kiki', 'Bilar', 'Ali', 'Dhea', 'Uma', 'Arifah', 'Lintas Divisi'],
+  division: ['IT', 'Marketing', 'Sales'],
 };
 
 // Validasi dropdown di dalam Spreadsheet (header -> tipe opsi).
 const VALIDATION_MAP = {
   Status: 'status', Priority: 'priority', Stage: 'stage',
   Platform: 'platform', PIC: 'pic', Support: 'support',
+  'Divisi Tujuan': 'division',
 };
 
 /* ------------------------------------------------------------------ */
@@ -254,6 +257,8 @@ function rowToTask(row, rowNumber) {
     document: String(g(10)).trim(),
     picNotes: String(g(11)).trim(),
     pmNotes: String(g(12)).trim(),
+    divisiTujuan: String(g(13)).trim(),
+    kontakDivisi: String(g(14)).trim(),
     // Field virtual (tidak ada kolomnya di sheet ini) — disediakan agar UI lama tetap jalan.
     startDate: createdDate,
     approvalGate: '',
@@ -265,7 +270,7 @@ function taskToRow(task, existingTask) {
   const id = task.id || null; // di-resolve oleh pemanggil bila perlu generate
   const createdDate = task.createdDate || (existingTask && existingTask.createdDate) || toSheetDate(new Date());
   const support = Array.isArray(task.support) ? task.support.join(', ') : String(task.support || '');
-  // Sheet ini 13 kolom (B..N): tanpa Start Date, Approval Gate, Last Update.
+  // Sheet ini 15 kolom (B..P): tanpa Start Date, Approval Gate, Last Update.
   return [
     id || '',
     toSheetDate(createdDate),
@@ -280,6 +285,8 @@ function taskToRow(task, existingTask) {
     task.document || '',
     task.picNotes || '',
     task.pmNotes || '',
+    task.divisiTujuan || '',
+    task.kontakDivisi || '',
   ];
 }
 

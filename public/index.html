@@ -415,6 +415,17 @@
       <div class="overflow-y-auto p-5 scrollbar-thin">
         <form id="taskForm" onsubmit="event.preventDefault(); saveTaskFromModal();" class="space-y-4">
           <input type="hidden" id="fieldId">
+          <div id="taskTypeRow" class="hide rounded-xl border border-gray-200 dark:border-slate-700 p-3 bg-gray-50/60 dark:bg-slate-800/40">
+            <label class="form-label">Tipe Task</label>
+            <div class="flex gap-2">
+              <label class="flex-1 cursor-pointer"><input type="radio" name="taskType" value="internal" class="peer sr-only" onchange="toggleExternalFields()"><div class="text-center text-sm font-medium px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600">Internal (Produk)</div></label>
+              <label class="flex-1 cursor-pointer"><input type="radio" name="taskType" value="eksternal" class="peer sr-only" onchange="toggleExternalFields()"><div class="text-center text-sm font-medium px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600">Lintas Divisi (Eksternal)</div></label>
+            </div>
+            <div id="externalFields" class="hide grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <div><label class="form-label">Divisi Tujuan</label><select id="fieldDivisiTujuan" class="form-control"></select></div>
+              <div><label class="form-label">Kontak Divisi</label><input id="fieldKontakDivisi" class="form-control" placeholder="Nama kontak di divisi tujuan (mis. Budi - IT)"></div>
+            </div>
+          </div>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div class="lg:col-span-2">
               <label class="form-label">Task Name</label>
@@ -544,7 +555,7 @@ const dummyOptions = {
   status:['Todo','In progress','Review PM','Hold','Done'], priority:['Urgent','High','Normal','Low'],
   stage:['RnD','Develop Materi','Develop Soal','QC Konten','Input','Liveclass','Report','Data & Intelligence','Manajemen Sistem','Manajemen Guru'],
   platform:['All Platform','Cerebrum','JadiASN','JadiPPPK','JadiBUMN','JadiSekdin','JadiBeasiswa','JadiOJK','JadiPCPM','JadiPrajurit','JadiPolisi','Jago TPA','Siadu','Markaz','Toefl Academy'],
-  pic:['Nynda','Andika','Alya','Kiki','Bilar','Ali','Dhea','Uma','Arifah'], support:['Nynda','Andika','Alya','Kiki','Bilar','Ali','Dhea','Uma','Arifah'], approvalGate:['No','Yes','Need Approval','Approved','Rejected']
+  pic:['Nynda','Andika','Alya','Kiki','Bilar','Ali','Dhea','Uma','Arifah','Lintas Divisi'], support:['Nynda','Andika','Alya','Kiki','Bilar','Ali','Dhea','Uma','Arifah','Lintas Divisi'], division:['IT','Marketing','Sales'], approvalGate:['No','Yes','Need Approval','Approved','Rejected']
 };
 const dummyTasks = [
   {id:'TSK-001',createdDate:'2026-06-02',dueDate:'2026-06-02',startDate:'2026-06-02',status:'Done',priority:'High',taskName:'QC 50 video pembahasan BAPPENAS',stage:'QC Konten',platform:'JadiASN',pic:'Uma',support:'',document:'Paket 5 - M. Alfian',approvalGate:'No',lastUpdate:'2026-06-02 10:10',picNotes:'Selesai QC.',pmNotes:''},
@@ -592,10 +603,14 @@ function isManager(user){if(String(user||'').toLowerCase()==='dev') return true;
 const VIEWONLY_USER='Lintas Divisi';
 function isViewOnly(){ return baseName(state.currentUser)===baseName(VIEWONLY_USER); }
 function seesAll(){ return isManager(state.currentUser) || isViewOnly(); }
+// Task eksternal (lintas divisi) = punya Divisi Tujuan. Hanya manager/dev yang boleh buat/edit/hapus.
+function isExternalTask(t){ return !!(t && String(t.divisiTujuan||'').trim()); }
+function canCreateExternal(){ return !isViewOnly() && isManager(state.currentUser); }
+function canEditTask(t){ if(isViewOnly()) return false; if(isExternalTask(t)) return isManager(state.currentUser); return true; }
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 function scopedTasks(){
-  if(isViewOnly()) return [...state.tasks];                 // lihat semua (read-only)
+  if(isViewOnly()) return state.tasks.filter(isExternalTask);   // hanya task lintas divisi
   if(isManager(state.currentUser)){
     if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
     return [...state.tasks];
@@ -626,13 +641,15 @@ function applyRoleUI(){
   document.getElementById('managerFocusBox').classList.toggle('hide',!mgr || vo);
   document.getElementById('nav-activity').classList.toggle('hide',!mgr || vo);
   const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
-  // Mode lihat-saja: sembunyikan tab Dashboard Lain, Link Saya, Komunikasi, dan tombol Tambah Task.
-  ['nav-extdash','nav-mylinks','nav-communication'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
+  // Mode lihat-saja: sembunyikan tab Dashboard Lain, Link Saya, dan tombol Tambah Task.
+  // Komunikasi TETAP tampil (satu-satunya fitur yang bisa dipakai aktif: kirim chat).
+  ['nav-extdash','nav-mylinks'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
+  const navComm=document.getElementById('nav-communication'); if(navComm) navComm.classList.remove('hide');
   const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
   // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas).
   const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView);
   // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
-  const hiddenForVo=['activity','settings','extdash','mylinks','communication'];
+  const hiddenForVo=['activity','settings','extdash','mylinks'];
   if(vo && hiddenForVo.includes(state.activeView)) switchView('dashboard');
   else if(!mgr && (state.activeView==='activity'||state.activeView==='settings')) switchView('dashboard');
   if(!mgr) state.managerFocus='';
@@ -762,9 +779,13 @@ function populateModalDropdowns(){
   const _platSel=document.getElementById('fieldPlatform');
   if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   fillSelect('fieldPic', state.options.pic, null, state.currentUser);
+  fillSelect('fieldDivisiTujuan', state.options.division||['IT','Marketing','Sales'], 'Pilih divisi…');
   const support = document.getElementById('fieldSupport');
   support.innerHTML = (state.options.support || state.options.pic || []).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
 }
+function getTaskType(){ const r=document.querySelector('input[name="taskType"]:checked'); return r?r.value:'internal'; }
+function setTaskType(v){ document.querySelectorAll('input[name="taskType"]').forEach(r=>{ r.checked=(r.value===v); }); }
+function toggleExternalFields(){ const box=document.getElementById('externalFields'); if(box) box.classList.toggle('hide', getTaskType()!=='eksternal'); }
 function fillSelect(id, values=[], placeholder=null, defaultValue=''){
   const el=document.getElementById(id); if(!el) return;
   const old=el.value;
@@ -919,8 +940,8 @@ function viewTasks(){
 /* ---------- Quick inline update (1 field, ringan) ---------- */
 function quickUpdate(ev, id, field, value){
   if(ev && ev.stopPropagation) ev.stopPropagation();
-  if(isViewOnly()) return;   // mode lihat-saja
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  if(!canEditTask(t)){ if(isExternalTask(t)&&!isViewOnly()) showToast('Hanya manager/dev yang bisa mengubah task lintas divisi.', false); return; }
   const prev=t[field]; if(same(prev,value)) return;
   t[field]=value; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
   if(IS_GAS){
@@ -932,7 +953,7 @@ function quickUpdate(ev, id, field, value){
 }
 function inlineSelect(field, t){
   const cur=t[field]||'';
-  if(isViewOnly()) return `<span class="text-xs font-medium text-gray-700 dark:text-slate-200">${escapeHtml(cur||'—')}</span>`;
+  if(!canEditTask(t)) return `<span class="text-xs font-medium text-gray-700 dark:text-slate-200">${escapeHtml(cur||'—')}</span>`;
   const opts=state.options[field]||[];
   const options=opts.map(o=>`<option value="${escapeAttr(o)}" ${same(o,cur)?'selected':''}>${escapeHtml(o)}</option>`).join('');
   return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium text-gray-700 dark:text-slate-200 bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
@@ -1024,7 +1045,7 @@ function renderBoard(){
   }).join('');
   if(window.Sortable && !isViewOnly()){
     board.querySelectorAll('.kanban-col').forEach(colEl=>{
-      const s=Sortable.create(colEl,{group:'tasks',draggable:'[data-task-id]',animation:150,ghostClass:'card-drag-ghost',chosenClass:'card-drag-chosen',
+      const s=Sortable.create(colEl,{group:'tasks',draggable:'[data-task-id]',filter:'.nodrag',animation:150,ghostClass:'card-drag-ghost',chosenClass:'card-drag-chosen',
         onEnd:(evt)=>{
           const id=evt.item.dataset.taskId;
           const newStatus=evt.to.dataset.status;
@@ -1049,7 +1070,7 @@ function matchStatus(t,status,statuses){
 function taskCard(t){
   const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
   const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'');
-  return `<div data-task-id="${escapeAttr(t.id)}" onclick="openTaskModal('${escapeAttr(t.id)}')" class="tt-card bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ring-gray-200 dark:ring-slate-700 hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
+  return `<div data-task-id="${escapeAttr(t.id)}" onclick="openTaskModal('${escapeAttr(t.id)}')" class="tt-card ${canEditTask(t)?'':'nodrag'} bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ${isExternalTask(t)?'ring-violet-300 dark:ring-violet-800':'ring-gray-200 dark:ring-slate-700'} hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
     <div class="flex items-start justify-between gap-2">
       <span class="text-[10px] font-mono text-gray-400">${escapeHtml(t.id||'-')}</span>
       ${overdue?'<span class="text-[10px] font-bold text-rose-600">TELAT</span>':(today?'<span class="text-[10px] font-bold text-pink-600">HARI INI</span>':(t.approvalGate && !same(t.approvalGate,'No')?`<span class="text-[10px] font-semibold text-amber-600">${escapeHtml(t.approvalGate)}</span>`:''))}
@@ -1057,6 +1078,7 @@ function taskCard(t){
     <p class="text-[13px] font-medium leading-snug text-gray-800 dark:text-slate-100 mt-1.5 line-clamp-3">${escapeHtml(t.taskName||'-')}</p>
     <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
       ${priorityPill(t.priority)}
+      ${isExternalTask(t)?`<span class="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[12px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}
       ${t.platform?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform)}</span>`:''}
       ${t.stage?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage)}</span>`:''}
     </div>
@@ -1075,7 +1097,7 @@ function renderTable(){
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
-    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}</div></td>
+    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
     <td class="px-4 py-3">${inlineSelect('status', t)}</td>
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
     <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
@@ -1156,8 +1178,8 @@ function renderCalendar(){
 }
 
 function rescheduleTask(id, startStr, dueStr){
-  if(isViewOnly()) return;   // mode lihat-saja
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  if(!canEditTask(t)) return;
   const ps=t.startDate, pd=t.dueDate;
   t.startDate=startStr; t.dueDate=dueStr; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
   if(IS_GAS){
@@ -1268,34 +1290,45 @@ function sendCommunicationComment(){
 function openTaskModal(id=''){
   populateModalDropdowns();
   const t=id?state.tasks.find(x=>x.id===id):null;
-  const vo=isViewOnly();
+  const external=isExternalTask(t);
+  const ro = t ? !canEditTask(t) : isViewOnly();
   document.getElementById('taskModal').classList.remove('hide');
-  document.getElementById('modalTitle').textContent=vo?'Detail Task (lihat saja)':(t?'Edit Task':'Tambah Task');
-  document.getElementById('deleteBtn').classList.toggle('hide',!t || vo);
+  document.getElementById('modalTitle').textContent= ro ? 'Detail Task (lihat saja)' : (t?'Edit Task':'Tambah Task');
+  document.getElementById('deleteBtn').classList.toggle('hide',!t || ro);
+  // Tipe task: toggle hanya untuk manager/dev; member tetap melihat label bila task ini memang eksternal.
+  const typeRow=document.getElementById('taskTypeRow'); if(typeRow) typeRow.classList.toggle('hide', !canCreateExternal() && !external);
+  setTaskType(external?'eksternal':'internal');
   setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan'); setVal('fieldTaskName', t?.taskName||'');
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
   setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||'');
   setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
+  setVal('fieldDivisiTujuan', t?.divisiTujuan||''); setVal('fieldKontakDivisi', t?.kontakDivisi||'');
   const selectedPlatform=String(t?.platform||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldPlatform').options].forEach(o=>o.selected=selectedPlatform.includes(o.value));
   const selectedSupport=String(t?.support||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldSupport').options].forEach(o=>o.selected=selectedSupport.includes(o.value));
-  document.getElementById('modalCommentsBox').classList.toggle('hide',!t || vo);
-  if(t && !vo){loadModalComments(t.id);}
-  setModalReadonly(vo);
+  toggleExternalFields();
+  // Komentar tampil untuk task yang sudah ada (termasuk mode Lihat Saja yang boleh kirim chat).
+  document.getElementById('modalCommentsBox').classList.toggle('hide',!t);
+  if(t){loadModalComments(t.id);}
+  setModalReadonly(ro);
 }
 function setModalReadonly(ro){
   const modal=document.getElementById('taskModal'); if(!modal) return;
-  modal.querySelectorAll('input,select,textarea').forEach(el=>{ if(el.id==='fieldIdDisplay') return; el.disabled=ro; });
+  // fieldIdDisplay selalu disabled; modalCommentInput selalu aktif (Lihat Saja tetap boleh chat).
+  modal.querySelectorAll('input,select,textarea').forEach(el=>{ if(el.id==='fieldIdDisplay'||el.id==='modalCommentInput') return; el.disabled=ro; });
   const sb=document.getElementById('saveBtn'); if(sb) sb.classList.toggle('hide',ro);
 }
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes')};}
+function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():''};}
 function saveTaskFromModal(){
   if(isViewOnly()) return;
   const task=modalTask(); if(!task.taskName){showToast('Task Name wajib diisi.',false);return;}
+  if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }
+  const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
+  if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
   task.actor=state.currentUser;
   document.getElementById('loading').classList.remove('hide');
   if(IS_GAS){GAS.withSuccessHandler(res=>{document.getElementById('loading').classList.add('hide'); if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).saveTask(task);}
@@ -1303,7 +1336,10 @@ function saveTaskFromModal(){
 }
 function deleteTaskFromModal(){
   if(isViewOnly()) return;
-  const id=getVal('fieldId'); if(!id || !confirm('Hapus task '+id+'?')) return;
+  const id=getVal('fieldId'); if(!id) return;
+  const existing=state.tasks.find(x=>x.id===id);
+  if(existing && isExternalTask(existing) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa menghapus task lintas divisi.', false); return; }
+  if(!confirm('Hapus task '+id+'?')) return;
   if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteTask(id,state.currentUser);}
   else {state.tasks=state.tasks.filter(t=>t.id!==id);showToast('Task dihapus (preview).');closeTaskModal();applyRoleUI();renderAll();}
 }
