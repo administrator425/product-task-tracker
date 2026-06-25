@@ -32,6 +32,7 @@ const HANDLERS = {
   deleteOption: (type, value) => backend.deleteOption(type, value),
 
   setupTaskTracker: () => backend.setupTaskTracker(),
+  assignMissingTaskIds: () => backend.assignMissingTaskIds(),
 };
 
 async function readJsonBody(req) {

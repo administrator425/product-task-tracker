@@ -45,7 +45,7 @@ const COL = {
 const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support'];
 
 const DEFAULT_OPTIONS = {
-  status: ['Todo', 'In progress', 'Review PM', 'Hold', 'Done'],
+  status: ['Todo', 'In progress', 'Review PM', 'Revisi', 'Hold', 'Done'],
   priority: ['Urgent', 'High', 'Normal', 'Low'],
   stage: [
     'RnD', 'Develop Materi', 'Develop Soal', 'QC Konten', 'Input',
@@ -690,6 +690,33 @@ async function setupTaskTracker() {
   };
 }
 
+// Isi Task ID untuk baris yang punya Task Name tapi kolom Task ID-nya kosong
+// (mis. baris yang diketik langsung di spreadsheet). ID dilanjutkan dari nomor tertinggi.
+async function assignMissingTaskIds() {
+  const rows = await valuesGet(MAIN_DATA_RANGE());
+  let max = 0;
+  rows.forEach(r => { const m = String((r && r[0]) || '').match(/(\d+)\s*$/); if (m) max = Math.max(max, Number(m[1])); });
+  const data = [];
+  rows.forEach((row, idx) => {
+    const tid = String((row && row[0]) || '').trim();
+    const name = String((row && row[5]) || '').trim(); // kolom G (Task Name) = indeks 5 dari B
+    if (!tid && name) {
+      max += 1;
+      const rowNumber = CONFIG.FIRST_DATA_ROW + idx;
+      data.push({ range: `${CONFIG.TASK_SHEET}!${COL.taskId}${rowNumber}`, values: [['TSK-' + String(max).padStart(3, '0')]] });
+    }
+  });
+  if (data.length) {
+    const sheets = await getSheets();
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: getSpreadsheetId(),
+      requestBody: { valueInputOption: 'RAW', data },
+    });
+  }
+  const tasks = await getTasks();
+  return { success: true, message: `${data.length} Task ID baru dibuat untuk baris yang belum punya ID.`, assigned: data.length, tasks };
+}
+
 module.exports = {
   // bootstrap & reads
   getBootstrapData, getTasks, getOptions, getComments, getActivityLog,
@@ -697,7 +724,7 @@ module.exports = {
   saveTask, deleteTask, quickUpdateField, quickUpdateDates,
   addComment, saveOption, deleteOption,
   // setup
-  setupTaskTracker,
+  setupTaskTracker, assignMissingTaskIds,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };

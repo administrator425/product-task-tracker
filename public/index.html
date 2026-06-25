@@ -308,7 +308,10 @@
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">build_circle</span> Inisialisasi Spreadsheet</h2>
               <p class="text-sm text-gray-500 mt-1">Jalankan sekali setelah deploy untuk memastikan sheet <b>Main</b>, <b>OPTIONS</b>, <b>COMMENTS</b>, <b>ACTIVITY</b>, header, dan dropdown sudah siap. Aman diulang — data yang sudah ada tidak dihapus.</p>
             </div>
-            <button id="btnSetup" onclick="runSetup()" class="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">play_arrow</span> Jalankan Setup</button>
+            <div class="shrink-0 flex flex-col sm:flex-row gap-2">
+              <button id="btnSetup" onclick="runSetup()" class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">play_arrow</span> Jalankan Setup</button>
+              <button id="btnFixIds" onclick="runFixIds()" class="px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">tag</span> Buat Task ID kosong</button>
+            </div>
           </div>
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Dropdown Master</h2>
@@ -448,7 +451,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -563,7 +566,7 @@ function renderDeadlineReminder(){
   if(state._deadlineDismissed){ box.classList.add('hide'); box.innerHTML=''; return; }
   const mine=scopedTasks();
   const overdue=mine.filter(t=>isLate(t));
-  const today=mine.filter(t=>!isDone(t)&&daysToDue(t)===0);
+  const today=mine.filter(t=>isDeadlineActive(t)&&daysToDue(t)===0);
   if(!overdue.length && !today.length){ box.classList.add('hide'); box.innerHTML=''; return; }
   const parts=[];
   if(overdue.length) parts.push(`<b>${overdue.length}</b> task overdue`);
@@ -664,7 +667,7 @@ function applyQuickFilter(arr){
   const qf=state.quickFilter;
   if(qf==='mine') return arr.filter(t=>ownsTask(t,state.currentUser));
   if(qf==='overdue') return arr.filter(isLate);
-  if(qf==='duesoon') return arr.filter(t=>!isDone(t)&&daysToDue(t)>=0&&daysToDue(t)<=3);
+  if(qf==='duesoon') return arr.filter(t=>isDeadlineActive(t)&&daysToDue(t)>=0&&daysToDue(t)<=3);
   return arr;
 }
 function baseFilteredTasks(){
@@ -681,7 +684,7 @@ function applyQuickFilterCount(qf){
   const arr=scopedTasks();
   if(qf==='mine') return arr.filter(t=>ownsTask(t,state.currentUser)).length;
   if(qf==='overdue') return arr.filter(isLate).length;
-  if(qf==='duesoon') return arr.filter(t=>!isDone(t)&&daysToDue(t)>=0&&daysToDue(t)<=3).length;
+  if(qf==='duesoon') return arr.filter(t=>isDeadlineActive(t)&&daysToDue(t)>=0&&daysToDue(t)<=3).length;
   return arr.length;
 }
 function setQuickFilter(qf){state.quickFilter=qf; renderAll();}
@@ -754,7 +757,7 @@ function applyFieldFilters(arr){
 }
 function viewTasks(){
   let arr=applyFieldFilters(baseFilteredTasks());
-  if(state.deadlineFocus) arr=arr.filter(t=>isLate(t) || (!isDone(t)&&daysToDue(t)===0));
+  if(state.deadlineFocus) arr=arr.filter(t=>isLate(t) || (isDeadlineActive(t)&&daysToDue(t)===0));
   return arr;
 }
 
@@ -782,10 +785,10 @@ function inlineSelect(field, t){
 function renderDashboard(){
   const tasks=baseFilteredTasks();
   const active=tasks.filter(t=>!isDone(t));
-  const late=active.filter(isLate);
-  const dueToday=active.filter(t=>daysToDue(t)===0);
+  const late=tasks.filter(isLate);
+  const dueToday=tasks.filter(t=>isDeadlineActive(t)&&daysToDue(t)===0);
   const urgent=active.filter(t=>['urgent','high'].includes(String(t.priority||'').toLowerCase()));
-  const dueSoon=active.filter(t=>daysToDue(t)>=0 && daysToDue(t)<=3);
+  const dueSoon=tasks.filter(t=>isDeadlineActive(t)&&daysToDue(t)>=0&&daysToDue(t)<=3);
   const data=[
     ['Total Task',tasks.length,'receipt_long','bg-gray-100 text-gray-600'],
     ['Aktif',active.length,'pending_actions','bg-indigo-100 text-indigo-600'],
@@ -827,7 +830,7 @@ function renderBoard(){
   const tasks=viewTasks();
   let statuses=[...(state.options.status||[])];
   if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status))) && !statuses.some(s=>same(s,'Tanpa Status'))) statuses.push('Tanpa Status');
-  const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Done','Hold'];
+  const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
   statuses.sort((a,b)=>{const ia=KANBAN_ORDER.findIndex(o=>same(o,a)),ib=KANBAN_ORDER.findIndex(o=>same(o,b));return (ia<0?99:ia)-(ib<0?99:ib);});
   const board=document.getElementById('kanbanBoard');
   board.innerHTML=statuses.map(status=>{
@@ -1182,6 +1185,17 @@ function runSetup(){
     showToast('Setup gagal: '+(err.message||err), false);
   }).setupTaskTracker();
 }
+function runFixIds(){
+  if(!confirm('Buat Task ID untuk baris yang punya nama task tapi belum punya ID?')) return;
+  const btn=document.getElementById('btnFixIds'); const orig=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true; btn.classList.add('opacity-60','cursor-not-allowed'); btn.innerHTML='<span class="material-icons-round text-[18px]">hourglass_top</span> Memproses…';}
+  function restore(){ if(btn){btn.disabled=false; btn.classList.remove('opacity-60','cursor-not-allowed'); btn.innerHTML=orig;} }
+  GAS.withSuccessHandler(res=>{
+    restore();
+    showToast((res&&res.message)||'Selesai.', !(res&&res.success===false));
+    if(res&&res.tasks){ state.tasks=res.tasks; afterLoad(); }
+  }).withFailureHandler(err=>{ restore(); showToast('Gagal: '+(err.message||err), false); }).assignMissingTaskIds();
+}
 
 /* ---------- Misc ---------- */
 function exportCsv(){
@@ -1193,7 +1207,10 @@ function exportCsv(){
 
 /* ---------- Helpers ---------- */
 function isDone(t){return String(t.status||'').toLowerCase()==='done';}
-function isLate(t){return !isDone(t) && t.dueDate && parseDate(t.dueDate)<TODAY;}
+// Status "aman" dari hitungan deadline (tidak telat & tidak due): Done, Review PM, Hold.
+// Aktif & dihitung deadline: Todo, In progress, Revisi.
+function isDeadlineActive(t){const s=String(t.status||'').toLowerCase().replace(/\s+/g,' ').trim(); return s!=='done' && s!=='review pm' && s!=='hold';}
+function isLate(t){return isDeadlineActive(t) && t.dueDate && parseDate(t.dueDate)<TODAY;}
 function daysToDue(t){if(!t.dueDate)return 9999; return Math.ceil((parseDate(t.dueDate)-TODAY)/86400000);}
 function parseDate(s){const d=new Date(s+'T00:00:00'); return isNaN(d)?new Date(8640000000000000):d;}
 function todayStr(){const d=new Date(); return d.toISOString().slice(0,10);}
@@ -1205,6 +1222,7 @@ const STATUS_PALETTE={
   'todo':'#6366f1','to do':'#6366f1','backlog':'#6366f1',
   'in progress':'#3b82f6','in-progress':'#3b82f6','progress':'#3b82f6',
   'review pm':'#f59e0b','review':'#f59e0b','in review':'#f59e0b',
+  'revisi':'#fb7185','revision':'#fb7185','revise':'#fb7185',
   'hold':'#a855f7','on hold':'#a855f7',
   'done':'#22c55e','selesai':'#22c55e',
   'tanpa status':'#94a3b8','no status':'#94a3b8'
