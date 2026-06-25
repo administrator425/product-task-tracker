@@ -618,7 +618,7 @@ function populateUserSelect(){
   select.value = state.currentUser;
   select.disabled = !!locked;
 }
-function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();}
+function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
 function populateManagerFocus(){const el=document.getElementById('managerFocusPic');if(!el)return;el.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');el.value=state.managerFocus;}
 function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;applyRoleUI();renderAll();}
 
