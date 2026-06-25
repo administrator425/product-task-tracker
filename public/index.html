@@ -478,7 +478,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','listPinUsers'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -1253,7 +1253,7 @@ function renderPinAdmin(){
   const users=(state.options.pic||[]);
   const hasPin=u=>(state.pinUsers||[]).some(x=>String(x).toLowerCase()===String(u).toLowerCase());
   const list=document.getElementById('pinAdminList'); if(!list) return;
-  list.innerHTML=users.map((u,i)=>`<div class="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-slate-800"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-800 dark:text-slate-200 truncate">${escapeHtml(u)}</div><div class="text-[10px] ${hasPin(u)?'text-emerald-600':'text-gray-400'}">${hasPin(u)?'PIN sudah diset':'belum diset'}</div></div><input id="pinIn-${i}" type="password" inputmode="numeric" maxlength="4" placeholder="4 digit" class="w-20 text-center rounded-md bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2 py-1.5 text-sm outline-none"><button onclick="savePinFor(${i})" class="px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold">Set</button></div>`).join('');
+  list.innerHTML=users.map((u,i)=>`<div class="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-slate-800"><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-800 dark:text-slate-200 truncate">${escapeHtml(u)}</div><div class="text-[10px] ${hasPin(u)?'text-emerald-600':'text-gray-400'}">${hasPin(u)?'PIN sudah diset':'belum diset'}</div></div><input id="pinIn-${i}" type="password" inputmode="numeric" maxlength="4" placeholder="4 digit" class="w-20 text-center rounded-md bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2 py-1.5 text-sm outline-none"><button onclick="savePinFor(${i})" class="px-2.5 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold">Set</button>${hasPin(u)?`<button onclick="deletePinFor(${i})" class="px-2 py-1.5 rounded-md border border-rose-200 dark:border-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-semibold">Hapus</button>`:''}</div>`).join('');
 }
 function savePinFor(i){
   const users=(state.options.pic||[]); const user=users[i]; if(!user) return;
@@ -1264,9 +1264,25 @@ function savePinFor(i){
     if(res&&res.success){ if(!(state.pinUsers||[]).some(x=>String(x).toLowerCase()===String(user).toLowerCase())) state.pinUsers=(state.pinUsers||[]).concat([user]); if(inp) inp.value=''; renderPinAdmin(); }
   }).withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).setUserPin(user, pin);
 }
+function deletePinFor(i){
+  const users=(state.options.pic||[]); const user=users[i]; if(!user) return;
+  if(!confirm('Hapus PIN untuk '+user+'? User ini jadi bebas tanpa PIN.')) return;
+  GAS.withSuccessHandler(res=>{
+    showToast((res&&res.message)||'PIN dihapus.', !(res&&res.success===false));
+    if(res&&res.success){ state.pinUsers=(state.pinUsers||[]).filter(x=>String(x).toLowerCase()!==String(user).toLowerCase()); renderPinAdmin(); }
+  }).withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).deleteUserPin(user);
+}
+function editOptionPrompt(type, oldValue){
+  const nv = prompt('Ubah "'+oldValue+'" menjadi:', oldValue);
+  if(nv===null) return; const newValue=String(nv).trim(); if(!newValue || newValue===oldValue) return;
+  if(IS_GAS){
+    document.getElementById('loading').classList.remove('hide');
+    GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah opsi',false); return; } state.options=Object.assign({},dummyOptions,res.options||{}); if(res.tasks) state.tasks=res.tasks; showToast(res.message); applyRoleUI(); renderAll(); renderSettings(); }).withFailureHandler(err=>{ document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false); }).editOption(type, oldValue, newValue);
+  } else { showToast('Edit (preview).'); }
+}
 function renderSettings(){
   const names={status:'Status',priority:'Priority',stage:'Stage',platform:'Platform',pic:'PIC',support:'Support'};
-  document.getElementById('settingsGrid').innerHTML=Object.keys(names).map(type=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="p-4 border-b border-gray-100 dark:border-slate-800"><div class="font-semibold text-gray-900 dark:text-white">${names[type]}</div><div class="flex gap-2 mt-2.5"><input id="new-${type}" placeholder="Tambah opsi…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"><button onclick="addOption('${type}')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Add</button></div></div><div class="p-3 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin">${(state.options[type]||[]).map(v=>`<div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800"><span class="font-medium text-sm text-gray-700 dark:text-slate-200">${escapeHtml(v)}</span><button onclick="removeOption('${type}','${escapeAttr(v)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`).join('')}</div></div>`).join('');
+  document.getElementById('settingsGrid').innerHTML=Object.keys(names).map(type=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="p-4 border-b border-gray-100 dark:border-slate-800"><div class="font-semibold text-gray-900 dark:text-white">${names[type]}</div><div class="flex gap-2 mt-2.5"><input id="new-${type}" placeholder="Tambah opsi…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"><button onclick="addOption('${type}')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Add</button></div></div><div class="p-3 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin">${(state.options[type]||[]).map(v=>`<div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800"><span class="font-medium text-sm text-gray-700 dark:text-slate-200">${escapeHtml(v)}</span><span class="flex items-center gap-1"><button onclick="editOptionPrompt('${type}','${escapeAttr(v)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[18px]">edit</span></button><button onclick="removeOption('${type}','${escapeAttr(v)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></span></div>`).join('')}</div></div>`).join('');
 }
 function addOption(type){const input=document.getElementById('new-'+type); const value=input.value.trim(); if(!value)return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).saveOption(type,value);} else {state.options[type]=[...(state.options[type]||[]),value]; renderSettings(); populateModalDropdowns(); renderAll();}}
 function removeOption(type,value){if(!confirm('Nonaktifkan opsi '+value+'?'))return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption(type,value);} else {state.options[type]=(state.options[type]||[]).filter(v=>v!==value); renderSettings(); renderAll();}}

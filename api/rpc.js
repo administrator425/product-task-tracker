@@ -30,11 +30,13 @@ const HANDLERS = {
   addComment: (payload) => backend.addComment(payload),
   saveOption: (type, value) => backend.saveOption(type, value),
   deleteOption: (type, value) => backend.deleteOption(type, value),
+  editOption: (type, oldValue, newValue) => backend.editOption(type, oldValue, newValue),
 
   setupTaskTracker: () => backend.setupTaskTracker(),
   assignMissingTaskIds: () => backend.assignMissingTaskIds(),
   verifyPin: (user, pin) => backend.verifyPin(user, pin),
   setUserPin: (user, pin) => backend.setUserPin(user, pin),
+  deleteUserPin: (user) => backend.deleteUserPin(user),
   listPinUsers: () => backend.listPinUsers(),
 };
 

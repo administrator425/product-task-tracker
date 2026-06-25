@@ -497,6 +497,45 @@ async function deleteOption(type, value) {
   return { success: true, message: 'Opsi berhasil dinonaktifkan.', options: await getOptions() };
 }
 
+// Edit (rename) nilai opsi + cascade ke task yang masih memakai nilai lama.
+async function editOption(type, oldValue, newValue) {
+  type = String(type || '').trim();
+  oldValue = String(oldValue || '').trim();
+  newValue = String(newValue || '').trim();
+  if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
+  if (!oldValue || !newValue) return { success: false, message: 'Nilai lama/baru tidak boleh kosong.' };
+  const rows = await readOptionsRaw();
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === oldValue.toLowerCase());
+  if (!found) return { success: false, message: 'Opsi tidak ditemukan.' };
+  await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!B${found.row}`, [[newValue]]);
+  const col = COL[type];
+  if (col) {
+    const taskRows = await valuesGet(MAIN_DATA_RANGE());
+    const colIdx = col.charCodeAt(0) - 'B'.charCodeAt(0);
+    const data = [];
+    taskRows.forEach((row, idx) => {
+      const cur = String((row && row[colIdx]) || '');
+      if (!cur) return;
+      const rowNumber = CONFIG.FIRST_DATA_ROW + idx;
+      if (type === 'support') {
+        const parts = cur.split(',').map(s => s.trim()).filter(Boolean);
+        if (parts.some(p => p.toLowerCase() === oldValue.toLowerCase())) {
+          const np = parts.map(p => p.toLowerCase() === oldValue.toLowerCase() ? newValue : p).join(', ');
+          data.push({ range: `${CONFIG.TASK_SHEET}!${col}${rowNumber}`, values: [[np]] });
+        }
+      } else if (cur.toLowerCase() === oldValue.toLowerCase()) {
+        data.push({ range: `${CONFIG.TASK_SHEET}!${col}${rowNumber}`, values: [[newValue]] });
+      }
+    });
+    if (data.length) {
+      const sheets = await getSheets();
+      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: getSpreadsheetId(), requestBody: { valueInputOption: 'USER_ENTERED', data } });
+    }
+  }
+  await applySheetValidations().catch(() => {});
+  return { success: true, message: `"${oldValue}" diubah menjadi "${newValue}".`, options: await getOptions(), tasks: await getTasks() };
+}
+
 /* ------------------------------------------------------------------ */
 /* COMMENTS                                                            */
 /* ------------------------------------------------------------------ */
@@ -749,6 +788,22 @@ async function setUserPin(user, pin) {
   return { success: true, message: `PIN untuk ${user} disimpan.` };
 }
 
+// Hapus PIN seorang user (kembali bebas tanpa PIN).
+async function deleteUserPin(user) {
+  user = String(user || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.AUTH_SHEET}!A2:B`); } catch (e) { return { success: true, message: 'Tidak ada PIN.', removed: false }; }
+  const i = rows.findIndex(r => String((r && r[0]) || '').trim().toLowerCase() === user.toLowerCase());
+  if (i === -1) return { success: true, message: 'User belum punya PIN.', removed: false };
+  const meta = await getSheetMeta();
+  const sheetId = meta[CONFIG.AUTH_SHEET] && meta[CONFIG.AUTH_SHEET].sheetId;
+  if (sheetId == null) return { success: false, message: 'Sheet AUTH tidak ditemukan.' };
+  const rowNumber = 2 + i;
+  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: rowNumber - 1, endIndex: rowNumber } } }]);
+  return { success: true, message: `PIN untuk ${user} dihapus.`, removed: true };
+}
+
 // Daftar user yang sudah punya PIN khusus (hash TIDAK dikirim).
 async function listPinUsers() {
   const rows = await readAuthRaw();
@@ -801,11 +856,11 @@ module.exports = {
   getBootstrapData, getTasks, getOptions, getComments, getActivityLog,
   // writes
   saveTask, deleteTask, quickUpdateField, quickUpdateDates,
-  addComment, saveOption, deleteOption,
+  addComment, saveOption, deleteOption, editOption,
   // setup
   setupTaskTracker, assignMissingTaskIds,
   // auth (PIN)
-  verifyPin, setUserPin, listPinUsers,
+  verifyPin, setUserPin, deleteUserPin, listPinUsers,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };
