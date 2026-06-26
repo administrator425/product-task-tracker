@@ -35,24 +35,24 @@ const CONFIG = {
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
-  LAST_COL_LETTER: 'P',
+  LAST_COL_LETTER: 'R',
 };
 
 const TASK_HEADERS = [
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority',
   'Task Name', 'Stage', 'Platform', 'PIC', 'Support', 'Document',
-  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi',
+  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kategori', 'Subkategori',
 ];
 
-// Pemetaan field -> kolom (B..P). Urutan tetap.
+// Pemetaan field -> kolom (B..R). Urutan tetap.
 const COL = {
   taskId: 'B', createdDate: 'C', dueDate: 'D', status: 'E',
   priority: 'F', taskName: 'G', stage: 'H', platform: 'I', pic: 'J',
   support: 'K', document: 'L', picNotes: 'M', pmNotes: 'N',
-  divisiTujuan: 'O', kontakDivisi: 'P',
+  divisiTujuan: 'O', kontakDivisi: 'P', category: 'Q', subcategory: 'R',
 };
 
-const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support', 'division'];
+const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support', 'division', 'category', 'subcategory'];
 
 const DEFAULT_OPTIONS = {
   status: ['Todo', 'In progress', 'Review PM', 'Revisi', 'Hold', 'Done'],
@@ -76,7 +76,7 @@ const DEFAULT_OPTIONS = {
 const VALIDATION_MAP = {
   Status: 'status', Priority: 'priority', Stage: 'stage',
   Platform: 'platform', PIC: 'pic', Support: 'support',
-  'Divisi Tujuan': 'division',
+  'Divisi Tujuan': 'division', Kategori: 'category',
 };
 
 /* ------------------------------------------------------------------ */
@@ -260,6 +260,8 @@ function rowToTask(row, rowNumber) {
     pmNotes: String(g(12)).trim(),
     divisiTujuan: String(g(13)).trim(),
     kontakDivisi: String(g(14)).trim(),
+    category: String(g(15)).trim(),
+    subcategory: String(g(16)).trim(),
     // Field virtual (tidak ada kolomnya di sheet ini) — disediakan agar UI lama tetap jalan.
     startDate: createdDate,
     approvalGate: '',
@@ -288,6 +290,8 @@ function taskToRow(task, existingTask) {
     task.pmNotes || '',
     task.divisiTujuan || '',
     task.kontakDivisi || '',
+    task.category || '',
+    task.subcategory || '',
   ];
 }
 
@@ -447,13 +451,14 @@ async function quickUpdateDates(taskId, startDate, dueDate, actor) {
 /* ------------------------------------------------------------------ */
 
 async function readOptionsRaw() {
-  const rows = await valuesGet(`${CONFIG.OPTIONS_SHEET}!A2:C`, { valueRenderOption: 'UNFORMATTED_VALUE' });
+  const rows = await valuesGet(`${CONFIG.OPTIONS_SHEET}!A2:D`, { valueRenderOption: 'UNFORMATTED_VALUE' });
   return rows
     .map((r, i) => ({
       row: i + 2,
       type: String((r && r[0]) || '').trim(),
       value: String((r && r[1]) || '').trim(),
       active: r && (r[2] === true || String(r[2]).toUpperCase() === 'TRUE'),
+      parent: String((r && r[3]) || '').trim(),
     }))
     .filter(r => r.type && r.value);
 }
@@ -467,57 +472,94 @@ async function getOptions() {
   }
   const options = {};
   OPTION_TYPES.forEach(t => (options[t] = []));
+  const subcatMap = {}; // { kategori: [subkategori, ...] }
   raw.forEach(row => {
     if (!options[row.type]) options[row.type] = [];
     if (!options[row.type].includes(row.value)) options[row.type].push(row.value);
+    if (row.type === 'subcategory' && row.parent) {
+      (subcatMap[row.parent] = subcatMap[row.parent] || []);
+      if (!subcatMap[row.parent].includes(row.value)) subcatMap[row.parent].push(row.value);
+    }
   });
   OPTION_TYPES.forEach(t => {
     if (!options[t] || !options[t].length) options[t] = DEFAULT_OPTIONS[t] || [];
   });
+  options.subcatMap = subcatMap;
   return options;
 }
 
-async function saveOption(type, value) {
+async function saveOption(type, value, parent) {
   type = String(type || '').trim();
   value = String(value || '').trim();
+  parent = String(parent || '').trim();
   if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
   if (!value) return { success: false, message: 'Nilai opsi tidak boleh kosong.' };
+  if (type === 'subcategory' && !parent) return { success: false, message: 'Subkategori wajib punya kategori induk.' };
 
   await ensureOptionsSheet();
   const rows = await readOptionsRaw();
-  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase());
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === parent.toLowerCase()));
   if (found) {
-    await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!C${found.row}`, [[true]]);
+    await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!C${found.row}:D${found.row}`, [[true, parent]]);
   } else {
-    await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:C`, [[type, value, true]]);
+    await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:D`, [[type, value, true, parent]]);
   }
   await applySheetValidations().catch(() => {});
   return { success: true, message: 'Opsi berhasil disimpan.', options: await getOptions() };
 }
 
-async function deleteOption(type, value) {
+async function deleteOption(type, value, parent) {
   type = String(type || '').trim();
   value = String(value || '').trim();
+  parent = String(parent || '').trim();
   if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
 
   const rows = await readOptionsRaw();
-  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase());
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === parent.toLowerCase()));
   if (found) await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!C${found.row}`, [[false]]);
   await applySheetValidations().catch(() => {});
   return { success: true, message: 'Opsi berhasil dinonaktifkan.', options: await getOptions() };
 }
 
 // Edit (rename) nilai opsi + cascade ke task yang masih memakai nilai lama.
-async function editOption(type, oldValue, newValue) {
+async function editOption(type, oldValue, newValue, parent) {
   type = String(type || '').trim();
   oldValue = String(oldValue || '').trim();
   newValue = String(newValue || '').trim();
+  parent = String(parent || '').trim();
   if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
   if (!oldValue || !newValue) return { success: false, message: 'Nilai lama/baru tidak boleh kosong.' };
   const rows = await readOptionsRaw();
-  const found = rows.find(r => r.type === type && r.value.toLowerCase() === oldValue.toLowerCase());
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === oldValue.toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === parent.toLowerCase()));
   if (!found) return { success: false, message: 'Opsi tidak ditemukan.' };
   await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!B${found.row}`, [[newValue]]);
+
+  if (type === 'subcategory') {
+    // Cascade ke task: kolom Subkategori (R) + prefix nama (G) untuk task di kategori induk yang sama.
+    const taskRows = await valuesGet(MAIN_DATA_RANGE());
+    const catIdx = COL.category.charCodeAt(0) - 'B'.charCodeAt(0);
+    const subIdx = COL.subcategory.charCodeAt(0) - 'B'.charCodeAt(0);
+    const nameIdx = COL.taskName.charCodeAt(0) - 'B'.charCodeAt(0);
+    const oldPrefix = (oldValue + ' - ').toLowerCase();
+    const data = [];
+    taskRows.forEach((row, idx) => {
+      const cat = String((row && row[catIdx]) || '').trim();
+      const sub = String((row && row[subIdx]) || '').trim();
+      if (cat.toLowerCase() === parent.toLowerCase() && sub.toLowerCase() === oldValue.toLowerCase()) {
+        const rowNumber = CONFIG.FIRST_DATA_ROW + idx;
+        data.push({ range: `${CONFIG.TASK_SHEET}!${COL.subcategory}${rowNumber}`, values: [[newValue]] });
+        const name = String((row && row[nameIdx]) || '');
+        if (name.toLowerCase().startsWith(oldPrefix)) data.push({ range: `${CONFIG.TASK_SHEET}!${COL.taskName}${rowNumber}`, values: [[newValue + ' - ' + name.slice((oldValue + ' - ').length)]] });
+      }
+    });
+    if (data.length) {
+      const sheets = await getSheets();
+      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: getSpreadsheetId(), requestBody: { valueInputOption: 'USER_ENTERED', data } });
+    }
+    await applySheetValidations().catch(() => {});
+    return { success: true, message: `Subkategori "${oldValue}" diubah menjadi "${newValue}".`, options: await getOptions(), tasks: await getTasks() };
+  }
+
   const col = COL[type];
   if (col) {
     const taskRows = await valuesGet(MAIN_DATA_RANGE());
@@ -666,20 +708,45 @@ async function ensureSheetExists(title) {
 
 async function ensureOptionsSheet() {
   await ensureSheetExists(CONFIG.OPTIONS_SHEET);
-  const head = await valuesGet(`${CONFIG.OPTIONS_SHEET}!A1:C1`);
-  if (!head.length || !head[0] || !head[0][0]) {
-    await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!A1:C1`, [['Type', 'Value', 'Active']]);
-  }
+  const head = await valuesGet(`${CONFIG.OPTIONS_SHEET}!A1:D1`);
+  const h0 = head[0] || [];
+  if (!h0[0]) await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!A1:D1`, [['Type', 'Value', 'Active', 'Parent']]);
+  else if (!h0[3]) await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!D1`, [['Parent']]);
   // Seed opsi default yang belum ada.
   const existing = await readOptionsRaw();
   const toAppend = [];
   OPTION_TYPES.forEach(type => {
     (DEFAULT_OPTIONS[type] || []).forEach(value => {
       const exists = existing.some(r => r.type === type && r.value.toLowerCase() === String(value).toLowerCase());
-      if (!exists) toAppend.push([type, value, true]);
+      if (!exists) toAppend.push([type, value, true, '']);
     });
   });
-  if (toAppend.length) await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:C`, toAppend);
+  if (toAppend.length) await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:D`, toAppend);
+}
+
+// Template kategori + subkategori (dari tabel divisi produk). Dipakai tombol "Isi dari template".
+const CATEGORY_TEMPLATE = {
+  'rnd': ['Menyusun kurikulum', 'mapping', 'Product knowledge', 'Menyusun silabus', 'Menyusun Sistem penilaian', 'Menyusun panduan', 'membuat prompt produksi soal', 'Riset kompetitor'],
+  'Develop konten(materi/soal)': ['Menyusun 5 materi', 'Membuat 1 soal', 'Menyusun 1 Journey', 'Syuting 5 materi', 'Take video pembahasan 5'],
+  'Manajemen sistem': ['Perapian detail subbab di siadu', 'Menyusun kerangka Kategori', 'Generate/regenerate 15 paket SKD', 'Show/hide kategori', 'Grupping', 'menyelesaikan 60 report'],
+  'QC': ['Memperbarui bumper', 'Memperbarui thumbnail 5', 'QC materi', 'QC 1 soal', 'Retake', 'QC 5 paket TO'],
+  'Operasional': ['Input soal', 'Input Video Pembahasan', 'Membangun sistem otomatis qc', 'Membangun sistem otomatis input', 'Input jadwal liveclass', 'Monitoring 5 Liveclass'],
+  'Manajemen Guru': ['Proyek 5 video pembahasan TIU', 'Proyek komplit 15 TO SKD', 'Menyusun jadwal liveclass'],
+  'Data & Intelligence': ['Membuat Query', 'Scrapping Data', 'Membangun dashboard'],
+  'Kreatif': ['Mengedit 4 Pdf materi', 'Mengedit 5 Video materi', 'Membuat 5 Icon'],
+};
+async function seedCategoryTemplate() {
+  await ensureOptionsSheet();
+  const existing = await readOptionsRaw();
+  const has = (type, value, parent) => existing.some(r => r.type === type && r.value.toLowerCase() === String(value).toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === String(parent || '').toLowerCase()));
+  const toAppend = [];
+  Object.keys(CATEGORY_TEMPLATE).forEach(cat => {
+    if (!has('category', cat)) toAppend.push(['category', cat, true, '']);
+    CATEGORY_TEMPLATE[cat].forEach(sub => { if (!has('subcategory', sub, cat)) toAppend.push(['subcategory', sub, true, cat]); });
+  });
+  if (toAppend.length) await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:D`, toAppend);
+  await applySheetValidations().catch(() => {});
+  return { success: true, message: `Template terisi: ${toAppend.length} baris baru (kategori + subkategori).`, options: await getOptions() };
 }
 
 async function ensureCommentsSheet() {
@@ -1036,6 +1103,8 @@ module.exports = {
   renameUserFolder, deleteUserFolder,
   // dashboard lain (CRUD Dev)
   getAllDashboards, addDashboard, updateDashboard, deleteDashboard,
+  // kategori & subkategori
+  seedCategoryTemplate,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };

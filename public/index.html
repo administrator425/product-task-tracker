@@ -375,6 +375,20 @@
             <p class="text-sm text-gray-500 mt-1">Kelola pilihan Status, Priority, Stage, Platform, PIC, Support, Approval Gate. Perubahan diterapkan juga sebagai data validation di Spreadsheet.</p>
           </div>
           <div id="settingsGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div class="flex-1">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">account_tree</span> Kategori &amp; Subkategori</h2>
+                <p class="text-sm text-gray-500 mt-1">Subkategori muncul sesuai kategori yang dipilih saat input task. Nama task otomatis jadi <b>subkategori - detail</b>.</p>
+              </div>
+              <button onclick="seedCategoryTemplate()" class="shrink-0 px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">auto_awesome</span> Isi dari template</button>
+            </div>
+            <div class="flex gap-2 mt-3 max-w-md">
+              <input id="new-category" placeholder="Tambah kategori baru…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <button onclick="addOption('category')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shrink-0">Add Kategori</button>
+            </div>
+            <div id="catSubGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4"></div>
+          </div>
         </div>
 
         <!-- ACTIVITY -->
@@ -428,10 +442,15 @@
               <div><label class="form-label">Kontak Divisi</label><input id="fieldKontakDivisi" class="form-control" placeholder="Nama kontak di divisi tujuan (mis. Budi - IT)"></div>
             </div>
           </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div><label class="form-label">Kategori</label><select id="fieldCategory" class="form-control" onchange="onCategoryChange()"></select></div>
+            <div id="subcatWrap"><label class="form-label">Subkategori</label><select id="fieldSubcategory" class="form-control" onchange="updateNamePreview()"></select></div>
+          </div>
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div class="lg:col-span-2">
-              <label class="form-label">Task Name</label>
-              <input id="fieldTaskName" class="form-control" placeholder="Contoh: QC 50 video pembahasan BAPPENAS" required>
+              <label class="form-label">Detail Task <span class="font-normal text-gray-400">(nama jadi: subkategori - detail)</span></label>
+              <input id="fieldTaskName" oninput="updateNamePreview()" class="form-control" placeholder="mis. revisi bagian TIU">
+              <p id="namePreview" class="text-[11px] font-medium text-indigo-500 dark:text-indigo-300 mt-1"></p>
             </div>
             <div>
               <label class="form-label">Task ID</label>
@@ -522,7 +541,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedCategoryTemplate'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -784,12 +803,25 @@ function populateModalDropdowns(){
   if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   fillSelect('fieldPic', state.options.pic, null, state.currentUser);
   fillSelect('fieldDivisiTujuan', state.options.division||['IT','Marketing','Sales'], 'Pilih divisi…');
+  fillSelect('fieldCategory', state.options.category||[], 'Pilih kategori…');
   const support = document.getElementById('fieldSupport');
   support.innerHTML = (state.options.support || state.options.pic || []).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
 }
 function getTaskType(){ const r=document.querySelector('input[name="taskType"]:checked'); return r?r.value:'internal'; }
 function setTaskType(v){ document.querySelectorAll('input[name="taskType"]').forEach(r=>{ r.checked=(r.value===v); }); }
 function toggleExternalFields(){ const box=document.getElementById('externalFields'); if(box) box.classList.toggle('hide', getTaskType()!=='eksternal'); }
+// ---- Kategori → Subkategori (cascading) + penamaan otomatis "subkategori - detail" ----
+function subcatsFor(category){ const m=(state.options&&state.options.subcatMap)||{}; if(m[category]) return m[category]; const k=Object.keys(m).find(x=>x.toLowerCase()===String(category||'').toLowerCase()); return k?m[k]:[]; }
+function populateSubcatSelect(category, selected){
+  const sel=document.getElementById('fieldSubcategory'); if(!sel) return;
+  const subs=subcatsFor(category);
+  sel.innerHTML='<option value="">'+(subs.length?'Pilih subkategori…':'(tidak ada subkategori)')+'</option>'+subs.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  if(selected && subs.some(s=>s.toLowerCase()===String(selected).toLowerCase())) sel.value=subs.find(s=>s.toLowerCase()===String(selected).toLowerCase());
+  const wrap=document.getElementById('subcatWrap'); if(wrap) wrap.classList.toggle('hide', !subs.length);
+}
+function onCategoryChange(){ populateSubcatSelect(getVal('fieldCategory'), ''); updateNamePreview(); }
+function composeTaskName(){ const sub=getVal('fieldSubcategory'); const detail=getVal('fieldTaskName').trim(); return sub ? (sub+' - '+detail) : detail; }
+function updateNamePreview(){ const p=document.getElementById('namePreview'); if(!p) return; const sub=getVal('fieldSubcategory'); const detail=getVal('fieldTaskName').trim(); const name= sub ? (sub+' - '+(detail||'…')) : detail; p.textContent = name ? ('Nama task: '+name) : ''; }
 function fillSelect(id, values=[], placeholder=null, defaultValue=''){
   const el=document.getElementById(id); if(!el) return;
   const old=el.value;
@@ -833,7 +865,7 @@ function renderActiveView(){
   else if(v==='timeline') renderTimeline();
   else if(v==='calendar') renderCalendar();
   else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
-  else if(v==='settings'){ renderSettings(); renderPinAdmin(); }
+  else if(v==='settings'){ renderSettings(); renderPinAdmin(); renderCatSubManager(); }
   else if(v==='activity') renderActivity();
   else if(v==='extdash') renderExternalDashboards();
   else if(v==='mylinks') renderMyLinks();
@@ -1302,7 +1334,13 @@ function openTaskModal(id=''){
   // Tipe task: toggle hanya untuk manager/dev; member tetap melihat label bila task ini memang eksternal.
   const typeRow=document.getElementById('taskTypeRow'); if(typeRow) typeRow.classList.toggle('hide', !canCreateExternal() && !external);
   setTaskType(external?'eksternal':'internal');
-  setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan'); setVal('fieldTaskName', t?.taskName||'');
+  setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan');
+  // Kategori → subkategori → detail. Nama tersimpan = "subkategori - detail"; dipecah lagi saat edit.
+  setVal('fieldCategory', t?.category||'');
+  populateSubcatSelect(t?.category||'', t?.subcategory||'');
+  let _detail=t?.taskName||'';
+  if(t && t.subcategory && _detail.toLowerCase().startsWith((t.subcategory+' - ').toLowerCase())) _detail=_detail.slice((t.subcategory+' - ').length);
+  setVal('fieldTaskName', _detail);
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
   setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||'');
   setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
@@ -1312,6 +1350,7 @@ function openTaskModal(id=''){
   const selectedSupport=String(t?.support||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldSupport').options].forEach(o=>o.selected=selectedSupport.includes(o.value));
   toggleExternalFields();
+  updateNamePreview();
   // Komentar tampil untuk task yang sudah ada (termasuk mode Lihat Saja yang boleh kirim chat).
   document.getElementById('modalCommentsBox').classList.toggle('hide',!t);
   if(t){loadModalComments(t.id);}
@@ -1326,10 +1365,14 @@ function setModalReadonly(ro){
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:getVal('fieldTaskName').trim(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():''};}
+function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',category:getVal('fieldCategory'),subcategory:getVal('fieldSubcategory')};}
 function saveTaskFromModal(){
   if(isViewOnly()) return;
-  const task=modalTask(); if(!task.taskName){showToast('Task Name wajib diisi.',false);return;}
+  const _detail=getVal('fieldTaskName').trim();
+  if(!_detail){ showToast('Detail task wajib diisi.',false); return; }
+  const _cat=getVal('fieldCategory'); const _subs=subcatsFor(_cat);
+  if(_cat && _subs.length && !getVal('fieldSubcategory')){ showToast('Pilih subkategori untuk kategori ini.', false); return; }
+  const task=modalTask(); if(!task.taskName){showToast('Detail task wajib diisi.',false);return;}
   if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }
   const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
   if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
@@ -1522,7 +1565,36 @@ function renderSettings(){
   document.getElementById('settingsGrid').innerHTML=Object.keys(names).map(type=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="p-4 border-b border-gray-100 dark:border-slate-800"><div class="font-semibold text-gray-900 dark:text-white">${names[type]}</div><div class="flex gap-2 mt-2.5"><input id="new-${type}" placeholder="Tambah opsi…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"><button onclick="addOption('${type}')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Add</button></div></div><div class="p-3 space-y-1.5 max-h-[340px] overflow-y-auto scrollbar-thin">${(state.options[type]||[]).map(v=>`<div class="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800"><span class="font-medium text-sm text-gray-700 dark:text-slate-200">${escapeHtml(v)}</span><span class="flex items-center gap-1"><button onclick="editOptionPrompt('${type}','${escapeAttr(v)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[18px]">edit</span></button><button onclick="removeOption('${type}','${escapeAttr(v)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></span></div>`).join('')}</div></div>`).join('');
 }
 function addOption(type){const input=document.getElementById('new-'+type); const value=input.value.trim(); if(!value)return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).saveOption(type,value);} else {state.options[type]=[...(state.options[type]||[]),value]; renderSettings(); populateModalDropdowns(); renderAll();}}
-function removeOption(type,value){if(!confirm('Nonaktifkan opsi '+value+'?'))return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption(type,value);} else {state.options[type]=(state.options[type]||[]).filter(v=>v!==value); renderSettings(); renderAll();}}
+function removeOption(type,value){if(!confirm('Nonaktifkan opsi '+value+'?'))return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderCatSubManager(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption(type,value);} else {state.options[type]=(state.options[type]||[]).filter(v=>v!==value); renderSettings(); renderAll();}}
+/* ---------- Kategori & Subkategori (Dropdown Master) ---------- */
+function renderCatSubManager(){
+  const grid=document.getElementById('catSubGrid'); if(!grid) return;
+  const cats=state.options.category||[];
+  grid.innerHTML = cats.length ? cats.map((cat,i)=>{
+    const subs=subcatsFor(cat);
+    const subRows = subs.length ? subs.map(s=>`<div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900"><span class="text-[13px] text-gray-700 dark:text-slate-200 truncate">${escapeHtml(s)}</span><span class="flex items-center gap-1 shrink-0"><button onclick="editSubcat('${attrJs(cat)}','${attrJs(s)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[15px]">edit</span></button><button onclick="removeSubcat('${attrJs(cat)}','${attrJs(s)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[15px]">delete</span></button></span></div>`).join('') : '<p class="text-[11px] text-gray-400 italic px-1 py-2">Belum ada subkategori.</p>';
+    return `<div class="bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden"><div class="p-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between gap-2"><div class="font-semibold text-sm text-gray-900 dark:text-white truncate">${escapeHtml(cat)}</div><span class="flex items-center gap-1 shrink-0"><button title="Ubah nama kategori" onclick="editOptionPrompt('category','${attrJs(cat)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">edit</span></button><button title="Hapus kategori" onclick="removeOption('category','${attrJs(cat)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[16px]">delete</span></button></span></div><div class="p-2.5"><div class="flex gap-2 mb-2"><input id="newsub-${i}" placeholder="Tambah subkategori…" class="flex-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2.5 py-1.5 outline-none text-[13px] focus:ring-2 focus:ring-indigo-300"><button onclick="addSubcat('${attrJs(cat)}',${i})" class="px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] shrink-0">+</button></div><div class="space-y-1 max-h-[220px] overflow-y-auto scrollbar-thin">${subRows}</div></div></div>`;
+  }).join('') : emptyState('Belum ada kategori. Klik "Isi dari template" atau tambah manual di atas.');
+}
+function _applyOptionRes(res, msg){ if(!res||!res.success){ showToast((res&&res.message)||'Gagal', false); return false; } state.options=Object.assign({},dummyOptions,res.options||{}); if(res.tasks) state.tasks=res.tasks; showToast(res.message||msg); populateModalDropdowns(); renderCatSubManager(); return true; }
+function addSubcat(category, idx){
+  const el=document.getElementById('newsub-'+idx); const value=(el?el.value:'').trim(); if(!value) return;
+  GAS.withSuccessHandler(res=>{ if(_applyOptionRes(res,'Subkategori ditambah.') && el) el.value=''; }).withFailureHandler(err=>showToast(err.message||err,false)).saveOption('subcategory', value, category);
+}
+function removeSubcat(category, value){
+  if(!confirm('Hapus subkategori "'+value+'" dari kategori "'+category+'"?')) return;
+  GAS.withSuccessHandler(res=>{ _applyOptionRes(res,'Subkategori dihapus.'); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption('subcategory', value, category);
+}
+function editSubcat(category, oldValue){
+  const nv=prompt('Ubah subkategori "'+oldValue+'" menjadi:', oldValue); if(nv===null) return; const newValue=String(nv).trim(); if(!newValue||newValue===oldValue) return;
+  document.getElementById('loading').classList.remove('hide');
+  GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); if(_applyOptionRes(res,'Subkategori diubah.')) renderAll(); }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).editOption('subcategory', oldValue, newValue, category);
+}
+function seedCategoryTemplate(){
+  if(!confirm('Isi kategori & subkategori dari template tabel divisi produk? Yang sudah ada tidak diduplikat.')) return;
+  document.getElementById('loading').classList.remove('hide');
+  GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); _applyOptionRes(res,'Template terisi.'); }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).seedCategoryTemplate();
+}
 
 /* ---------- Activity ---------- */
 function renderActivity(){
