@@ -227,6 +227,7 @@
       <section class="flex-1 overflow-y-auto p-4 md:p-6">
         <div id="deadlineReminder" class="hide max-w-[1700px] mx-auto mb-4"></div>
         <div id="deadlineFocusBar" class="hide max-w-[1700px] mx-auto mb-4"></div>
+        <div id="viewOnlyNotice" class="hide max-w-[1700px] mx-auto mb-4"></div>
         <div id="filterBar" class="hide max-w-[1700px] mx-auto mb-4 flex flex-wrap items-center gap-2"></div>
         <!-- DASHBOARD -->
         <div id="dashboardView" class="view space-y-5 max-w-[1500px] mx-auto">
@@ -329,8 +330,9 @@
         <!-- SETTINGS -->
         <!-- DASHBOARD LAIN (tautan ke dashboard eksternal) -->
         <div id="extdashView" class="view hide max-w-[1500px] mx-auto space-y-4">
-          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4">
-            <p class="text-sm text-gray-500">Kumpulan dashboard & monitoring lain (di luar task tracker). Klik untuk membuka di tab baru.</p>
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 flex items-center justify-between gap-3">
+            <p class="text-sm text-gray-500">Kumpulan dashboard &amp; monitoring lain (di luar task tracker). Klik untuk membuka di tab baru.</p>
+            <button id="btnAddDashboard" onclick="addDashboardPrompt()" class="hide shrink-0 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">add</span><span class="hidden sm:inline">Tambah Dashboard</span></button>
           </div>
           <div id="extdashGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
         </div>
@@ -520,7 +522,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -547,7 +549,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], dashboards: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -576,6 +578,7 @@ function init() {
       state.commentsSummary = data.commentsSummary || [];
       state.pinUsers = data.pinUsers || [];
       state.links = data.links || [];
+      state.dashboards = data.dashboards || [];
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
@@ -602,6 +605,7 @@ function isManager(user){if(String(user||'').toLowerCase()==='dev') return true;
 // melihat SEMUA task produk, tapi tidak bisa edit & hanya tab Dashboard/Kanban/List/Timeline/Calendar.
 const VIEWONLY_USER='Lintas Divisi';
 function isViewOnly(){ return baseName(state.currentUser)===baseName(VIEWONLY_USER); }
+function isDev(){ return String(state.currentUser||'').toLowerCase()==='dev'; }
 function seesAll(){ return isManager(state.currentUser) || isViewOnly(); }
 // Task eksternal (lintas divisi) = punya Divisi Tujuan. Hanya manager/dev yang boleh buat/edit/hapus.
 function isExternalTask(t){ return !!(t && String(t.divisiTujuan||'').trim()); }
@@ -834,7 +838,7 @@ function renderActiveView(){
   else if(v==='extdash') renderExternalDashboards();
   else if(v==='mylinks') renderMyLinks();
 }
-function renderAll(){ renderActiveView(); renderFilterBar(); }
+function renderAll(){ renderActiveView(); renderFilterBar(); renderViewOnlyNotice(); }
 let _searchTimer=null;
 function onSearchInput(){clearTimeout(_searchTimer); _searchTimer=setTimeout(renderActiveView,220);}
 function mergeTask(task){if(!task)return; const i=state.tasks.findIndex(x=>x.id===task.id); if(i>=0) state.tasks[i]=task; else state.tasks.push(task);}
@@ -1371,9 +1375,50 @@ const EXTERNAL_DASHBOARDS=[
   {title:'Monitoring Liveclass', desc:'Pantau jadwal & progress liveclass divisi produk.', icon:'live_tv', url:'https://script.google.com/a/macros/officecerebrum.com/s/AKfycbyT316LqY077YmfhPCAzEgyw9yUQ-pscC_hcW_e1T3mRliSZBhdXQPWxxorwkxD5FDLMA/exec'}
   // Contoh tambah: ,{title:'Nama Dashboard', desc:'Keterangan', icon:'dashboard', url:'https://...'}
 ];
+function dashList(){ return (state.dashboards && state.dashboards.length) ? state.dashboards : EXTERNAL_DASHBOARDS.map(d=>({row:0,...d})); }
+function findDashboardByRow(row){ return (state.dashboards||[]).find(d=>String(d.row)===String(row)); }
 function renderExternalDashboards(){
   const grid=document.getElementById('extdashGrid'); if(!grid) return;
-  grid.innerHTML = (EXTERNAL_DASHBOARDS&&EXTERNAL_DASHBOARDS.length) ? EXTERNAL_DASHBOARDS.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-center gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white">${escapeHtml(d.title||'Dashboard')}</div></div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
+  const dev=isDev();
+  const addBtn=document.getElementById('btnAddDashboard'); if(addBtn) addBtn.classList.toggle('hide',!dev);
+  const list=dashList();
+  grid.innerHTML = list.length ? list.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-start gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white flex-1 min-w-0 break-words">${escapeHtml(d.title||'Dashboard')}</div>${(dev && d.row)?`<div class="flex gap-1 shrink-0"><button title="Edit" onclick="editDashboard(${d.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[18px]">edit</span></button><button title="Hapus" onclick="deleteDashboardConfirm(${d.row})" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`:''}</div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
+}
+function addDashboardPrompt(){
+  if(!isDev()){ showToast('Hanya Dev yang bisa menambah dashboard.', false); return; }
+  const title=prompt('Judul dashboard:',''); if(title===null) return;
+  if(!title.trim()){ showToast('Judul wajib diisi.', false); return; }
+  const url=prompt('URL dashboard (https://...):',''); if(url===null) return;
+  if(!url.trim()){ showToast('URL wajib diisi.', false); return; }
+  const desc=prompt('Keterangan singkat (opsional):',''); if(desc===null) return;
+  const icon=prompt('Ikon (opsional — nama Material Icon, mis. live_tv, insights, dashboard):','dashboard'); if(icon===null) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard ditambahkan.'); renderExternalDashboards(); }).withFailureHandler(err=>showToast(err.message||err,false)).addDashboard(title.trim(), String(desc).trim(), String(icon).trim(), url.trim());
+}
+function editDashboard(row){
+  if(!isDev()) return;
+  const d=findDashboardByRow(row); if(!d) return;
+  const title=prompt('Judul dashboard:', d.title||''); if(title===null) return;
+  if(!title.trim()){ showToast('Judul wajib diisi.', false); return; }
+  const url=prompt('URL dashboard:', d.url||''); if(url===null) return;
+  if(!url.trim()){ showToast('URL wajib diisi.', false); return; }
+  const desc=prompt('Keterangan:', d.desc||''); if(desc===null) return;
+  const icon=prompt('Ikon:', d.icon||'dashboard'); if(icon===null) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard diperbarui.'); renderExternalDashboards(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateDashboard(row, title.trim(), String(desc).trim(), String(icon).trim(), url.trim());
+}
+function deleteDashboardConfirm(row){
+  if(!isDev()) return;
+  const d=findDashboardByRow(row); if(!d) return;
+  if(!confirm('Hapus dashboard "'+(d.title||'')+'"?')) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard dihapus.'); renderExternalDashboards(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteDashboard(row);
+}
+function renderViewOnlyNotice(){
+  const b=document.getElementById('viewOnlyNotice'); if(!b) return;
+  if(!isViewOnly()){ b.classList.add('hide'); b.innerHTML=''; return; }
+  const total=state.tasks.length;
+  const ext=state.tasks.filter(isExternalTask).length;
+  if(ext>0){ b.classList.add('hide'); b.innerHTML=''; return; }
+  b.classList.remove('hide');
+  b.innerHTML=`<div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40"><span class="material-icons-round text-amber-600">info</span><div class="text-sm text-amber-800 dark:text-amber-200">Belum ada <b>task lintas divisi</b> untuk ditampilkan. Task muncul di sini setelah <b>manager/Dev</b> membuat task bertipe <b>Eksternal</b> + mengisi <b>Divisi Tujuan</b>.<div class="text-[11px] text-amber-700/80 dark:text-amber-300/70 mt-1">Total task termuat: ${total} • bertipe lintas divisi: ${ext}. Kalau ini kosong padahal task sudah dibuat, muat ulang halaman (Ctrl+Shift+R).</div></div></div>`;
 }
 function findLinkByRow(row){ return (state.links||[]).find(l=>String(l.row)===String(row)); }
 function attrJs(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}

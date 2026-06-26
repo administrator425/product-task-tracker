@@ -31,6 +31,7 @@ const CONFIG = {
   ACTIVITY_SHEET: 'ACTIVITY',
   AUTH_SHEET: 'AUTH',
   LINKS_SHEET: 'LINKS',
+  DASHBOARDS_SHEET: 'DASHBOARDS',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -626,13 +627,14 @@ async function getAllCommentsLite() {
 }
 
 async function getBootstrapData() {
-  const [tasks, options, activity, commentsSummary, pinUsers, links] = await Promise.all([
+  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
     getAllCommentsLite(),
     listPinUsers(),
     getAllLinks(),
+    getAllDashboards(),
   ]);
   return {
     tasks,
@@ -641,6 +643,7 @@ async function getBootstrapData() {
     commentsSummary,
     pinUsers,
     links,
+    dashboards,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
@@ -920,6 +923,61 @@ async function deleteUserFolder(user, folder) {
   return { ...res, message: `Folder "${folder}" dihapus. ${res.changed} link dipindah ke Umum (tidak terhapus).` };
 }
 
+/* ------------------------------------------------------------------ */
+/* DASHBOARD LAIN (dashboard eksternal — CRUD khusus Dev)              */
+/* ------------------------------------------------------------------ */
+const DEFAULT_DASHBOARDS = [
+  ['Monitoring Liveclass', 'Pantau jadwal & progress liveclass divisi produk.', 'live_tv', 'https://script.google.com/a/macros/officecerebrum.com/s/AKfycbyT316LqY077YmfhPCAzEgyw9yUQ-pscC_hcW_e1T3mRliSZBhdXQPWxxorwkxD5FDLMA/exec'],
+];
+async function ensureDashboardsSheet() {
+  await ensureSheetExists(CONFIG.DASHBOARDS_SHEET);
+  const head = await valuesGet(`${CONFIG.DASHBOARDS_SHEET}!A1:D1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.DASHBOARDS_SHEET}!A1:D1`, [['Title', 'Desc', 'Icon', 'URL']]);
+    if (DEFAULT_DASHBOARDS.length) await valuesAppend(`${CONFIG.DASHBOARDS_SHEET}!A:D`, DEFAULT_DASHBOARDS); // seed agar dashboard awal tak hilang
+  }
+}
+async function getAllDashboards() {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.DASHBOARDS_SHEET}!A2:D`); } catch (e) { return []; }
+  return rows
+    .map((r, i) => ({ row: i + 2, title: String((r && r[0]) || '').trim(), desc: String((r && r[1]) || '').trim(), icon: String((r && r[2]) || '').trim(), url: String((r && r[3]) || '').trim() }))
+    .filter(d => d.title || d.url);
+}
+async function addDashboard(title, desc, icon, url) {
+  title = String(title || '').trim();
+  desc = String(desc || '').trim();
+  icon = String(icon || '').trim() || 'dashboard';
+  url = String(url || '').trim();
+  if (!title) return { success: false, message: 'Judul dashboard wajib diisi.' };
+  if (!url) return { success: false, message: 'URL dashboard wajib diisi.' };
+  await ensureDashboardsSheet();
+  await valuesAppend(`${CONFIG.DASHBOARDS_SHEET}!A:D`, [[title, desc, icon, url]]);
+  return { success: true, message: 'Dashboard ditambahkan.', dashboards: await getAllDashboards() };
+}
+async function updateDashboard(row, title, desc, icon, url) {
+  row = parseInt(row, 10);
+  title = String(title || '').trim();
+  desc = String(desc || '').trim();
+  icon = String(icon || '').trim() || 'dashboard';
+  url = String(url || '').trim();
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (!title) return { success: false, message: 'Judul dashboard wajib diisi.' };
+  if (!url) return { success: false, message: 'URL dashboard wajib diisi.' };
+  await ensureDashboardsSheet();
+  await valuesUpdate(`${CONFIG.DASHBOARDS_SHEET}!A${row}:D${row}`, [[title, desc, icon, url]]);
+  return { success: true, message: 'Dashboard diperbarui.', dashboards: await getAllDashboards() };
+}
+async function deleteDashboard(row) {
+  row = parseInt(row, 10);
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  const meta = await getSheetMeta();
+  const sheetId = meta[CONFIG.DASHBOARDS_SHEET] && meta[CONFIG.DASHBOARDS_SHEET].sheetId;
+  if (sheetId == null) return { success: false, message: 'Sheet DASHBOARDS tidak ditemukan.' };
+  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }]);
+  return { success: true, message: 'Dashboard dihapus.', dashboards: await getAllDashboards() };
+}
+
 async function setupTaskTracker() {
   await ensureTaskHeaders();
   await ensureOptionsSheet();
@@ -927,6 +985,7 @@ async function setupTaskTracker() {
   await ensureActivitySheet();
   await ensureAuthSheet();
   await ensureLinksSheet();
+  await ensureDashboardsSheet();
   await applySheetValidations().catch(() => {});
   return {
     success: true,
@@ -975,6 +1034,8 @@ module.exports = {
   // link per-user
   addUserLink, updateUserLink, deleteUserLink, getAllLinks,
   renameUserFolder, deleteUserFolder,
+  // dashboard lain (CRUD Dev)
+  getAllDashboards, addDashboard, updateDashboard, deleteDashboard,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };
