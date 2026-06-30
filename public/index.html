@@ -439,6 +439,17 @@
               <div><label class="form-label">Kontak Divisi</label><input id="fieldKontakDivisi" class="form-control" placeholder="Nama kontak di divisi tujuan (mis. Budi - IT)"></div>
             </div>
           </div>
+          <div id="mirrorRow" class="hide rounded-xl border border-emerald-200 dark:border-emerald-900/40 p-3 bg-emerald-50/50 dark:bg-emerald-900/10 flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-sm font-semibold text-gray-800 dark:text-slate-100 flex items-center gap-1.5"><span class="material-icons-round text-[18px] text-emerald-600">cast</span> Tampilkan ke Lintas Divisi</div>
+              <div class="text-[11px] text-gray-500 mt-0.5">Task ini ikut "di-mirror" ke view Lintas Divisi (dilihat divisi lain). Hanya PM/Dev.</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+              <input type="checkbox" id="fieldMirror" class="sr-only peer">
+              <div class="w-11 h-6 bg-gray-300 dark:bg-slate-600 rounded-full peer-checked:bg-emerald-500 transition-colors"></div>
+              <div class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+            </label>
+          </div>
           <div class="rounded-xl border border-indigo-100 dark:border-slate-700 bg-indigo-50/40 dark:bg-slate-800/40 p-3 space-y-3">
             <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-300 flex items-center gap-1"><span class="material-icons-round text-[15px]">auto_fix_high</span> Rumus Nama Task</div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -623,12 +634,16 @@ function isDev(){ return String(state.currentUser||'').toLowerCase()==='dev'; }
 function seesAll(){ return isManager(state.currentUser) || isViewOnly(); }
 // Task eksternal (lintas divisi) = punya Divisi Tujuan. Hanya manager/dev yang boleh buat/edit/hapus.
 function isExternalTask(t){ return !!(t && String(t.divisiTujuan||'').trim()); }
+// Mirror: task internal yang dipilih PM/Dev untuk tampil di view Lintas Divisi.
+function isMirrored(t){ const v=String((t&&t.mirror)||'').trim().toLowerCase(); return !!v && !['','tidak','no','false','0'].includes(v); }
+function canMirror(){ return !isViewOnly() && isManager(state.currentUser); } // PM/Dev saja
+function inLintasView(t){ return isExternalTask(t) || isMirrored(t); }
 function canCreateExternal(){ return !isViewOnly() && isManager(state.currentUser); }
 function canEditTask(t){ if(isViewOnly()) return false; if(isExternalTask(t)) return isManager(state.currentUser); return true; }
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 function scopedTasks(){
-  if(isViewOnly()) return state.tasks.filter(isExternalTask);   // hanya task lintas divisi
+  if(isViewOnly()) return state.tasks.filter(inLintasView);   // task lintas divisi + task internal yang di-mirror PM/Dev
   if(isManager(state.currentUser)){
     if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
     return [...state.tasks];
@@ -1124,7 +1139,7 @@ function taskCard(t){
   const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'');
   return `<div data-task-id="${escapeAttr(t.id)}" onclick="openTaskModal('${escapeAttr(t.id)}')" class="tt-card ${canEditTask(t)?'':'nodrag'} bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ${isExternalTask(t)?'ring-violet-300 dark:ring-violet-800':'ring-gray-200 dark:ring-slate-700'} hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
     <div class="flex items-start justify-between gap-2">
-      <span class="text-[10px] font-mono text-gray-400">${escapeHtml(t.id||'-')}</span>
+      <span class="flex items-center gap-1 min-w-0"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(t.id||'-')}</span>${mirrorChip(t)}</span>
       ${overdue?'<span class="text-[10px] font-bold text-rose-600">TELAT</span>':(today?'<span class="text-[10px] font-bold text-pink-600">HARI INI</span>':(t.approvalGate && !same(t.approvalGate,'No')?`<span class="text-[10px] font-semibold text-amber-600">${escapeHtml(t.approvalGate)}</span>`:''))}
     </div>
     <p class="text-[13px] font-medium leading-snug text-gray-800 dark:text-slate-100 mt-1.5 line-clamp-3">${escapeHtml(t.taskName||'-')}</p>
@@ -1141,6 +1156,19 @@ function taskCard(t){
   </div>`;
 }
 function updateTaskStatus(id,newStatus){ quickUpdate(null, id, 'status', newStatus); }
+// Toggle mirror (tampil di Lintas Divisi). Hanya PM/Dev.
+function mirrorChip(t){
+  const on=isMirrored(t);
+  if(canMirror()) return `<button onclick="toggleMirror(event,'${escapeAttr(t.id)}')" title="${on?'Tampil di Lintas Divisi — klik untuk sembunyikan':'Klik untuk tampilkan ke Lintas Divisi'}" class="shrink-0 ${on?'text-emerald-600':'text-gray-300 hover:text-gray-500'}"><span class="material-icons-round text-[15px] align-middle">cast</span></button>`;
+  return on ? `<span title="Tampil di Lintas Divisi" class="text-emerald-600 shrink-0"><span class="material-icons-round text-[15px] align-middle">cast</span></span>` : '';
+}
+function toggleMirror(ev, id){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  if(!canMirror()){ showToast('Hanya PM/Dev yang bisa mengatur mirror ke Lintas Divisi.', false); return; }
+  const t=state.tasks.find(x=>x.id===id); if(!t) return;
+  const turnOn=!isMirrored(t); const prev=t.mirror; t.mirror=turnOn?'Ya':'';
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal', false); t.mirror=prev; renderAll(); return; } mergeTask(res.task); showToast(turnOn?'Ditampilkan ke Lintas Divisi.':'Disembunyikan dari Lintas Divisi.'); renderAll(); }).withFailureHandler(err=>{ showToast(err.message||err,false); t.mirror=prev; renderAll(); }).quickUpdateField(id, 'mirror', turnOn?'Ya':'', state.currentUser);
+}
 
 /* ---------- List ---------- */
 function renderTable(){
@@ -1156,7 +1184,7 @@ function renderTable(){
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform||'-')}</td>
     <td class="px-4 py-3">${inlineSelect('priority', t)}</td>
     <td class="px-4 py-3 font-medium ${overdue?'text-rose-600':(today?'text-pink-600':'text-gray-600 dark:text-slate-300')}">${t.dueDate?formatDateHuman(t.dueDate):'-'}</td>
-    <td class="px-4 py-3 text-right"><span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Buka</span></td>
+    <td class="px-4 py-3 text-right whitespace-nowrap">${canMirror()?`<button onclick="toggleMirror(event,'${escapeAttr(t.id)}')" title="${isMirrored(t)?'Tampil di Lintas Divisi — klik untuk sembunyikan':'Klik untuk tampilkan ke Lintas Divisi'}" class="mr-2 align-middle ${isMirrored(t)?'text-emerald-600':'text-gray-300 hover:text-gray-500'}"><span class="material-icons-round text-[18px]">cast</span></button>`:(isMirrored(t)?`<span class="mr-2 align-middle text-emerald-600" title="Tampil di Lintas Divisi"><span class="material-icons-round text-[16px]">cast</span></span>`:'')}<span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Buka</span></td>
   </tr>`;}).join('');
   document.getElementById('taskTable').innerHTML=rows || `<tr><td colspan="8" class="px-4 py-14 text-center text-gray-400 font-medium">Tidak ada task sesuai filter.</td></tr>`;
 }
@@ -1351,6 +1379,9 @@ function openTaskModal(id=''){
   // Tipe task: toggle hanya untuk manager/dev; member tetap melihat label bila task ini memang eksternal.
   const typeRow=document.getElementById('taskTypeRow'); if(typeRow) typeRow.classList.toggle('hide', !canCreateExternal() && !external);
   setTaskType(external?'eksternal':'internal');
+  // Mirror ke Lintas Divisi (PM/Dev). Checkbox selalu di-set ke nilai asli agar tidak hilang saat disimpan member.
+  const mirrorRow=document.getElementById('mirrorRow'); if(mirrorRow) mirrorRow.classList.toggle('hide', !canMirror());
+  const fm=document.getElementById('fieldMirror'); if(fm) fm.checked=isMirrored(t);
   setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan');
   // Rumus nama: Stage → Kata Kerja → Objek (+ Jumlah/Detail manual).
   setVal('fieldStage', t?.stage||'');
@@ -1380,7 +1411,7 @@ function setModalReadonly(ro){
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',verb:getVal('fieldVerb'),jumlah:getVal('fieldJumlah').trim(),objek:getVal('fieldObjek'),detail:getVal('fieldDetail').trim()};}
+function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',verb:getVal('fieldVerb'),jumlah:getVal('fieldJumlah').trim(),objek:getVal('fieldObjek'),detail:getVal('fieldDetail').trim(),mirror:(document.getElementById('fieldMirror')&&document.getElementById('fieldMirror').checked)?'Ya':''};}
 function saveTaskFromModal(){
   if(isViewOnly()) return;
   const _stage=getVal('fieldStage'), _verb=getVal('fieldVerb');
@@ -1473,10 +1504,10 @@ function renderViewOnlyNotice(){
   const b=document.getElementById('viewOnlyNotice'); if(!b) return;
   if(!isViewOnly()){ b.classList.add('hide'); b.innerHTML=''; return; }
   const total=state.tasks.length;
-  const ext=state.tasks.filter(isExternalTask).length;
-  if(ext>0){ b.classList.add('hide'); b.innerHTML=''; return; }
+  const shown=state.tasks.filter(inLintasView).length;
+  if(shown>0){ b.classList.add('hide'); b.innerHTML=''; return; }
   b.classList.remove('hide');
-  b.innerHTML=`<div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40"><span class="material-icons-round text-amber-600">info</span><div class="text-sm text-amber-800 dark:text-amber-200">Belum ada <b>task lintas divisi</b> untuk ditampilkan. Task muncul di sini setelah <b>manager/Dev</b> membuat task bertipe <b>Eksternal</b> + mengisi <b>Divisi Tujuan</b>.<div class="text-[11px] text-amber-700/80 dark:text-amber-300/70 mt-1">Total task termuat: ${total} • bertipe lintas divisi: ${ext}. Kalau ini kosong padahal task sudah dibuat, muat ulang halaman (Ctrl+Shift+R).</div></div></div>`;
+  b.innerHTML=`<div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40"><span class="material-icons-round text-amber-600">info</span><div class="text-sm text-amber-800 dark:text-amber-200">Belum ada task untuk ditampilkan ke Lintas Divisi. Muncul di sini setelah <b>PM/Dev</b> membuat task <b>Eksternal</b> (isi Divisi Tujuan) atau menyalakan <b>mirror</b> (ikon <span class="material-icons-round text-[13px] align-middle">cast</span>) pada task internal.<div class="text-[11px] text-amber-700/80 dark:text-amber-300/70 mt-1">Total task termuat: ${total} • tampil ke Lintas: ${shown}. Kalau kosong padahal sudah dipilih, muat ulang halaman (Ctrl+Shift+R).</div></div></div>`;
 }
 function findLinkByRow(row){ return (state.links||[]).find(l=>String(l.row)===String(row)); }
 function attrJs(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}

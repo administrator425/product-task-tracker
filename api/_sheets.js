@@ -35,21 +35,21 @@ const CONFIG = {
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
-  LAST_COL_LETTER: 'U',
+  LAST_COL_LETTER: 'V',
 };
 
 const TASK_HEADERS = [
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority',
   'Task Name', 'Stage', 'Platform', 'PIC', 'Support', 'Document',
-  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh',
+  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View',
 ];
 
-// Pemetaan field -> kolom (B..U). Urutan tetap.
+// Pemetaan field -> kolom (B..V). Urutan tetap.
 const COL = {
   taskId: 'B', createdDate: 'C', dueDate: 'D', status: 'E',
   priority: 'F', taskName: 'G', stage: 'H', platform: 'I', pic: 'J',
   support: 'K', document: 'L', picNotes: 'M', pmNotes: 'N',
-  divisiTujuan: 'O', kontakDivisi: 'P', verb: 'Q', jumlah: 'R', objek: 'S', detail: 'T', createdBy: 'U',
+  divisiTujuan: 'O', kontakDivisi: 'P', verb: 'Q', jumlah: 'R', objek: 'S', detail: 'T', createdBy: 'U', mirror: 'V',
 };
 
 // Rumus nama task: Kata Kerja (verb, parent=stage) -> Objek (object, parent="stage||verb"). Jumlah & Detail diisi manual.
@@ -266,6 +266,7 @@ function rowToTask(row, rowNumber) {
     objek: String(g(17)).trim(),
     detail: String(g(18)).trim(),
     createdBy: String(g(19)).trim(),
+    mirror: String(g(20)).trim(),
     // Field virtual (tidak ada kolomnya di sheet ini) — disediakan agar UI lama tetap jalan.
     startDate: createdDate,
     approvalGate: '',
@@ -299,6 +300,7 @@ function taskToRow(task, existingTask) {
     task.objek || '',
     task.detail || '',
     (task.createdBy || (existingTask && existingTask.createdBy) || ''),
+    (task.mirror ? 'Ya' : ''),
   ];
 }
 
@@ -402,7 +404,7 @@ async function deleteTask(taskId, actor) {
 }
 
 const QUICK_FIELD_COL = {
-  status: COL.status, priority: COL.priority, pic: COL.pic, stage: COL.stage,
+  status: COL.status, priority: COL.priority, pic: COL.pic, stage: COL.stage, mirror: COL.mirror,
 };
 
 async function quickUpdateField(taskId, field, value, actor) {
