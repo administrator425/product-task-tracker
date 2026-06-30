@@ -332,7 +332,7 @@
         <div id="extdashView" class="view hide max-w-[1500px] mx-auto space-y-4">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 flex items-center justify-between gap-3">
             <p class="text-sm text-gray-500">Kumpulan dashboard &amp; monitoring lain (di luar task tracker). Klik untuk membuka di tab baru.</p>
-            <button id="btnAddDashboard" onclick="addDashboardPrompt()" class="hide shrink-0 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">add</span><span class="hidden sm:inline">Tambah Dashboard</span></button>
+            <button id="btnAddDashboard" onclick="openDashboardModal()" class="hide shrink-0 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">add</span><span class="hidden sm:inline">Tambah Dashboard</span></button>
           </div>
           <div id="extdashGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
         </div>
@@ -413,6 +413,32 @@
     </main>
   </div>
 
+  <!-- Dashboard Modal (manager/dev) -->
+  <div id="dashModal" class="fixed inset-0 z-[95] hide flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-gray-900/50" onclick="closeDashModal()"></div>
+    <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-800 flex flex-col overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
+        <h2 id="dashModalTitle" class="text-base font-semibold text-gray-900 dark:text-white">Tambah Dashboard</h2>
+        <button onclick="closeDashModal()" class="w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-400"><span class="material-icons-round text-[20px]">close</span></button>
+      </div>
+      <div class="p-5 space-y-3 overflow-y-auto scrollbar-thin">
+        <input type="hidden" id="dashRow">
+        <div><label class="form-label">Judul</label><input id="dashTitle" class="form-control" placeholder="mis. Monitoring Liveclass"></div>
+        <div><label class="form-label">URL</label><input id="dashUrl" class="form-control" placeholder="https://..."></div>
+        <div><label class="form-label">Keterangan <span class="font-normal text-gray-400">(opsional)</span></label><input id="dashDesc" class="form-control" placeholder="Keterangan singkat"></div>
+        <div>
+          <label class="form-label">Ikon <span class="font-normal text-gray-400">(pilih satu)</span></label>
+          <input type="hidden" id="dashIcon">
+          <div id="dashIconGrid" class="grid grid-cols-6 sm:grid-cols-8 gap-1.5"></div>
+        </div>
+      </div>
+      <div class="px-5 py-4 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-2">
+        <button onclick="closeDashModal()" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-sm">Batal</button>
+        <button onclick="saveDashModal()" class="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Simpan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Task Modal -->
   <div id="taskModal" class="fixed inset-0 z-[90] hide flex items-center justify-center p-4">
     <div class="absolute inset-0 bg-gray-900/50" onclick="closeTaskModal()"></div>
@@ -458,7 +484,7 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div><label class="form-label">Jumlah <span class="font-normal text-gray-400">(opsional)</span></label><input id="fieldJumlah" type="text" inputmode="numeric" oninput="updateNamePreview()" class="form-control" placeholder="mis. 5"></div>
-              <div id="objekWrap"><label class="form-label">Objek</label><select id="fieldObjek" class="form-control" onchange="updateNamePreview()"></select></div>
+              <div id="objekWrap"><label class="form-label">Objek <span class="font-normal text-gray-400">(opsional, bisa ketik)</span></label><input id="fieldObjek" list="objekDatalist" class="form-control" oninput="updateNamePreview()" placeholder="pilih atau ketik…"><datalist id="objekDatalist"></datalist></div>
               <div><label class="form-label">Detail <span class="font-normal text-gray-400">(opsional, manual)</span></label><input id="fieldDetail" oninput="updateNamePreview()" class="form-control" placeholder="mis. di SIADU"></div>
             </div>
             <p id="namePreview" class="text-[12px] font-semibold text-indigo-600 dark:text-indigo-300"></p>
@@ -848,7 +874,11 @@ function populateVerbSelect(stage, selVerb, selObjek){
   fillCascade('fieldVerb','verbWrap', verbsFor(stage), selVerb, 'Pilih kata kerja…');
   populateObjekSelect(stage, getVal('fieldVerb'), selObjek);
 }
-function populateObjekSelect(stage, verb, selObjek){ fillCascade('fieldObjek','objekWrap', objeksFor(stage, verb), selObjek, 'Pilih objek…'); }
+function populateObjekSelect(stage, verb, selObjek){
+  const dl=document.getElementById('objekDatalist'); const opts=objeksFor(stage, verb);
+  if(dl) dl.innerHTML=opts.map(o=>`<option value="${escapeAttr(o)}"></option>`).join('');
+  if(selObjek!==undefined){ const inp=document.getElementById('fieldObjek'); if(inp) inp.value=selObjek||''; }
+}
 function onStageChange(){ populateVerbSelect(getVal('fieldStage'), '', ''); updateNamePreview(); }
 function onVerbChange(){ populateObjekSelect(getVal('fieldStage'), getVal('fieldVerb'), ''); updateNamePreview(); }
 function composeTaskName(){ const parts=[getVal('fieldVerb'), getVal('fieldJumlah').trim(), getVal('fieldObjek'), getVal('fieldDetail').trim()]; return parts.filter(x=>x && String(x).trim()).join(' '); }
@@ -1417,8 +1447,7 @@ function saveTaskFromModal(){
   const _stage=getVal('fieldStage'), _verb=getVal('fieldVerb');
   if(!_stage){ showToast('Pilih Stage dulu.', false); return; }
   if(verbsFor(_stage).length && !_verb){ showToast('Pilih Kata Kerja.', false); return; }
-  if(_verb && objeksFor(_stage,_verb).length && !getVal('fieldObjek')){ showToast('Pilih Objek.', false); return; }
-  const task=modalTask(); if(!task.taskName){showToast('Nama task belum terbentuk — pilih kata kerja & objek.',false);return;}
+  const task=modalTask(); if(!task.taskName){showToast('Nama task belum terbentuk — isi minimal Kata Kerja atau Objek.',false);return;}
   if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }
   const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
   if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
@@ -1468,34 +1497,34 @@ function dashList(){ return (state.dashboards && state.dashboards.length) ? stat
 function findDashboardByRow(row){ return (state.dashboards||[]).find(d=>String(d.row)===String(row)); }
 function renderExternalDashboards(){
   const grid=document.getElementById('extdashGrid'); if(!grid) return;
-  const dev=isDev();
-  const addBtn=document.getElementById('btnAddDashboard'); if(addBtn) addBtn.classList.toggle('hide',!dev);
+  const can=isManager(state.currentUser);   // manager + dev boleh kelola
+  const addBtn=document.getElementById('btnAddDashboard'); if(addBtn) addBtn.classList.toggle('hide',!can);
   const list=dashList();
-  grid.innerHTML = list.length ? list.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-start gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white flex-1 min-w-0 break-words">${escapeHtml(d.title||'Dashboard')}</div>${(dev && d.row)?`<div class="flex gap-1 shrink-0"><button title="Edit" onclick="editDashboard(${d.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[18px]">edit</span></button><button title="Hapus" onclick="deleteDashboardConfirm(${d.row})" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`:''}</div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
+  grid.innerHTML = list.length ? list.map(d=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col"><div class="flex items-start gap-3 mb-2"><div class="w-11 h-11 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center shrink-0"><span class="material-icons-round text-[22px]">${escapeHtml(d.icon||'dashboard')}</span></div><div class="font-semibold text-gray-900 dark:text-white flex-1 min-w-0 break-words">${escapeHtml(d.title||'Dashboard')}</div>${(can && d.row)?`<div class="flex gap-1 shrink-0"><button title="Edit" onclick="openDashboardModal(${d.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[18px]">edit</span></button><button title="Hapus" onclick="deleteDashboardConfirm(${d.row})" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[18px]">delete</span></button></div>`:''}</div><p class="text-sm text-gray-500 flex-1 mb-4">${escapeHtml(d.desc||'')}</p><a href="${escapeAttr(d.url||'#')}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"><span class="material-icons-round text-[18px]">open_in_new</span> Buka Dashboard</a></div>`).join('') : emptyState('Belum ada dashboard.');
 }
-function addDashboardPrompt(){
-  if(!isDev()){ showToast('Hanya Dev yang bisa menambah dashboard.', false); return; }
-  const title=prompt('Judul dashboard:',''); if(title===null) return;
-  if(!title.trim()){ showToast('Judul wajib diisi.', false); return; }
-  const url=prompt('URL dashboard (https://...):',''); if(url===null) return;
-  if(!url.trim()){ showToast('URL wajib diisi.', false); return; }
-  const desc=prompt('Keterangan singkat (opsional):',''); if(desc===null) return;
-  const icon=prompt('Ikon (opsional — nama Material Icon, mis. live_tv, insights, dashboard):','dashboard'); if(icon===null) return;
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard ditambahkan.'); renderExternalDashboards(); }).withFailureHandler(err=>showToast(err.message||err,false)).addDashboard(title.trim(), String(desc).trim(), String(icon).trim(), url.trim());
+const DASH_ICONS=['dashboard','insights','analytics','monitoring','query_stats','bar_chart','pie_chart','trending_up','table_chart','leaderboard','calendar_month','live_tv','smart_display','slideshow','campaign','groups','school','assignment','fact_check','description','folder','public','support_agent','grade'];
+function renderDashIconGrid(){ const grid=document.getElementById('dashIconGrid'); if(!grid) return; const sel=getVal('dashIcon')||'dashboard'; grid.innerHTML=DASH_ICONS.map(ic=>`<button type="button" onclick="selectDashIcon('${ic}')" title="${ic}" class="aspect-square rounded-lg flex items-center justify-center border ${ic===sel?'bg-indigo-600 text-white border-indigo-600':'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-500 hover:border-indigo-300'}"><span class="material-icons-round text-[20px]">${ic}</span></button>`).join(''); }
+function selectDashIcon(ic){ setVal('dashIcon', ic); renderDashIconGrid(); }
+function openDashboardModal(row){
+  if(!isManager(state.currentUser)){ showToast('Hanya manager/Dev yang bisa mengelola dashboard.', false); return; }
+  const d=row?findDashboardByRow(row):null;
+  setVal('dashRow', d?d.row:''); setVal('dashTitle', d?.title||''); setVal('dashUrl', d?.url||''); setVal('dashDesc', d?.desc||''); setVal('dashIcon', d?.icon||'dashboard');
+  document.getElementById('dashModalTitle').textContent = d?'Edit Dashboard':'Tambah Dashboard';
+  renderDashIconGrid();
+  document.getElementById('dashModal').classList.remove('hide');
 }
-function editDashboard(row){
-  if(!isDev()) return;
-  const d=findDashboardByRow(row); if(!d) return;
-  const title=prompt('Judul dashboard:', d.title||''); if(title===null) return;
-  if(!title.trim()){ showToast('Judul wajib diisi.', false); return; }
-  const url=prompt('URL dashboard:', d.url||''); if(url===null) return;
-  if(!url.trim()){ showToast('URL wajib diisi.', false); return; }
-  const desc=prompt('Keterangan:', d.desc||''); if(desc===null) return;
-  const icon=prompt('Ikon:', d.icon||'dashboard'); if(icon===null) return;
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard diperbarui.'); renderExternalDashboards(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateDashboard(row, title.trim(), String(desc).trim(), String(icon).trim(), url.trim());
+function closeDashModal(){ const m=document.getElementById('dashModal'); if(m) m.classList.add('hide'); }
+function saveDashModal(){
+  if(!isManager(state.currentUser)) return;
+  const row=getVal('dashRow'), title=getVal('dashTitle').trim(), url=getVal('dashUrl').trim(), desc=getVal('dashDesc').trim(), icon=getVal('dashIcon')||'dashboard';
+  if(!title){ showToast('Judul wajib diisi.', false); return; }
+  if(!url){ showToast('URL wajib diisi.', false); return; }
+  const done=res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard tersimpan.'); closeDashModal(); renderExternalDashboards(); };
+  if(row) GAS.withSuccessHandler(done).withFailureHandler(err=>showToast(err.message||err,false)).updateDashboard(parseInt(row,10), title, desc, icon, url);
+  else GAS.withSuccessHandler(done).withFailureHandler(err=>showToast(err.message||err,false)).addDashboard(title, desc, icon, url);
 }
 function deleteDashboardConfirm(row){
-  if(!isDev()) return;
+  if(!isManager(state.currentUser)) return;
   const d=findDashboardByRow(row); if(!d) return;
   if(!confirm('Hapus dashboard "'+(d.title||'')+'"?')) return;
   GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus dashboard', false); return; } state.dashboards=res.dashboards||state.dashboards; showToast(res.message||'Dashboard dihapus.'); renderExternalDashboards(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteDashboard(row);
