@@ -793,7 +793,7 @@ function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;a
 function populateModalDropdowns(){
   fillSelect('fieldStatus', state.options.status, null, 'Todo');
   fillSelect('fieldPriority', state.options.priority, null, 'Normal');
-  fillSelect('fieldStage', state.options.stage, 'Pilih stage…');
+  fillSelect('fieldStage', allStagesForInput(), 'Pilih stage…');
   const _platSel=document.getElementById('fieldPlatform');
   if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   fillSelect('fieldPic', state.options.pic, null, state.currentUser);
@@ -805,9 +805,24 @@ function getTaskType(){ const r=document.querySelector('input[name="taskType"]:c
 function setTaskType(v){ document.querySelectorAll('input[name="taskType"]').forEach(r=>{ r.checked=(r.value===v); }); }
 function toggleExternalFields(){ const box=document.getElementById('externalFields'); if(box) box.classList.toggle('hide', getTaskType()!=='eksternal'); }
 // ---- Rumus nama task: Stage → Kata Kerja → Objek (cascading) + Jumlah/Detail manual ----
+// Template bawaan (dari tabel RUMUS DETAIL TASK). Dipakai sebagai fallback agar dropdown
+// langsung berisi tanpa perlu seeding. Kalau OPTIONS sudah punya verb/objek, itu yang dipakai.
+const FORMULA_FALLBACK = {
+  'RND': { 'Menyusun': ['kurikulum','product knowledge','silabus','sistem penilaian','panduan'], 'Membuat': ['mapping','prompt'], 'Melakukan': ['riset'] },
+  'Develop Konten (Materi/Soal)': { 'Menyusun': ['materi','journey'], 'Membuat': ['soal'], 'Melakukan': ['syuting','retake'], 'Mengambil (take)': ['video pembahasan'] },
+  'Manajemen Sistem': { 'Merapikan': ['subbab'], 'Menyusun': ['kerangka kategori'], 'Generate/regenerate': ['paket'], 'Menampilkan/menyembunyikan': ['kategori'], 'Mengelompokkan': ['data'], 'Menyelesaikan': ['report'] },
+  'QC': { 'Memperbarui': ['bumper','thumbnail'], 'Melakukan': ['QC'] },
+  'Operasional': { 'Menginput': ['soal','video pembahasan','jadwal'], 'Membangun': ['sistem otomatis'], 'Memonitor': ['liveclass'] },
+  'Manajemen Guru': { 'Mendistribusikan': ['proyek video pembahasan','proyek komplit'], 'Menyusun': ['jadwal'] },
+  'Data & Intelligence': { 'Membuat': ['query'], 'Melakukan': ['scraping'], 'Membangun': ['dashboard'] },
+  'Kreatif': { 'Mengedit': ['PDF','video'], 'Membuat': ['icon'] },
+};
+const _fbVerbMap={}, _fbObjekMap={};
+Object.keys(FORMULA_FALLBACK).forEach(st=>{ _fbVerbMap[st]=Object.keys(FORMULA_FALLBACK[st]); Object.keys(FORMULA_FALLBACK[st]).forEach(vb=>{ _fbObjekMap[st+'||'+vb]=FORMULA_FALLBACK[st][vb]; }); });
 function mapLookup(map, key){ if(!map) return []; if(map[key]) return map[key]; const k=Object.keys(map).find(x=>x.toLowerCase()===String(key||'').toLowerCase()); return k?map[k]:[]; }
-function verbsFor(stage){ return mapLookup((state.options&&state.options.verbMap)||{}, stage); }
-function objeksFor(stage, verb){ if(!stage||!verb) return []; return mapLookup((state.options&&state.options.objekMap)||{}, stage+'||'+verb); }
+function verbsFor(stage){ const real=mapLookup((state.options&&state.options.verbMap)||{}, stage); return real.length?real:mapLookup(_fbVerbMap, stage); }
+function objeksFor(stage, verb){ if(!stage||!verb) return []; const real=mapLookup((state.options&&state.options.objekMap)||{}, stage+'||'+verb); return real.length?real:mapLookup(_fbObjekMap, stage+'||'+verb); }
+function allStagesForInput(){ const out=[]; (state.options.stage||[]).forEach(s=>{ if(s && !out.some(x=>x.toLowerCase()===String(s).toLowerCase())) out.push(s); }); Object.keys(FORMULA_FALLBACK).forEach(s=>{ if(!out.some(x=>x.toLowerCase()===s.toLowerCase())) out.push(s); }); return out; }
 function fillCascade(selId, wrapId, values, selected, placeholder){
   const sel=document.getElementById(selId); if(!sel) return;
   sel.innerHTML='<option value="">'+(values.length?placeholder:'(belum ada pilihan)')+'</option>'+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
@@ -1569,16 +1584,19 @@ function removeOption(type,value){if(!confirm('Nonaktifkan opsi '+value+'?'))ret
 /* ---------- Kata Kerja & Objek per Stage (Dropdown Master, 3 tingkat) ---------- */
 function renderCatSubManager(){
   const grid=document.getElementById('catSubGrid'); if(!grid) return;
-  const stages=state.options.stage||[];
-  grid.innerHTML = stages.length ? stages.map((stage,si)=>{
-    const verbs=verbsFor(stage);
+  const stages=allStagesForInput();
+  const rVerbMap=(state.options&&state.options.verbMap)||{}, rObjekMap=(state.options&&state.options.objekMap)||{};
+  const _seeded=Object.keys(rVerbMap).length>0;
+  const _hint=_seeded?'':`<div class="lg:col-span-2 flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40 text-[12px] text-amber-800 dark:text-amber-200"><span class="material-icons-round text-amber-600 text-[16px]">info</span><div>Dropdown di form input <b>sudah aktif</b> memakai template bawaan. Agar bisa <b>tambah/edit/hapus</b> Kata Kerja &amp; Objek di sini, klik <b>"Isi dari template"</b> dulu.</div></div>`;
+  grid.innerHTML = _hint + (stages.length ? stages.map((stage,si)=>{
+    const verbs=mapLookup(rVerbMap, stage);
     const verbBlocks = verbs.length ? verbs.map((vb,vi)=>{
-      const objeks=objeksFor(stage,vb);
+      const objeks=mapLookup(rObjekMap, stage+'||'+vb);
       const objRows = objeks.length ? objeks.map(o=>`<div class="flex items-center justify-between gap-2 pl-2 pr-1 py-1 rounded bg-white dark:bg-slate-900"><span class="text-[12px] text-gray-600 dark:text-slate-300 truncate">${escapeHtml(o)}</span><span class="flex items-center gap-0.5 shrink-0"><button onclick="editObjek('${attrJs(stage)}','${attrJs(vb)}','${attrJs(o)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[14px]">edit</span></button><button onclick="removeObjek('${attrJs(stage)}','${attrJs(vb)}','${attrJs(o)}')" class="text-rose-400 hover:text-rose-600"><span class="material-icons-round text-[14px]">delete</span></button></span></div>`).join('') : '<p class="text-[10px] text-gray-400 italic px-1">Belum ada objek.</p>';
       return `<div class="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40"><div class="flex items-center justify-between gap-2 px-2 py-1.5"><span class="text-[13px] font-semibold text-indigo-700 dark:text-indigo-300 truncate">${escapeHtml(vb)}</span><span class="flex items-center gap-1 shrink-0"><button title="Ubah kata kerja" onclick="editVerb('${attrJs(stage)}','${attrJs(vb)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[15px]">edit</span></button><button title="Hapus kata kerja" onclick="removeVerb('${attrJs(stage)}','${attrJs(vb)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[15px]">delete</span></button></span></div><div class="px-2 pb-2 space-y-1"><div class="flex gap-1.5"><input id="newobj-${si}-${vi}" placeholder="+ objek…" class="flex-1 rounded bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2 py-1 outline-none text-[12px] focus:ring-2 focus:ring-indigo-300"><button onclick="addObjek('${attrJs(stage)}','${attrJs(vb)}',${si},${vi})" class="px-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold shrink-0">+</button></div>${objRows}</div></div>`;
-    }).join('') : '<p class="text-[11px] text-gray-400 italic px-1 py-1">Belum ada kata kerja.</p>';
+    }).join('') : '<p class="text-[11px] text-gray-400 italic px-1 py-1">Belum ada kata kerja tersimpan (form pakai template bawaan).</p>';
     return `<div class="bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden"><div class="p-3 border-b border-gray-200 dark:border-slate-700"><div class="font-semibold text-sm text-gray-900 dark:text-white truncate">${escapeHtml(stage)}</div></div><div class="p-2.5 space-y-2"><div class="flex gap-2"><input id="newverb-${si}" placeholder="Tambah kata kerja…" class="flex-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2.5 py-1.5 outline-none text-[13px] focus:ring-2 focus:ring-indigo-300"><button onclick="addVerb('${attrJs(stage)}',${si})" class="px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] shrink-0">+ Kata Kerja</button></div><div class="space-y-2 max-h-[340px] overflow-y-auto scrollbar-thin">${verbBlocks}</div></div></div>`;
-  }).join('') : emptyState('Belum ada Stage. Tambah Stage di kartu Stage di atas, atau klik "Isi dari template".');
+  }).join('') : emptyState('Belum ada Stage. Tambah Stage di kartu Stage di atas, atau klik "Isi dari template".'));
 }
 function _applyOptionRes(res, msg){ if(!res||!res.success){ showToast((res&&res.message)||'Gagal', false); return false; } state.options=Object.assign({},dummyOptions,res.options||{}); if(res.tasks) state.tasks=res.tasks; showToast(res.message||msg); populateModalDropdowns(); renderCatSubManager(); return true; }
 function addVerb(stage, si){ const el=document.getElementById('newverb-'+si); const v=(el?el.value:'').trim(); if(!v) return; GAS.withSuccessHandler(res=>{ if(_applyOptionRes(res,'Kata kerja ditambah.') && el) el.value=''; }).withFailureHandler(err=>showToast(err.message||err,false)).saveOption('verb', v, stage); }
