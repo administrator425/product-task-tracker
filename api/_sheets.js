@@ -35,24 +35,25 @@ const CONFIG = {
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
-  LAST_COL_LETTER: 'R',
+  LAST_COL_LETTER: 'U',
 };
 
 const TASK_HEADERS = [
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority',
   'Task Name', 'Stage', 'Platform', 'PIC', 'Support', 'Document',
-  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kategori', 'Subkategori',
+  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh',
 ];
 
-// Pemetaan field -> kolom (B..R). Urutan tetap.
+// Pemetaan field -> kolom (B..U). Urutan tetap.
 const COL = {
   taskId: 'B', createdDate: 'C', dueDate: 'D', status: 'E',
   priority: 'F', taskName: 'G', stage: 'H', platform: 'I', pic: 'J',
   support: 'K', document: 'L', picNotes: 'M', pmNotes: 'N',
-  divisiTujuan: 'O', kontakDivisi: 'P', category: 'Q', subcategory: 'R',
+  divisiTujuan: 'O', kontakDivisi: 'P', verb: 'Q', jumlah: 'R', objek: 'S', detail: 'T', createdBy: 'U',
 };
 
-const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support', 'division', 'category', 'subcategory'];
+// Rumus nama task: Kata Kerja (verb, parent=stage) -> Objek (object, parent="stage||verb"). Jumlah & Detail diisi manual.
+const OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support', 'division', 'verb', 'object'];
 
 const DEFAULT_OPTIONS = {
   status: ['Todo', 'In progress', 'Review PM', 'Revisi', 'Hold', 'Done'],
@@ -76,7 +77,7 @@ const DEFAULT_OPTIONS = {
 const VALIDATION_MAP = {
   Status: 'status', Priority: 'priority', Stage: 'stage',
   Platform: 'platform', PIC: 'pic', Support: 'support',
-  'Divisi Tujuan': 'division', Kategori: 'category',
+  'Divisi Tujuan': 'division',
 };
 
 /* ------------------------------------------------------------------ */
@@ -260,8 +261,11 @@ function rowToTask(row, rowNumber) {
     pmNotes: String(g(12)).trim(),
     divisiTujuan: String(g(13)).trim(),
     kontakDivisi: String(g(14)).trim(),
-    category: String(g(15)).trim(),
-    subcategory: String(g(16)).trim(),
+    verb: String(g(15)).trim(),
+    jumlah: String(g(16)).trim(),
+    objek: String(g(17)).trim(),
+    detail: String(g(18)).trim(),
+    createdBy: String(g(19)).trim(),
     // Field virtual (tidak ada kolomnya di sheet ini) — disediakan agar UI lama tetap jalan.
     startDate: createdDate,
     approvalGate: '',
@@ -290,8 +294,11 @@ function taskToRow(task, existingTask) {
     task.pmNotes || '',
     task.divisiTujuan || '',
     task.kontakDivisi || '',
-    task.category || '',
-    task.subcategory || '',
+    task.verb || '',
+    task.jumlah || '',
+    task.objek || '',
+    task.detail || '',
+    (task.createdBy || (existingTask && existingTask.createdBy) || ''),
   ];
 }
 
@@ -347,10 +354,12 @@ async function saveTask(task) {
     }
   }
   const isUpdate = rowNumber !== -1;
+  const actor = String(task.actor || '').trim() || 'Unknown';
 
-  // Pastikan ID terisi.
+  // Pastikan ID terisi. createdBy = pembuat task (di-set saat create, dipertahankan saat update).
   const finalId = task.id || generateTaskId(ids);
-  const rowData = taskToRow(Object.assign({}, task, { id: finalId }), existingTask);
+  const createdBy = isUpdate ? ((existingTask && existingTask.createdBy) || task.createdBy || '') : actor;
+  const rowData = taskToRow(Object.assign({}, task, { id: finalId, createdBy }), existingTask);
 
   if (!isUpdate) {
     rowNumber = CONFIG.FIRST_DATA_ROW + ids.length; // baris kosong berikutnya
@@ -362,7 +371,6 @@ async function saveTask(task) {
 
   const savedRows = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${rowNumber}:${CONFIG.LAST_COL_LETTER}${rowNumber}`);
   const saved = rowToTask(savedRows[0] || rowData, rowNumber);
-  const actor = String(task.actor || '').trim() || 'Unknown';
   await logActivity(actor, isUpdate ? 'Update Task' : 'Create Task', saved.id,
     `${saved.taskName} • Status: ${saved.status} • PIC: ${saved.pic}`);
 
@@ -472,21 +480,23 @@ async function getOptions() {
   }
   const options = {};
   OPTION_TYPES.forEach(t => (options[t] = []));
-  const subcatMap = {}; // { kategori: [subkategori, ...] }
+  const verbMap = {};  // { stage: [kata kerja, ...] }
+  const objekMap = {}; // { "stage||verb": [objek, ...] }
   raw.forEach(row => {
     if (!options[row.type]) options[row.type] = [];
     if (!options[row.type].includes(row.value)) options[row.type].push(row.value);
-    if (row.type === 'subcategory' && row.parent) {
-      (subcatMap[row.parent] = subcatMap[row.parent] || []);
-      if (!subcatMap[row.parent].includes(row.value)) subcatMap[row.parent].push(row.value);
-    }
+    if (row.type === 'verb' && row.parent) { (verbMap[row.parent] = verbMap[row.parent] || []); if (!verbMap[row.parent].includes(row.value)) verbMap[row.parent].push(row.value); }
+    if (row.type === 'object' && row.parent) { (objekMap[row.parent] = objekMap[row.parent] || []); if (!objekMap[row.parent].includes(row.value)) objekMap[row.parent].push(row.value); }
   });
   OPTION_TYPES.forEach(t => {
     if (!options[t] || !options[t].length) options[t] = DEFAULT_OPTIONS[t] || [];
   });
-  options.subcatMap = subcatMap;
+  options.verbMap = verbMap;
+  options.objekMap = objekMap;
   return options;
 }
+
+const USES_PARENT = ['verb', 'object']; // tipe opsi bertingkat (punya induk di kolom Parent): kata kerja & objek
 
 async function saveOption(type, value, parent) {
   type = String(type || '').trim();
@@ -494,11 +504,11 @@ async function saveOption(type, value, parent) {
   parent = String(parent || '').trim();
   if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
   if (!value) return { success: false, message: 'Nilai opsi tidak boleh kosong.' };
-  if (type === 'subcategory' && !parent) return { success: false, message: 'Subkategori wajib punya kategori induk.' };
+  if (USES_PARENT.includes(type) && !parent) return { success: false, message: 'Opsi ini wajib punya induk (parent).' };
 
   await ensureOptionsSheet();
   const rows = await readOptionsRaw();
-  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === parent.toLowerCase()));
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase() && (!USES_PARENT.includes(type) || r.parent.toLowerCase() === parent.toLowerCase()));
   if (found) {
     await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!C${found.row}:D${found.row}`, [[true, parent]]);
   } else {
@@ -515,7 +525,7 @@ async function deleteOption(type, value, parent) {
   if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
 
   const rows = await readOptionsRaw();
-  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === parent.toLowerCase()));
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === value.toLowerCase() && (!USES_PARENT.includes(type) || r.parent.toLowerCase() === parent.toLowerCase()));
   if (found) await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!C${found.row}`, [[false]]);
   await applySheetValidations().catch(() => {});
   return { success: true, message: 'Opsi berhasil dinonaktifkan.', options: await getOptions() };
@@ -530,34 +540,14 @@ async function editOption(type, oldValue, newValue, parent) {
   if (!OPTION_TYPES.includes(type)) return { success: false, message: 'Tipe opsi tidak valid.' };
   if (!oldValue || !newValue) return { success: false, message: 'Nilai lama/baru tidak boleh kosong.' };
   const rows = await readOptionsRaw();
-  const found = rows.find(r => r.type === type && r.value.toLowerCase() === oldValue.toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === parent.toLowerCase()));
+  const found = rows.find(r => r.type === type && r.value.toLowerCase() === oldValue.toLowerCase() && (!USES_PARENT.includes(type) || r.parent.toLowerCase() === parent.toLowerCase()));
   if (!found) return { success: false, message: 'Opsi tidak ditemukan.' };
   await valuesUpdate(`${CONFIG.OPTIONS_SHEET}!B${found.row}`, [[newValue]]);
 
-  if (type === 'subcategory') {
-    // Cascade ke task: kolom Subkategori (R) + prefix nama (G) untuk task di kategori induk yang sama.
-    const taskRows = await valuesGet(MAIN_DATA_RANGE());
-    const catIdx = COL.category.charCodeAt(0) - 'B'.charCodeAt(0);
-    const subIdx = COL.subcategory.charCodeAt(0) - 'B'.charCodeAt(0);
-    const nameIdx = COL.taskName.charCodeAt(0) - 'B'.charCodeAt(0);
-    const oldPrefix = (oldValue + ' - ').toLowerCase();
-    const data = [];
-    taskRows.forEach((row, idx) => {
-      const cat = String((row && row[catIdx]) || '').trim();
-      const sub = String((row && row[subIdx]) || '').trim();
-      if (cat.toLowerCase() === parent.toLowerCase() && sub.toLowerCase() === oldValue.toLowerCase()) {
-        const rowNumber = CONFIG.FIRST_DATA_ROW + idx;
-        data.push({ range: `${CONFIG.TASK_SHEET}!${COL.subcategory}${rowNumber}`, values: [[newValue]] });
-        const name = String((row && row[nameIdx]) || '');
-        if (name.toLowerCase().startsWith(oldPrefix)) data.push({ range: `${CONFIG.TASK_SHEET}!${COL.taskName}${rowNumber}`, values: [[newValue + ' - ' + name.slice((oldValue + ' - ').length)]] });
-      }
-    });
-    if (data.length) {
-      const sheets = await getSheets();
-      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: getSpreadsheetId(), requestBody: { valueInputOption: 'USER_ENTERED', data } });
-    }
+  if (USES_PARENT.includes(type)) {
+    // Kata kerja / objek: cukup ganti nama opsi. Nama task lama tidak diubah otomatis.
     await applySheetValidations().catch(() => {});
-    return { success: true, message: `Subkategori "${oldValue}" diubah menjadi "${newValue}".`, options: await getOptions(), tasks: await getTasks() };
+    return { success: true, message: `"${oldValue}" diubah menjadi "${newValue}".`, options: await getOptions() };
   }
 
   const col = COL[type];
@@ -724,29 +714,35 @@ async function ensureOptionsSheet() {
   if (toAppend.length) await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:D`, toAppend);
 }
 
-// Template kategori + subkategori (dari tabel divisi produk). Dipakai tombol "Isi dari template".
-const CATEGORY_TEMPLATE = {
-  'rnd': ['Menyusun kurikulum', 'mapping', 'Product knowledge', 'Menyusun silabus', 'Menyusun Sistem penilaian', 'Menyusun panduan', 'membuat prompt produksi soal', 'Riset kompetitor'],
-  'Develop konten(materi/soal)': ['Menyusun 5 materi', 'Membuat 1 soal', 'Menyusun 1 Journey', 'Syuting 5 materi', 'Take video pembahasan 5'],
-  'Manajemen sistem': ['Perapian detail subbab di siadu', 'Menyusun kerangka Kategori', 'Generate/regenerate 15 paket SKD', 'Show/hide kategori', 'Grupping', 'menyelesaikan 60 report'],
-  'QC': ['Memperbarui bumper', 'Memperbarui thumbnail 5', 'QC materi', 'QC 1 soal', 'Retake', 'QC 5 paket TO'],
-  'Operasional': ['Input soal', 'Input Video Pembahasan', 'Membangun sistem otomatis qc', 'Membangun sistem otomatis input', 'Input jadwal liveclass', 'Monitoring 5 Liveclass'],
-  'Manajemen Guru': ['Proyek 5 video pembahasan TIU', 'Proyek komplit 15 TO SKD', 'Menyusun jadwal liveclass'],
-  'Data & Intelligence': ['Membuat Query', 'Scrapping Data', 'Membangun dashboard'],
-  'Kreatif': ['Mengedit 4 Pdf materi', 'Mengedit 5 Video materi', 'Membuat 5 Icon'],
+// Template rumus nama task (dari tabel "RUMUS DETAIL TASK"): Stage -> Kata Kerja -> Objek.
+const FORMULA_TEMPLATE = {
+  'RND': { 'Menyusun': ['kurikulum', 'product knowledge', 'silabus', 'sistem penilaian', 'panduan'], 'Membuat': ['mapping', 'prompt'], 'Melakukan': ['riset'] },
+  'Develop Konten (Materi/Soal)': { 'Menyusun': ['materi', 'journey'], 'Membuat': ['soal'], 'Melakukan': ['syuting', 'retake'], 'Mengambil (take)': ['video pembahasan'] },
+  'Manajemen Sistem': { 'Merapikan': ['subbab'], 'Menyusun': ['kerangka kategori'], 'Generate/regenerate': ['paket'], 'Menampilkan/menyembunyikan': ['kategori'], 'Mengelompokkan': ['data'], 'Menyelesaikan': ['report'] },
+  'QC': { 'Memperbarui': ['bumper', 'thumbnail'], 'Melakukan': ['QC'] },
+  'Operasional': { 'Menginput': ['soal', 'video pembahasan', 'jadwal'], 'Membangun': ['sistem otomatis'], 'Memonitor': ['liveclass'] },
+  'Manajemen Guru': { 'Mendistribusikan': ['proyek video pembahasan', 'proyek komplit'], 'Menyusun': ['jadwal'] },
+  'Data & Intelligence': { 'Membuat': ['query'], 'Melakukan': ['scraping'], 'Membangun': ['dashboard'] },
+  'Kreatif': { 'Mengedit': ['PDF', 'video'], 'Membuat': ['icon'] },
 };
-async function seedCategoryTemplate() {
+async function seedFormulaTemplate() {
   await ensureOptionsSheet();
   const existing = await readOptionsRaw();
-  const has = (type, value, parent) => existing.some(r => r.type === type && r.value.toLowerCase() === String(value).toLowerCase() && (type !== 'subcategory' || r.parent.toLowerCase() === String(parent || '').toLowerCase()));
+  const has = (type, value, parent) => existing.some(r => r.type === type && r.value.toLowerCase() === String(value).toLowerCase() && (!USES_PARENT.includes(type) || r.parent.toLowerCase() === String(parent || '').toLowerCase()));
   const toAppend = [];
-  Object.keys(CATEGORY_TEMPLATE).forEach(cat => {
-    if (!has('category', cat)) toAppend.push(['category', cat, true, '']);
-    CATEGORY_TEMPLATE[cat].forEach(sub => { if (!has('subcategory', sub, cat)) toAppend.push(['subcategory', sub, true, cat]); });
+  Object.keys(FORMULA_TEMPLATE).forEach(stage => {
+    if (!has('stage', stage)) toAppend.push(['stage', stage, true, '']);
+    Object.keys(FORMULA_TEMPLATE[stage]).forEach(verb => {
+      if (!has('verb', verb, stage)) toAppend.push(['verb', verb, true, stage]);
+      FORMULA_TEMPLATE[stage][verb].forEach(objek => {
+        const p = stage + '||' + verb;
+        if (!has('object', objek, p)) toAppend.push(['object', objek, true, p]);
+      });
+    });
   });
   if (toAppend.length) await valuesAppend(`${CONFIG.OPTIONS_SHEET}!A:D`, toAppend);
   await applySheetValidations().catch(() => {});
-  return { success: true, message: `Template terisi: ${toAppend.length} baris baru (kategori + subkategori).`, options: await getOptions() };
+  return { success: true, message: `Template terisi: ${toAppend.length} baris baru (stage + kata kerja + objek).`, options: await getOptions() };
 }
 
 async function ensureCommentsSheet() {
@@ -1103,8 +1099,8 @@ module.exports = {
   renameUserFolder, deleteUserFolder,
   // dashboard lain (CRUD Dev)
   getAllDashboards, addDashboard, updateDashboard, deleteDashboard,
-  // kategori & subkategori
-  seedCategoryTemplate,
+  // rumus nama task (kata kerja/objek)
+  seedFormulaTemplate,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
 };

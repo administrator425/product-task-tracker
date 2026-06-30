@@ -31,7 +31,7 @@ const HANDLERS = {
   saveOption: (type, value, parent) => backend.saveOption(type, value, parent),
   deleteOption: (type, value, parent) => backend.deleteOption(type, value, parent),
   editOption: (type, oldValue, newValue, parent) => backend.editOption(type, oldValue, newValue, parent),
-  seedCategoryTemplate: () => backend.seedCategoryTemplate(),
+  seedFormulaTemplate: () => backend.seedFormulaTemplate(),
 
   setupTaskTracker: () => backend.setupTaskTracker(),
   assignMissingTaskIds: () => backend.assignMissingTaskIds(),

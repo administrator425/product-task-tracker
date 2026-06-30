@@ -378,16 +378,13 @@
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
             <div class="flex flex-col sm:flex-row sm:items-center gap-3">
               <div class="flex-1">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">account_tree</span> Kategori &amp; Subkategori</h2>
-                <p class="text-sm text-gray-500 mt-1">Subkategori muncul sesuai kategori yang dipilih saat input task. Nama task otomatis jadi <b>subkategori - detail</b>.</p>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">account_tree</span> Kata Kerja &amp; Objek per Stage</h2>
+                <p class="text-sm text-gray-500 mt-1">Atur Kata Kerja tiap Stage, lalu Objek tiap Kata Kerja. Saat input: Stage → Kata Kerja → Objek. Nama task = <b>Kata Kerja [Jumlah] Objek [Detail]</b>.</p>
               </div>
-              <button onclick="seedCategoryTemplate()" class="shrink-0 px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">auto_awesome</span> Isi dari template</button>
+              <button onclick="seedFormulaTemplate()" class="shrink-0 px-4 py-2.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">auto_awesome</span> Isi dari template</button>
             </div>
-            <div class="flex gap-2 mt-3 max-w-md">
-              <input id="new-category" placeholder="Tambah kategori baru…" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
-              <button onclick="addOption('category')" class="px-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shrink-0">Add Kategori</button>
-            </div>
-            <div id="catSubGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4"></div>
+            <p class="text-[12px] text-gray-400 mt-2">Daftar Stage dikelola di kartu <b>Stage</b> di atas. Di sini atur Kata Kerja &amp; Objek untuk tiap Stage.</p>
+            <div id="catSubGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3"></div>
           </div>
         </div>
 
@@ -442,25 +439,23 @@
               <div><label class="form-label">Kontak Divisi</label><input id="fieldKontakDivisi" class="form-control" placeholder="Nama kontak di divisi tujuan (mis. Budi - IT)"></div>
             </div>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div><label class="form-label">Kategori</label><select id="fieldCategory" class="form-control" onchange="onCategoryChange()"></select></div>
-            <div id="subcatWrap"><label class="form-label">Subkategori</label><select id="fieldSubcategory" class="form-control" onchange="updateNamePreview()"></select></div>
-          </div>
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div class="lg:col-span-2">
-              <label class="form-label">Detail Task <span class="font-normal text-gray-400">(nama jadi: subkategori - detail)</span></label>
-              <input id="fieldTaskName" oninput="updateNamePreview()" class="form-control" placeholder="mis. revisi bagian TIU">
-              <p id="namePreview" class="text-[11px] font-medium text-indigo-500 dark:text-indigo-300 mt-1"></p>
+          <div class="rounded-xl border border-indigo-100 dark:border-slate-700 bg-indigo-50/40 dark:bg-slate-800/40 p-3 space-y-3">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-300 flex items-center gap-1"><span class="material-icons-round text-[15px]">auto_fix_high</span> Rumus Nama Task</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div><label class="form-label">Stage</label><select id="fieldStage" class="form-control" onchange="onStageChange()"></select></div>
+              <div id="verbWrap"><label class="form-label">Kata Kerja</label><select id="fieldVerb" class="form-control" onchange="onVerbChange()"></select></div>
             </div>
-            <div>
-              <label class="form-label">Task ID</label>
-              <input id="fieldIdDisplay" class="form-control bg-gray-100 dark:bg-slate-800" placeholder="Auto" disabled>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div><label class="form-label">Jumlah <span class="font-normal text-gray-400">(opsional)</span></label><input id="fieldJumlah" type="text" inputmode="numeric" oninput="updateNamePreview()" class="form-control" placeholder="mis. 5"></div>
+              <div id="objekWrap"><label class="form-label">Objek</label><select id="fieldObjek" class="form-control" onchange="updateNamePreview()"></select></div>
+              <div><label class="form-label">Detail <span class="font-normal text-gray-400">(opsional, manual)</span></label><input id="fieldDetail" oninput="updateNamePreview()" class="form-control" placeholder="mis. di SIADU"></div>
             </div>
+            <p id="namePreview" class="text-[12px] font-semibold text-indigo-600 dark:text-indigo-300"></p>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div><label class="form-label">Task ID</label><input id="fieldIdDisplay" class="form-control bg-gray-100 dark:bg-slate-800" placeholder="Auto" disabled></div>
             <div><label class="form-label">Status</label><select id="fieldStatus" class="form-control"></select></div>
             <div><label class="form-label">Priority</label><select id="fieldPriority" class="form-control"></select></div>
-            <div><label class="form-label">Stage</label><select id="fieldStage" class="form-control"></select></div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             <div><label class="form-label">Platform</label><select id="fieldPlatform" class="form-control" multiple></select><p class="text-[11px] text-gray-400 mt-1">Ctrl/Cmd untuk pilih lebih dari satu.</p></div>
@@ -541,7 +536,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedCategoryTemplate'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -798,30 +793,36 @@ function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;a
 function populateModalDropdowns(){
   fillSelect('fieldStatus', state.options.status, null, 'Todo');
   fillSelect('fieldPriority', state.options.priority, null, 'Normal');
-  fillSelect('fieldStage', state.options.stage, null);
+  fillSelect('fieldStage', state.options.stage, 'Pilih stage…');
   const _platSel=document.getElementById('fieldPlatform');
   if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   fillSelect('fieldPic', state.options.pic, null, state.currentUser);
   fillSelect('fieldDivisiTujuan', state.options.division||['IT','Marketing','Sales'], 'Pilih divisi…');
-  fillSelect('fieldCategory', state.options.category||[], 'Pilih kategori…');
   const support = document.getElementById('fieldSupport');
   support.innerHTML = (state.options.support || state.options.pic || []).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
 }
 function getTaskType(){ const r=document.querySelector('input[name="taskType"]:checked'); return r?r.value:'internal'; }
 function setTaskType(v){ document.querySelectorAll('input[name="taskType"]').forEach(r=>{ r.checked=(r.value===v); }); }
 function toggleExternalFields(){ const box=document.getElementById('externalFields'); if(box) box.classList.toggle('hide', getTaskType()!=='eksternal'); }
-// ---- Kategori → Subkategori (cascading) + penamaan otomatis "subkategori - detail" ----
-function subcatsFor(category){ const m=(state.options&&state.options.subcatMap)||{}; if(m[category]) return m[category]; const k=Object.keys(m).find(x=>x.toLowerCase()===String(category||'').toLowerCase()); return k?m[k]:[]; }
-function populateSubcatSelect(category, selected){
-  const sel=document.getElementById('fieldSubcategory'); if(!sel) return;
-  const subs=subcatsFor(category);
-  sel.innerHTML='<option value="">'+(subs.length?'Pilih subkategori…':'(tidak ada subkategori)')+'</option>'+subs.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-  if(selected && subs.some(s=>s.toLowerCase()===String(selected).toLowerCase())) sel.value=subs.find(s=>s.toLowerCase()===String(selected).toLowerCase());
-  const wrap=document.getElementById('subcatWrap'); if(wrap) wrap.classList.toggle('hide', !subs.length);
+// ---- Rumus nama task: Stage → Kata Kerja → Objek (cascading) + Jumlah/Detail manual ----
+function mapLookup(map, key){ if(!map) return []; if(map[key]) return map[key]; const k=Object.keys(map).find(x=>x.toLowerCase()===String(key||'').toLowerCase()); return k?map[k]:[]; }
+function verbsFor(stage){ return mapLookup((state.options&&state.options.verbMap)||{}, stage); }
+function objeksFor(stage, verb){ if(!stage||!verb) return []; return mapLookup((state.options&&state.options.objekMap)||{}, stage+'||'+verb); }
+function fillCascade(selId, wrapId, values, selected, placeholder){
+  const sel=document.getElementById(selId); if(!sel) return;
+  sel.innerHTML='<option value="">'+(values.length?placeholder:'(belum ada pilihan)')+'</option>'+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(selected){ const m=values.find(v=>v.toLowerCase()===String(selected).toLowerCase()); if(m) sel.value=m; }
+  const wrap=document.getElementById(wrapId); if(wrap) wrap.classList.toggle('hide', !values.length);
 }
-function onCategoryChange(){ populateSubcatSelect(getVal('fieldCategory'), ''); updateNamePreview(); }
-function composeTaskName(){ const sub=getVal('fieldSubcategory'); const detail=getVal('fieldTaskName').trim(); return sub ? (sub+' - '+detail) : detail; }
-function updateNamePreview(){ const p=document.getElementById('namePreview'); if(!p) return; const sub=getVal('fieldSubcategory'); const detail=getVal('fieldTaskName').trim(); const name= sub ? (sub+' - '+(detail||'…')) : detail; p.textContent = name ? ('Nama task: '+name) : ''; }
+function populateVerbSelect(stage, selVerb, selObjek){
+  fillCascade('fieldVerb','verbWrap', verbsFor(stage), selVerb, 'Pilih kata kerja…');
+  populateObjekSelect(stage, getVal('fieldVerb'), selObjek);
+}
+function populateObjekSelect(stage, verb, selObjek){ fillCascade('fieldObjek','objekWrap', objeksFor(stage, verb), selObjek, 'Pilih objek…'); }
+function onStageChange(){ populateVerbSelect(getVal('fieldStage'), '', ''); updateNamePreview(); }
+function onVerbChange(){ populateObjekSelect(getVal('fieldStage'), getVal('fieldVerb'), ''); updateNamePreview(); }
+function composeTaskName(){ const parts=[getVal('fieldVerb'), getVal('fieldJumlah').trim(), getVal('fieldObjek'), getVal('fieldDetail').trim()]; return parts.filter(x=>x && String(x).trim()).join(' '); }
+function updateNamePreview(){ const p=document.getElementById('namePreview'); if(!p) return; const n=composeTaskName(); p.textContent = n ? ('Nama task: '+n) : 'Nama task akan muncul di sini setelah memilih kata kerja & objek.'; }
 function fillSelect(id, values=[], placeholder=null, defaultValue=''){
   const el=document.getElementById(id); if(!el) return;
   const old=el.value;
@@ -1119,8 +1120,8 @@ function taskCard(t){
       ${t.stage?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage)}</span>`:''}
     </div>
     <div class="flex items-center justify-between mt-3 pt-2.5 border-t border-gray-100 dark:border-slate-700">
-      ${avatar(t.pic)}
-      <span class="text-[11px] font-medium ${overdue?'text-rose-600':'text-gray-500'} flex items-center gap-1">${t.dueDate?'<span class="material-icons-round text-[13px]">event</span>'+formatDateHuman(t.dueDate):'No due'}</span>
+      <div class="flex items-center gap-1.5 min-w-0">${avatar(t.pic)}${t.createdBy?`<span class="text-[10px] text-gray-400 truncate" title="Dibuat oleh ${escapeAttr(t.createdBy)}">dari ${escapeHtml(t.createdBy)}</span>`:''}</div>
+      <span class="text-[11px] font-medium ${overdue?'text-rose-600':'text-gray-500'} flex items-center gap-1 shrink-0">${t.dueDate?'<span class="material-icons-round text-[13px]">event</span>'+formatDateHuman(t.dueDate):'No due'}</span>
     </div>
   </div>`;
 }
@@ -1133,7 +1134,7 @@ function renderTable(){
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
-    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
+    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${t.createdBy?' • Dari: '+escapeHtml(t.createdBy):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
     <td class="px-4 py-3">${inlineSelect('status', t)}</td>
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
     <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
@@ -1330,19 +1331,18 @@ function openTaskModal(id=''){
   const ro = t ? !canEditTask(t) : isViewOnly();
   document.getElementById('taskModal').classList.remove('hide');
   document.getElementById('modalTitle').textContent= ro ? 'Detail Task (lihat saja)' : (t?'Edit Task':'Tambah Task');
+  const _sub=document.getElementById('modalSub'); if(_sub) _sub.textContent = (t && t.createdBy) ? ('Dari: '+t.createdBy+(t.pic?(' → '+t.pic):'')) : 'Isi detail task sesuai rumus nama task.';
   document.getElementById('deleteBtn').classList.toggle('hide',!t || ro);
   // Tipe task: toggle hanya untuk manager/dev; member tetap melihat label bila task ini memang eksternal.
   const typeRow=document.getElementById('taskTypeRow'); if(typeRow) typeRow.classList.toggle('hide', !canCreateExternal() && !external);
   setTaskType(external?'eksternal':'internal');
   setVal('fieldId', t?.id||''); setVal('fieldIdDisplay', t?.id||'Auto setelah disimpan');
-  // Kategori → subkategori → detail. Nama tersimpan = "subkategori - detail"; dipecah lagi saat edit.
-  setVal('fieldCategory', t?.category||'');
-  populateSubcatSelect(t?.category||'', t?.subcategory||'');
-  let _detail=t?.taskName||'';
-  if(t && t.subcategory && _detail.toLowerCase().startsWith((t.subcategory+' - ').toLowerCase())) _detail=_detail.slice((t.subcategory+' - ').length);
-  setVal('fieldTaskName', _detail);
+  // Rumus nama: Stage → Kata Kerja → Objek (+ Jumlah/Detail manual).
+  setVal('fieldStage', t?.stage||'');
+  populateVerbSelect(t?.stage||'', t?.verb||'', t?.objek||'');
+  setVal('fieldJumlah', t?.jumlah||''); setVal('fieldDetail', t?.detail||'');
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
-  setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal'); setVal('fieldStage', t?.stage||'');
+  setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal');
   setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
   setVal('fieldDivisiTujuan', t?.divisiTujuan||''); setVal('fieldKontakDivisi', t?.kontakDivisi||'');
   const selectedPlatform=String(t?.platform||'').split(',').map(x=>x.trim()).filter(Boolean);
@@ -1365,14 +1365,14 @@ function setModalReadonly(ro){
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',category:getVal('fieldCategory'),subcategory:getVal('fieldSubcategory')};}
+function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',verb:getVal('fieldVerb'),jumlah:getVal('fieldJumlah').trim(),objek:getVal('fieldObjek'),detail:getVal('fieldDetail').trim()};}
 function saveTaskFromModal(){
   if(isViewOnly()) return;
-  const _detail=getVal('fieldTaskName').trim();
-  if(!_detail){ showToast('Detail task wajib diisi.',false); return; }
-  const _cat=getVal('fieldCategory'); const _subs=subcatsFor(_cat);
-  if(_cat && _subs.length && !getVal('fieldSubcategory')){ showToast('Pilih subkategori untuk kategori ini.', false); return; }
-  const task=modalTask(); if(!task.taskName){showToast('Detail task wajib diisi.',false);return;}
+  const _stage=getVal('fieldStage'), _verb=getVal('fieldVerb');
+  if(!_stage){ showToast('Pilih Stage dulu.', false); return; }
+  if(verbsFor(_stage).length && !_verb){ showToast('Pilih Kata Kerja.', false); return; }
+  if(_verb && objeksFor(_stage,_verb).length && !getVal('fieldObjek')){ showToast('Pilih Objek.', false); return; }
+  const task=modalTask(); if(!task.taskName){showToast('Nama task belum terbentuk — pilih kata kerja & objek.',false);return;}
   if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }
   const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
   if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
@@ -1566,35 +1566,28 @@ function renderSettings(){
 }
 function addOption(type){const input=document.getElementById('new-'+type); const value=input.value.trim(); if(!value)return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).saveOption(type,value);} else {state.options[type]=[...(state.options[type]||[]),value]; renderSettings(); populateModalDropdowns(); renderAll();}}
 function removeOption(type,value){if(!confirm('Nonaktifkan opsi '+value+'?'))return; if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} state.options=res.options; showToast(res.message); populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); renderSettings(); renderCatSubManager(); renderAll();}).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption(type,value);} else {state.options[type]=(state.options[type]||[]).filter(v=>v!==value); renderSettings(); renderAll();}}
-/* ---------- Kategori & Subkategori (Dropdown Master) ---------- */
+/* ---------- Kata Kerja & Objek per Stage (Dropdown Master, 3 tingkat) ---------- */
 function renderCatSubManager(){
   const grid=document.getElementById('catSubGrid'); if(!grid) return;
-  const cats=state.options.category||[];
-  grid.innerHTML = cats.length ? cats.map((cat,i)=>{
-    const subs=subcatsFor(cat);
-    const subRows = subs.length ? subs.map(s=>`<div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900"><span class="text-[13px] text-gray-700 dark:text-slate-200 truncate">${escapeHtml(s)}</span><span class="flex items-center gap-1 shrink-0"><button onclick="editSubcat('${attrJs(cat)}','${attrJs(s)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[15px]">edit</span></button><button onclick="removeSubcat('${attrJs(cat)}','${attrJs(s)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[15px]">delete</span></button></span></div>`).join('') : '<p class="text-[11px] text-gray-400 italic px-1 py-2">Belum ada subkategori.</p>';
-    return `<div class="bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden"><div class="p-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between gap-2"><div class="font-semibold text-sm text-gray-900 dark:text-white truncate">${escapeHtml(cat)}</div><span class="flex items-center gap-1 shrink-0"><button title="Ubah nama kategori" onclick="editOptionPrompt('category','${attrJs(cat)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">edit</span></button><button title="Hapus kategori" onclick="removeOption('category','${attrJs(cat)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[16px]">delete</span></button></span></div><div class="p-2.5"><div class="flex gap-2 mb-2"><input id="newsub-${i}" placeholder="Tambah subkategori…" class="flex-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2.5 py-1.5 outline-none text-[13px] focus:ring-2 focus:ring-indigo-300"><button onclick="addSubcat('${attrJs(cat)}',${i})" class="px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] shrink-0">+</button></div><div class="space-y-1 max-h-[220px] overflow-y-auto scrollbar-thin">${subRows}</div></div></div>`;
-  }).join('') : emptyState('Belum ada kategori. Klik "Isi dari template" atau tambah manual di atas.');
+  const stages=state.options.stage||[];
+  grid.innerHTML = stages.length ? stages.map((stage,si)=>{
+    const verbs=verbsFor(stage);
+    const verbBlocks = verbs.length ? verbs.map((vb,vi)=>{
+      const objeks=objeksFor(stage,vb);
+      const objRows = objeks.length ? objeks.map(o=>`<div class="flex items-center justify-between gap-2 pl-2 pr-1 py-1 rounded bg-white dark:bg-slate-900"><span class="text-[12px] text-gray-600 dark:text-slate-300 truncate">${escapeHtml(o)}</span><span class="flex items-center gap-0.5 shrink-0"><button onclick="editObjek('${attrJs(stage)}','${attrJs(vb)}','${attrJs(o)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[14px]">edit</span></button><button onclick="removeObjek('${attrJs(stage)}','${attrJs(vb)}','${attrJs(o)}')" class="text-rose-400 hover:text-rose-600"><span class="material-icons-round text-[14px]">delete</span></button></span></div>`).join('') : '<p class="text-[10px] text-gray-400 italic px-1">Belum ada objek.</p>';
+      return `<div class="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/40"><div class="flex items-center justify-between gap-2 px-2 py-1.5"><span class="text-[13px] font-semibold text-indigo-700 dark:text-indigo-300 truncate">${escapeHtml(vb)}</span><span class="flex items-center gap-1 shrink-0"><button title="Ubah kata kerja" onclick="editVerb('${attrJs(stage)}','${attrJs(vb)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[15px]">edit</span></button><button title="Hapus kata kerja" onclick="removeVerb('${attrJs(stage)}','${attrJs(vb)}')" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[15px]">delete</span></button></span></div><div class="px-2 pb-2 space-y-1"><div class="flex gap-1.5"><input id="newobj-${si}-${vi}" placeholder="+ objek…" class="flex-1 rounded bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2 py-1 outline-none text-[12px] focus:ring-2 focus:ring-indigo-300"><button onclick="addObjek('${attrJs(stage)}','${attrJs(vb)}',${si},${vi})" class="px-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold shrink-0">+</button></div>${objRows}</div></div>`;
+    }).join('') : '<p class="text-[11px] text-gray-400 italic px-1 py-1">Belum ada kata kerja.</p>';
+    return `<div class="bg-gray-50 dark:bg-slate-800/60 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden"><div class="p-3 border-b border-gray-200 dark:border-slate-700"><div class="font-semibold text-sm text-gray-900 dark:text-white truncate">${escapeHtml(stage)}</div></div><div class="p-2.5 space-y-2"><div class="flex gap-2"><input id="newverb-${si}" placeholder="Tambah kata kerja…" class="flex-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 px-2.5 py-1.5 outline-none text-[13px] focus:ring-2 focus:ring-indigo-300"><button onclick="addVerb('${attrJs(stage)}',${si})" class="px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-[13px] shrink-0">+ Kata Kerja</button></div><div class="space-y-2 max-h-[340px] overflow-y-auto scrollbar-thin">${verbBlocks}</div></div></div>`;
+  }).join('') : emptyState('Belum ada Stage. Tambah Stage di kartu Stage di atas, atau klik "Isi dari template".');
 }
 function _applyOptionRes(res, msg){ if(!res||!res.success){ showToast((res&&res.message)||'Gagal', false); return false; } state.options=Object.assign({},dummyOptions,res.options||{}); if(res.tasks) state.tasks=res.tasks; showToast(res.message||msg); populateModalDropdowns(); renderCatSubManager(); return true; }
-function addSubcat(category, idx){
-  const el=document.getElementById('newsub-'+idx); const value=(el?el.value:'').trim(); if(!value) return;
-  GAS.withSuccessHandler(res=>{ if(_applyOptionRes(res,'Subkategori ditambah.') && el) el.value=''; }).withFailureHandler(err=>showToast(err.message||err,false)).saveOption('subcategory', value, category);
-}
-function removeSubcat(category, value){
-  if(!confirm('Hapus subkategori "'+value+'" dari kategori "'+category+'"?')) return;
-  GAS.withSuccessHandler(res=>{ _applyOptionRes(res,'Subkategori dihapus.'); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption('subcategory', value, category);
-}
-function editSubcat(category, oldValue){
-  const nv=prompt('Ubah subkategori "'+oldValue+'" menjadi:', oldValue); if(nv===null) return; const newValue=String(nv).trim(); if(!newValue||newValue===oldValue) return;
-  document.getElementById('loading').classList.remove('hide');
-  GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); if(_applyOptionRes(res,'Subkategori diubah.')) renderAll(); }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).editOption('subcategory', oldValue, newValue, category);
-}
-function seedCategoryTemplate(){
-  if(!confirm('Isi kategori & subkategori dari template tabel divisi produk? Yang sudah ada tidak diduplikat.')) return;
-  document.getElementById('loading').classList.remove('hide');
-  GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); _applyOptionRes(res,'Template terisi.'); }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).seedCategoryTemplate();
-}
+function addVerb(stage, si){ const el=document.getElementById('newverb-'+si); const v=(el?el.value:'').trim(); if(!v) return; GAS.withSuccessHandler(res=>{ if(_applyOptionRes(res,'Kata kerja ditambah.') && el) el.value=''; }).withFailureHandler(err=>showToast(err.message||err,false)).saveOption('verb', v, stage); }
+function removeVerb(stage, verb){ if(!confirm('Hapus kata kerja "'+verb+'" dari stage "'+stage+'"?')) return; GAS.withSuccessHandler(res=>{ _applyOptionRes(res,'Kata kerja dihapus.'); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption('verb', verb, stage); }
+function editVerb(stage, oldValue){ const nv=prompt('Ubah kata kerja "'+oldValue+'" menjadi:', oldValue); if(nv===null) return; const newValue=String(nv).trim(); if(!newValue||newValue===oldValue) return; document.getElementById('loading').classList.remove('hide'); GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); _applyOptionRes(res,'Kata kerja diubah.'); }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).editOption('verb', oldValue, newValue, stage); }
+function addObjek(stage, verb, si, vi){ const el=document.getElementById('newobj-'+si+'-'+vi); const v=(el?el.value:'').trim(); if(!v) return; GAS.withSuccessHandler(res=>{ if(_applyOptionRes(res,'Objek ditambah.') && el) el.value=''; }).withFailureHandler(err=>showToast(err.message||err,false)).saveOption('object', v, stage+'||'+verb); }
+function removeObjek(stage, verb, value){ if(!confirm('Hapus objek "'+value+'"?')) return; GAS.withSuccessHandler(res=>{ _applyOptionRes(res,'Objek dihapus.'); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteOption('object', value, stage+'||'+verb); }
+function editObjek(stage, verb, oldValue){ const nv=prompt('Ubah objek "'+oldValue+'" menjadi:', oldValue); if(nv===null) return; const newValue=String(nv).trim(); if(!newValue||newValue===oldValue) return; document.getElementById('loading').classList.remove('hide'); GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); _applyOptionRes(res,'Objek diubah.'); }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).editOption('object', oldValue, newValue, stage+'||'+verb); }
+function seedFormulaTemplate(){ if(!confirm('Isi Stage + Kata Kerja + Objek dari template tabel "RUMUS DETAIL TASK"? Yang sudah ada tidak diduplikat.')) return; document.getElementById('loading').classList.remove('hide'); GAS.withSuccessHandler(res=>{ document.getElementById('loading').classList.add('hide'); if(_applyOptionRes(res,'Template terisi.')){ populateUserSelect(); populateManagerFocus(); renderSettings(); } }).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).seedFormulaTemplate(); }
 
 /* ---------- Activity ---------- */
 function renderActivity(){
@@ -1697,7 +1690,7 @@ function shadeColor(hex,percent){
 }
 function statusChip(status){const hex=statusHex(status); return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700"><span class="w-1.5 h-1.5 rounded-full" style="background:${hex}"></span>${escapeHtml(status||'No Status')}</span>`;}
 function priorityPill(text){if(!text)return''; const v=String(text).toLowerCase(); let cls='bg-gray-50 border-gray-200 text-gray-700 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200'; if(v==='urgent')cls='bg-red-50 border-red-200 text-red-700'; else if(v==='high')cls='bg-orange-50 border-orange-200 text-orange-700'; else if(v==='normal')cls='bg-indigo-50 border-indigo-200 text-indigo-700'; return `<span class="inline-flex items-center h-5 px-1.5 rounded border text-[11px] font-semibold ${cls}">${escapeHtml(text)}</span>`;}
-function taskMiniCard(t,showDue){return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 cursor-pointer hover:bg-gray-100"><div class="flex justify-between gap-3 items-start"><div class="font-medium text-sm leading-snug line-clamp-2 text-gray-800 dark:text-slate-100">${escapeHtml(t.taskName||'-')}</div>${statusChip(t.status)}</div><div class="mt-1.5 text-[11px] text-gray-500 font-medium flex justify-between items-center"><span class="flex items-center gap-1.5">${avatar(t.pic)} ${escapeHtml(t.platform||'-')}</span><span class="${isLate(t)?'text-rose-600':''}">${showDue?formatDateHuman(t.dueDate):escapeHtml(t.lastUpdate||'-')}</span></div></div>`;}
+function taskMiniCard(t,showDue){return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 cursor-pointer hover:bg-gray-100"><div class="flex justify-between gap-3 items-start"><div class="font-medium text-sm leading-snug line-clamp-2 text-gray-800 dark:text-slate-100">${escapeHtml(t.taskName||'-')}</div>${statusChip(t.status)}</div><div class="mt-1.5 text-[11px] text-gray-500 font-medium flex justify-between items-center"><span class="flex items-center gap-1.5 min-w-0 truncate">${avatar(t.pic)} ${escapeHtml(t.platform||'-')}${t.createdBy?' • dari '+escapeHtml(t.createdBy):''}</span><span class="shrink-0 ${isLate(t)?'text-rose-600':''}">${showDue?formatDateHuman(t.dueDate):escapeHtml(t.lastUpdate||'-')}</span></div></div>`;}
 function emptyState(text){return `<div class="h-full min-h-[120px] flex items-center justify-center text-center text-gray-400 font-medium text-sm p-6">${escapeHtml(text)}</div>`;}
 
 const AV_PALETTE=[['#e0e7ff','#4338ca'],['#fee2e2','#b91c1c'],['#ffedd5','#c2410c'],['#fef9c3','#a16207'],['#dcfce7','#15803d'],['#cffafe','#0e7490'],['#f3e8ff','#7e22ce'],['#fce7f3','#be185d']];
