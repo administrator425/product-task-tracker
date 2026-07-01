@@ -139,7 +139,7 @@
           <span class="material-icons-round text-[20px]">task_alt</span>
         </div>
         <div>
-          <div class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span></div>
+          <div class="text-[15px] font-bold tracking-tight text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span> <span id="appVersion" class="text-[9px] font-semibold text-gray-400 align-top"></span></div>
           <div class="text-[10px] uppercase tracking-widest text-gray-400 font-semibold">Divisi Produk</div>
         </div>
       </div>
@@ -359,6 +359,7 @@
             <div class="flex-1">
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">build_circle</span> Inisialisasi Spreadsheet</h2>
               <p class="text-sm text-gray-500 mt-1">Jalankan sekali setelah deploy untuk memastikan sheet <b>Main</b>, <b>OPTIONS</b>, <b>COMMENTS</b>, <b>ACTIVITY</b>, header, dan dropdown sudah siap. Aman diulang — data yang sudah ada tidak dihapus.</p>
+              <div class="text-[11px] text-gray-400 mt-1.5">Versi aplikasi terpasang: <b id="appVersionSettings" class="text-indigo-600 dark:text-indigo-300"></b></div>
             </div>
             <div class="shrink-0 flex flex-col sm:flex-row gap-2">
               <button id="btnSetup" onclick="runSetup()" class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold flex items-center justify-center gap-1.5"><span class="material-icons-round text-[18px]">play_arrow</span> Jalankan Setup</button>
@@ -539,6 +540,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
+const APP_VERSION = '1.22.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
@@ -643,7 +645,9 @@ function init() {
   }
 }
 
+function renderAppVersion(){ const label='v'+APP_VERSION; ['appVersion','appVersionSettings'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=label; }); }
 function afterLoad() {
+  renderAppVersion();
   populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad();
   if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); }); document.addEventListener('keydown', e=>{ if(e.key==='Escape' && state.activeView==='communication' && state.selectedTaskId && document.getElementById('taskModal').classList.contains('hide')){ closeCommChat(); } });}
   document.getElementById('loading').classList.add('hide');
