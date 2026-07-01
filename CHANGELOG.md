@@ -10,6 +10,9 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.24.0 — Folder untuk Catatan Saya
+- Catatan Saya kini punya **folder + pencarian** (sama seperti Link Saya): kelompokkan per folder, cari cepat, ubah nama/hapus folder (catatan pindah ke Umum), pindahkan catatan antar folder.
+
 ## 1.23.0 — Hari Ini, Catatan Saya, Laporan
 - **Hari Ini**: layar fokus harian pribadi (overdue, jatuh tempo hari ini, sedang dikerjakan, due ≤3 hari).
 - **Catatan Saya**: catatan pribadi per user (sheet NOTES) — tambah/edit/hapus.

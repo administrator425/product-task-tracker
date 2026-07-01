@@ -1047,43 +1047,45 @@ async function deleteDashboard(row) {
 }
 
 /* ------------------------------------------------------------------ */
-/* CATATAN SAYA (sheet NOTES: User, Title, Body, UpdatedAt — per user) */
+/* CATATAN SAYA (sheet NOTES: User, Title, Body, UpdatedAt, Folder)    */
 /* ------------------------------------------------------------------ */
 async function ensureNotesSheet() {
   await ensureSheetExists(CONFIG.NOTES_SHEET);
-  const head = await valuesGet(`${CONFIG.NOTES_SHEET}!A1:D1`);
-  if (!head.length || !head[0] || !head[0][0]) {
-    await valuesUpdate(`${CONFIG.NOTES_SHEET}!A1:D1`, [['User', 'Title', 'Body', 'UpdatedAt']]);
-  }
+  const head = await valuesGet(`${CONFIG.NOTES_SHEET}!A1:E1`);
+  const h0 = head[0] || [];
+  if (!h0[0]) await valuesUpdate(`${CONFIG.NOTES_SHEET}!A1:E1`, [['User', 'Title', 'Body', 'UpdatedAt', 'Folder']]);
+  else if (!h0[4]) await valuesUpdate(`${CONFIG.NOTES_SHEET}!E1`, [['Folder']]);
 }
 async function getAllNotes() {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:D`); } catch (e) { return []; }
+  try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:E`); } catch (e) { return []; }
   return rows
-    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), body: String((r && r[2]) || '').trim(), updatedAt: String((r && r[3]) || '').trim() }))
+    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), body: String((r && r[2]) || '').trim(), updatedAt: String((r && r[3]) || '').trim(), folder: String((r && r[4]) || '').trim() }))
     .filter(n => n.user && (n.title || n.body));
 }
-async function addNote(user, title, body) {
+async function addNote(user, title, body, folder) {
   user = String(user || '').trim();
   title = String(title || '').trim();
   body = String(body || '').trim();
+  folder = String(folder || '').trim();
   if (!user) return { success: false, message: 'User tidak boleh kosong.' };
   if (!title && !body) return { success: false, message: 'Catatan tidak boleh kosong.' };
   await ensureNotesSheet();
-  await valuesAppend(`${CONFIG.NOTES_SHEET}!A:D`, [[user, title || '(tanpa judul)', body, nowStamp()]]);
+  await valuesAppend(`${CONFIG.NOTES_SHEET}!A:E`, [[user, title || '(tanpa judul)', body, nowStamp(), folder]]);
   return { success: true, message: 'Catatan ditambahkan.', notes: await getAllNotes() };
 }
-async function updateNote(user, row, title, body) {
+async function updateNote(user, row, title, body, folder) {
   user = String(user || '').trim();
   row = parseInt(row, 10);
   title = String(title || '').trim();
   body = String(body || '').trim();
+  folder = String(folder || '').trim();
   if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
   if (!title && !body) return { success: false, message: 'Catatan tidak boleh kosong.' };
   const cur = await valuesGet(`${CONFIG.NOTES_SHEET}!A${row}:A${row}`);
   const owner = String((cur[0] && cur[0][0]) || '').trim();
   if (owner.toLowerCase() !== user.toLowerCase()) return { success: false, message: 'Bukan catatan Anda.' };
-  await valuesUpdate(`${CONFIG.NOTES_SHEET}!B${row}:D${row}`, [[title || '(tanpa judul)', body, nowStamp()]]);
+  await valuesUpdate(`${CONFIG.NOTES_SHEET}!B${row}:E${row}`, [[title || '(tanpa judul)', body, nowStamp(), folder]]);
   return { success: true, message: 'Catatan diperbarui.', notes: await getAllNotes() };
 }
 async function deleteNote(user, row) {
@@ -1098,6 +1100,40 @@ async function deleteNote(user, row) {
   if (sheetId == null) return { success: false, message: 'Sheet NOTES tidak ditemukan.' };
   await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }]);
   return { success: true, message: 'Catatan dihapus.', notes: await getAllNotes() };
+}
+// Operasi massal folder catatan milik 1 user (kolom E).
+async function _bulkNoteFolderOp(user, oldFolder, newFolder) {
+  await ensureNotesSheet();
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:E`); } catch (e) { rows = []; }
+  if (!rows.length) return { success: true, changed: 0, notes: [] };
+  let changed = 0;
+  const eCol = rows.map(r => {
+    const u = String((r && r[0]) || '').trim();
+    const f = String((r && r[4]) || '').trim();
+    if (u.toLowerCase() === user.toLowerCase() && f === oldFolder) { changed++; return [newFolder]; }
+    return [f];
+  });
+  if (changed > 0) await valuesUpdate(`${CONFIG.NOTES_SHEET}!E2:E${rows.length + 1}`, eCol);
+  return { success: true, changed, notes: await getAllNotes() };
+}
+async function renameNoteFolder(user, oldFolder, newFolder) {
+  user = String(user || '').trim();
+  oldFolder = String(oldFolder || '').trim();
+  newFolder = String(newFolder || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!oldFolder) return { success: false, message: 'Folder asal tidak valid.' };
+  if (!newFolder) return { success: false, message: 'Nama folder baru wajib diisi.' };
+  const res = await _bulkNoteFolderOp(user, oldFolder, newFolder);
+  return { ...res, message: `Folder "${oldFolder}" diganti jadi "${newFolder}" (${res.changed} catatan).` };
+}
+async function deleteNoteFolder(user, folder) {
+  user = String(user || '').trim();
+  folder = String(folder || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!folder) return { success: false, message: 'Folder tidak valid.' };
+  const res = await _bulkNoteFolderOp(user, folder, ''); // catatan dipindah ke Umum, tidak dihapus
+  return { ...res, message: `Folder "${folder}" dihapus. ${res.changed} catatan dipindah ke Umum.` };
 }
 
 async function setupTaskTracker() {
@@ -1160,7 +1196,7 @@ module.exports = {
   // dashboard lain (CRUD Dev)
   getAllDashboards, addDashboard, updateDashboard, deleteDashboard,
   // catatan saya (per user)
-  getAllNotes, addNote, updateNote, deleteNote,
+  getAllNotes, addNote, updateNote, deleteNote, renameNoteFolder, deleteNoteFolder,
   // rumus nama task (kata kerja/objek)
   seedFormulaTemplate,
   // (exported for tests)

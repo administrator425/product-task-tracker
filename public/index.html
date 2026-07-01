@@ -367,15 +367,21 @@
         </div>
         <!-- CATATAN SAYA -->
         <div id="mynotesView" class="view hide max-w-[1100px] mx-auto space-y-4">
-          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 space-y-2">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 space-y-3">
+            <div class="relative">
+              <span class="material-icons-round text-[18px] text-gray-400 absolute left-3 top-1/2 -translate-y-1/2">search</span>
+              <input id="noteSearch" oninput="renderMyNotes()" placeholder="Cari catatan (judul, isi, atau folder)…" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 pl-10 pr-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+            </div>
             <input id="newNoteTitle" placeholder="Judul catatan (opsional)" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
             <textarea id="newNoteBody" rows="3" placeholder="Tulis catatan…" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"></textarea>
-            <div class="flex items-center justify-between gap-2">
-              <p id="myNotesFor" class="text-[11px] text-gray-400"></p>
+            <div class="flex flex-col sm:flex-row gap-2">
+              <input id="newNoteFolder" list="noteFolders" placeholder="Folder (mis. Ide)" class="sm:w-44 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+              <datalist id="noteFolders"></datalist>
               <button onclick="addNote()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shrink-0">Simpan Catatan</button>
             </div>
+            <p id="myNotesFor" class="text-[11px] text-gray-400"></p>
           </div>
-          <div id="myNotesList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+          <div id="myNotesList" class="space-y-4"></div>
         </div>
         <!-- LAPORAN -->
         <div id="reportView" class="view hide max-w-[1300px] mx-auto space-y-4"><div id="reportContent" class="space-y-4"></div></div>
@@ -565,7 +571,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.23.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.24.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
@@ -600,7 +606,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -1607,27 +1613,62 @@ function renderHariIni(){
     + section('Jatuh tempo ≤ 3 hari','event_busy','text-violet-600',soon,'Aman, tidak ada yang mepet.');
 }
 
-/* ---------- Catatan Saya (per user) ---------- */
+/* ---------- Catatan Saya (per user, dengan folder — sama seperti Link Saya) ---------- */
 function findNoteByRow(row){ return (state.notes||[]).find(n=>String(n.row)===String(row)); }
+function noteCard(n){
+  return `<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex flex-col"><div class="flex items-start justify-between gap-2"><div class="font-semibold text-sm text-gray-900 dark:text-white break-words flex-1">${escapeHtml(n.title||'(tanpa judul)')}</div><div class="flex gap-1 shrink-0"><button title="Pindah folder" onclick="moveNote(${n.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">drive_file_move</span></button><button title="Edit" onclick="editNote(${n.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">edit</span></button><button title="Hapus" onclick="deleteNote(${n.row})" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[16px]">delete</span></button></div></div><p class="text-[13px] text-gray-600 dark:text-slate-300 mt-1 whitespace-pre-wrap break-words">${escapeHtml(n.body||'')}</p>${n.updatedAt?`<div class="text-[10px] text-gray-400 mt-2">${escapeHtml(n.updatedAt)}</div>`:''}</div>`;
+}
 function renderMyNotes(){
   const list=document.getElementById('myNotesList'); if(!list) return;
   const me=state.currentUser;
   const forEl=document.getElementById('myNotesFor'); if(forEl) forEl.textContent='Catatan pribadi untuk mode: '+me;
-  const mine=(state.notes||[]).filter(n=>String(n.user||'').toLowerCase()===String(me||'').toLowerCase()).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
-  list.innerHTML = mine.length ? mine.map(n=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex flex-col"><div class="flex items-start justify-between gap-2"><div class="font-semibold text-sm text-gray-900 dark:text-white break-words flex-1">${escapeHtml(n.title||'(tanpa judul)')}</div><div class="flex gap-1 shrink-0"><button title="Edit" onclick="editNote(${n.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">edit</span></button><button title="Hapus" onclick="deleteNote(${n.row})" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[16px]">delete</span></button></div></div><p class="text-[13px] text-gray-600 dark:text-slate-300 mt-1 whitespace-pre-wrap break-words">${escapeHtml(n.body||'')}</p>${n.updatedAt?`<div class="text-[10px] text-gray-400 mt-2">${escapeHtml(n.updatedAt)}</div>`:''}</div>`).join('') : emptyState('Belum ada catatan. Tulis di atas lalu simpan.');
+  let mine=(state.notes||[]).filter(n=>String(n.user||'').toLowerCase()===String(me||'').toLowerCase());
+  const allFolders=[...new Set(mine.map(n=>n.folder||'Umum'))].sort((a,b)=>a.localeCompare(b));
+  const dl=document.getElementById('noteFolders'); if(dl) dl.innerHTML=allFolders.map(f=>`<option value="${escapeAttr(f)}"></option>`).join('');
+  const q=(document.getElementById('noteSearch')?.value||'').toLowerCase().trim();
+  if(q) mine=mine.filter(n=>[n.title,n.body,n.folder].join(' ').toLowerCase().includes(q));
+  if(!mine.length){ list.innerHTML=emptyState(q?'Tidak ada catatan yang cocok dengan pencarian.':'Belum ada catatan. Tulis di atas lalu simpan.'); return; }
+  mine.sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  const groups={};
+  mine.forEach(n=>{ const f=n.folder||'Umum'; (groups[f]=groups[f]||[]).push(n); });
+  const fkeys=Object.keys(groups).sort((a,b)=> a==='Umum'?1 : b==='Umum'?-1 : a.localeCompare(b));
+  list.innerHTML=fkeys.map(f=>{
+    const isUmum=(f==='Umum');
+    const tools=isUmum?'':`<button title="Ubah nama folder" onclick="renameNoteFolder('${attrJs(f)}')" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">drive_file_rename_outline</span></button><button title="Hapus folder (catatan pindah ke Umum)" onclick="deleteNoteFolder('${attrJs(f)}')" class="text-gray-400 hover:text-rose-600"><span class="material-icons-round text-[16px]">folder_delete</span></button>`;
+    return `<div><div class="flex items-center gap-2 mb-2 px-1"><span class="material-icons-round text-[18px] ${isUmum?'text-gray-400':'text-amber-500'}">${isUmum?'folder_open':'folder'}</span><h3 class="text-sm font-bold text-gray-700 dark:text-slate-200">${escapeHtml(f)}</h3><span class="text-[11px] text-gray-400 bg-gray-100 dark:bg-slate-800 rounded-full px-2 py-0.5">${groups[f].length}</span><div class="flex items-center gap-1 ml-1">${tools}</div></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${groups[f].map(n=>noteCard(n)).join('')}</div></div>`;
+  }).join('');
 }
 function addNote(){
-  const tEl=document.getElementById('newNoteTitle'), bEl=document.getElementById('newNoteBody');
-  const title=(tEl?tEl.value:'').trim(), body=(bEl?bEl.value:'').trim();
+  const tEl=document.getElementById('newNoteTitle'), bEl=document.getElementById('newNoteBody'), fEl=document.getElementById('newNoteFolder');
+  const title=(tEl?tEl.value:'').trim(), body=(bEl?bEl.value:'').trim(), folder=(fEl?fEl.value:'').trim();
   if(!title && !body){ showToast('Catatan tidak boleh kosong.', false); return; }
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan catatan', false); return; } state.notes=res.notes||state.notes; if(tEl)tEl.value=''; if(bEl)bEl.value=''; showToast(res.message||'Catatan disimpan.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).addNote(state.currentUser, title, body);
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan catatan', false); return; } state.notes=res.notes||state.notes; if(tEl)tEl.value=''; if(bEl)bEl.value=''; if(fEl)fEl.value=''; showToast(res.message||'Catatan disimpan.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).addNote(state.currentUser, title, body, folder);
 }
 function editNote(row){
   const n=findNoteByRow(row); if(!n) return;
   const nt=prompt('Judul:', n.title||''); if(nt===null) return;
   const nb=prompt('Isi catatan:', n.body||''); if(nb===null) return;
+  const nf=prompt('Folder (kosongkan = Umum):', n.folder||''); if(nf===null) return;
   if(!String(nt).trim() && !String(nb).trim()){ showToast('Catatan tidak boleh kosong.', false); return; }
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah catatan', false); return; } state.notes=res.notes||state.notes; showToast(res.message||'Catatan diperbarui.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateNote(state.currentUser, row, String(nt).trim(), String(nb).trim());
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah catatan', false); return; } state.notes=res.notes||state.notes; showToast(res.message||'Catatan diperbarui.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateNote(state.currentUser, row, String(nt).trim(), String(nb).trim(), String(nf).trim());
+}
+function moveNote(row){
+  const n=findNoteByRow(row); if(!n) return;
+  const nf=prompt('Pindahkan ke folder (kosongkan = Umum):', n.folder||''); if(nf===null) return;
+  if(String(nf).trim()===String(n.folder||'').trim()) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal memindahkan', false); return; } state.notes=res.notes||state.notes; showToast('Catatan dipindahkan.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateNote(state.currentUser, row, n.title, n.body, String(nf).trim());
+}
+function renameNoteFolder(oldName){
+  if(oldName==='Umum'){ showToast('Folder "Umum" tidak bisa diubah.', false); return; }
+  const nn=prompt('Nama folder baru:', oldName); if(nn===null) return;
+  if(!nn.trim()){ showToast('Nama folder wajib diisi.', false); return; }
+  if(nn.trim()==='Umum'){ showToast('Untuk memindah catatan ke Umum, pakai tombol Hapus folder.', false); return; }
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah folder', false); return; } state.notes=res.notes||state.notes; showToast(res.message||'Folder diubah.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).renameNoteFolder(state.currentUser, oldName, nn.trim());
+}
+function deleteNoteFolder(name){
+  if(name==='Umum'){ showToast('Folder "Umum" tidak bisa dihapus.', false); return; }
+  if(!confirm('Hapus folder "'+name+'"?\n\nCatatan di dalamnya TIDAK ikut terhapus — hanya dipindah ke "Umum".')) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus folder', false); return; } state.notes=res.notes||state.notes; showToast(res.message||'Folder dihapus.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteNoteFolder(state.currentUser, name);
 }
 function deleteNote(row){
   const n=findNoteByRow(row); if(!n) return;

@@ -47,9 +47,11 @@ const HANDLERS = {
   addDashboard: (title, desc, icon, url) => backend.addDashboard(title, desc, icon, url),
   updateDashboard: (row, title, desc, icon, url) => backend.updateDashboard(row, title, desc, icon, url),
   deleteDashboard: (row) => backend.deleteDashboard(row),
-  addNote: (user, title, body) => backend.addNote(user, title, body),
-  updateNote: (user, row, title, body) => backend.updateNote(user, row, title, body),
+  addNote: (user, title, body, folder) => backend.addNote(user, title, body, folder),
+  updateNote: (user, row, title, body, folder) => backend.updateNote(user, row, title, body, folder),
   deleteNote: (user, row) => backend.deleteNote(user, row),
+  renameNoteFolder: (user, oldFolder, newFolder) => backend.renameNoteFolder(user, oldFolder, newFolder),
+  deleteNoteFolder: (user, folder) => backend.deleteNoteFolder(user, folder),
 };
 
 async function readJsonBody(req) {
