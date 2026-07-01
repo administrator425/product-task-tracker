@@ -32,6 +32,7 @@ const CONFIG = {
   AUTH_SHEET: 'AUTH',
   LINKS_SHEET: 'LINKS',
   DASHBOARDS_SHEET: 'DASHBOARDS',
+  NOTES_SHEET: 'NOTES',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -661,7 +662,7 @@ async function getAllCommentsLite() {
 }
 
 async function getBootstrapData() {
-  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards] = await Promise.all([
+  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
@@ -669,6 +670,7 @@ async function getBootstrapData() {
     listPinUsers(),
     getAllLinks(),
     getAllDashboards(),
+    getAllNotes(),
   ]);
   return {
     tasks,
@@ -678,6 +680,7 @@ async function getBootstrapData() {
     pinUsers,
     links,
     dashboards,
+    notes,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
@@ -1043,6 +1046,60 @@ async function deleteDashboard(row) {
   return { success: true, message: 'Dashboard dihapus.', dashboards: await getAllDashboards() };
 }
 
+/* ------------------------------------------------------------------ */
+/* CATATAN SAYA (sheet NOTES: User, Title, Body, UpdatedAt — per user) */
+/* ------------------------------------------------------------------ */
+async function ensureNotesSheet() {
+  await ensureSheetExists(CONFIG.NOTES_SHEET);
+  const head = await valuesGet(`${CONFIG.NOTES_SHEET}!A1:D1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.NOTES_SHEET}!A1:D1`, [['User', 'Title', 'Body', 'UpdatedAt']]);
+  }
+}
+async function getAllNotes() {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:D`); } catch (e) { return []; }
+  return rows
+    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), body: String((r && r[2]) || '').trim(), updatedAt: String((r && r[3]) || '').trim() }))
+    .filter(n => n.user && (n.title || n.body));
+}
+async function addNote(user, title, body) {
+  user = String(user || '').trim();
+  title = String(title || '').trim();
+  body = String(body || '').trim();
+  if (!user) return { success: false, message: 'User tidak boleh kosong.' };
+  if (!title && !body) return { success: false, message: 'Catatan tidak boleh kosong.' };
+  await ensureNotesSheet();
+  await valuesAppend(`${CONFIG.NOTES_SHEET}!A:D`, [[user, title || '(tanpa judul)', body, nowStamp()]]);
+  return { success: true, message: 'Catatan ditambahkan.', notes: await getAllNotes() };
+}
+async function updateNote(user, row, title, body) {
+  user = String(user || '').trim();
+  row = parseInt(row, 10);
+  title = String(title || '').trim();
+  body = String(body || '').trim();
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (!title && !body) return { success: false, message: 'Catatan tidak boleh kosong.' };
+  const cur = await valuesGet(`${CONFIG.NOTES_SHEET}!A${row}:A${row}`);
+  const owner = String((cur[0] && cur[0][0]) || '').trim();
+  if (owner.toLowerCase() !== user.toLowerCase()) return { success: false, message: 'Bukan catatan Anda.' };
+  await valuesUpdate(`${CONFIG.NOTES_SHEET}!B${row}:D${row}`, [[title || '(tanpa judul)', body, nowStamp()]]);
+  return { success: true, message: 'Catatan diperbarui.', notes: await getAllNotes() };
+}
+async function deleteNote(user, row) {
+  user = String(user || '').trim();
+  row = parseInt(row, 10);
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  const cur = await valuesGet(`${CONFIG.NOTES_SHEET}!A${row}:A${row}`);
+  const owner = String((cur[0] && cur[0][0]) || '').trim();
+  if (owner.toLowerCase() !== user.toLowerCase()) return { success: false, message: 'Bukan catatan Anda.' };
+  const meta = await getSheetMeta();
+  const sheetId = meta[CONFIG.NOTES_SHEET] && meta[CONFIG.NOTES_SHEET].sheetId;
+  if (sheetId == null) return { success: false, message: 'Sheet NOTES tidak ditemukan.' };
+  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }]);
+  return { success: true, message: 'Catatan dihapus.', notes: await getAllNotes() };
+}
+
 async function setupTaskTracker() {
   await ensureTaskHeaders();
   await ensureOptionsSheet();
@@ -1051,6 +1108,7 @@ async function setupTaskTracker() {
   await ensureAuthSheet();
   await ensureLinksSheet();
   await ensureDashboardsSheet();
+  await ensureNotesSheet();
   await applySheetValidations().catch(() => {});
   return {
     success: true,
@@ -1101,6 +1159,8 @@ module.exports = {
   renameUserFolder, deleteUserFolder,
   // dashboard lain (CRUD Dev)
   getAllDashboards, addDashboard, updateDashboard, deleteDashboard,
+  // catatan saya (per user)
+  getAllNotes, addNote, updateNote, deleteNote,
   // rumus nama task (kata kerja/objek)
   seedFormulaTemplate,
   // (exported for tests)

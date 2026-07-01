@@ -10,6 +10,11 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.23.0 — Hari Ini, Catatan Saya, Laporan
+- **Hari Ini**: layar fokus harian pribadi (overdue, jatuh tempo hari ini, sedang dikerjakan, due ≤3 hari).
+- **Catatan Saya**: catatan pribadi per user (sheet NOTES) — tambah/edit/hapus.
+- **Laporan** (manager/Dev): digest mingguan (ringkasan + per PIC + per stage) dengan **Export CSV** & Print/PDF.
+
 ## 1.22.0 — Versi aplikasi
 - Tampilkan nomor versi app di sidebar & Dropdown Master.
 - Tambah CHANGELOG ini (riwayat versi dari awal).

@@ -145,6 +145,9 @@
       </div>
 
       <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
+        <button onclick="switchView('hariini')" id="nav-hariini" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">wb_sunny</span> Hari Ini
+        </button>
         <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">space_dashboard</span> Dashboard
         </button>
@@ -153,6 +156,9 @@
         </button>
         <button onclick="switchView('mylinks')" id="nav-mylinks" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">bookmark</span> Link Saya
+        </button>
+        <button onclick="switchView('mynotes')" id="nav-mynotes" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">sticky_note_2</span> Catatan Saya
         </button>
         <button onclick="switchView('kanban')" id="nav-kanban" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">view_kanban</span> Kanban Status
@@ -171,6 +177,9 @@
         </button>
         <button onclick="switchView('activity')" id="nav-activity" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">history_edu</span> Riwayat Aktivitas
+        </button>
+        <button onclick="switchView('report')" id="nav-report" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+          <span class="material-icons-round text-[20px]">summarize</span> Laporan
         </button>
         <button onclick="switchView('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
           <span class="material-icons-round text-[20px]">tune</span> Dropdown Master
@@ -229,6 +238,8 @@
         <div id="deadlineFocusBar" class="hide max-w-[1700px] mx-auto mb-4"></div>
         <div id="viewOnlyNotice" class="hide max-w-[1700px] mx-auto mb-4"></div>
         <div id="filterBar" class="hide max-w-[1700px] mx-auto mb-4 flex flex-wrap items-center gap-2"></div>
+        <!-- HARI INI -->
+        <div id="hariiniView" class="view hide max-w-[1200px] mx-auto space-y-4"><div id="hariiniContent" class="space-y-4"></div></div>
         <!-- DASHBOARD -->
         <div id="dashboardView" class="view space-y-5 max-w-[1500px] mx-auto">
           <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3" id="kpiGrid"></div>
@@ -354,6 +365,20 @@
           </div>
           <div id="myLinksList" class="space-y-4"></div>
         </div>
+        <!-- CATATAN SAYA -->
+        <div id="mynotesView" class="view hide max-w-[1100px] mx-auto space-y-4">
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 space-y-2">
+            <input id="newNoteTitle" placeholder="Judul catatan (opsional)" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300">
+            <textarea id="newNoteBody" rows="3" placeholder="Tulis catatan…" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300"></textarea>
+            <div class="flex items-center justify-between gap-2">
+              <p id="myNotesFor" class="text-[11px] text-gray-400"></p>
+              <button onclick="addNote()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shrink-0">Simpan Catatan</button>
+            </div>
+          </div>
+          <div id="myNotesList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        </div>
+        <!-- LAPORAN -->
+        <div id="reportView" class="view hide max-w-[1300px] mx-auto space-y-4"><div id="reportContent" class="space-y-4"></div></div>
         <div id="settingsView" class="view hide max-w-[1300px] mx-auto space-y-4">
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center gap-3">
             <div class="flex-1">
@@ -540,7 +565,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.22.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.23.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
@@ -575,7 +600,7 @@ function submitLogin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -602,7 +627,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], dashboards: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -632,6 +657,7 @@ function init() {
       state.pinUsers = data.pinUsers || [];
       state.links = data.links || [];
       state.dashboards = data.dashboards || [];
+      state.notes = data.notes || [];
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
@@ -712,17 +738,17 @@ function applyRoleUI(){
   document.getElementById('managerFocusBox').classList.toggle('hide',!mgr || vo);
   document.getElementById('nav-activity').classList.toggle('hide',!mgr || vo);
   const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
-  // Mode lihat-saja: sembunyikan tab Dashboard Lain, Link Saya, dan tombol Tambah Task.
-  // Komunikasi TETAP tampil (satu-satunya fitur yang bisa dipakai aktif: kirim chat).
-  ['nav-extdash','nav-mylinks'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
+  const navReport=document.getElementById('nav-report'); if(navReport) navReport.classList.toggle('hide',!mgr || vo); // Laporan: manager/dev
+  // Mode lihat-saja: sembunyikan tab pribadi & manajemen. Komunikasi TETAP tampil (bisa kirim chat).
+  ['nav-extdash','nav-mylinks','nav-hariini','nav-mynotes'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
   const navComm=document.getElementById('nav-communication'); if(navComm) navComm.classList.remove('hide');
   const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
   // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas).
   const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView);
   // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
-  const hiddenForVo=['activity','settings','extdash','mylinks'];
+  const hiddenForVo=['activity','settings','report','extdash','mylinks','hariini','mynotes'];
   if(vo && hiddenForVo.includes(state.activeView)) switchView('dashboard');
-  else if(!mgr && (state.activeView==='activity'||state.activeView==='settings')) switchView('dashboard');
+  else if(!mgr && (state.activeView==='activity'||state.activeView==='settings'||state.activeView==='report')) switchView('dashboard');
   if(!mgr) state.managerFocus='';
   const mine=state.tasks.filter(t=>ownsTask(t,state.currentUser));
   const mineActive=mine.filter(t=>!isDone(t));
@@ -912,6 +938,9 @@ function switchView(view){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('nav-active'));
   const nav=document.getElementById('nav-'+view); if(nav) nav.classList.add('nav-active');
   const meta={
+    hariini:['Hari Ini','Fokus harian Anda: overdue, jatuh tempo hari ini, dan yang sedang dikerjakan.','wb_sunny'],
+    mynotes:['Catatan Saya','Catatan pribadi Anda (hanya Anda yang bisa lihat).','sticky_note_2'],
+    report:['Laporan','Ringkasan mingguan progress tim + ekspor.','summarize'],
     dashboard:['Dashboard','Pantau progress, deadline, dan komunikasi task tim.','space_dashboard'],
     extdash:['Dashboard Lain','Kumpulan dashboard & monitoring eksternal.','dashboard_customize'],
     mylinks:['Link Saya','Kumpulan link pribadi Anda yang sering diakses.','bookmark'],
@@ -942,6 +971,9 @@ function renderActiveView(){
   else if(v==='activity') renderActivity();
   else if(v==='extdash') renderExternalDashboards();
   else if(v==='mylinks') renderMyLinks();
+  else if(v==='hariini') renderHariIni();
+  else if(v==='mynotes') renderMyNotes();
+  else if(v==='report') renderReport();
 }
 function renderAll(){ renderActiveView(); renderFilterBar(); renderViewOnlyNotice(); }
 let _searchTimer=null;
@@ -1556,6 +1588,96 @@ function renderViewOnlyNotice(){
   if(shown>0){ b.classList.add('hide'); b.innerHTML=''; return; }
   b.classList.remove('hide');
   b.innerHTML=`<div class="flex items-start gap-3 p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/20 dark:border-amber-900/40"><span class="material-icons-round text-amber-600">info</span><div class="text-sm text-amber-800 dark:text-amber-200">Belum ada task untuk ditampilkan ke Lintas Divisi. Muncul di sini setelah <b>PM/Dev</b> membuat task <b>Eksternal</b> (isi Divisi Tujuan) atau menyalakan <b>mirror</b> (ikon <span class="material-icons-round text-[13px] align-middle">cast</span>) pada task internal.<div class="text-[11px] text-amber-700/80 dark:text-amber-300/70 mt-1">Total task termuat: ${total} • tampil ke Lintas: ${shown}. Kalau kosong padahal sudah dipilih, muat ulang halaman (Ctrl+Shift+R).</div></div></div>`;
+}
+/* ---------- Hari Ini (fokus harian pribadi) ---------- */
+function renderHariIni(){
+  const box=document.getElementById('hariiniContent'); if(!box) return;
+  const me=state.currentUser;
+  const mine=state.tasks.filter(t=>ownsTask(t,me));
+  const overdue=mine.filter(t=>isLate(t)).sort(cardSort);
+  const today=mine.filter(t=>!isLate(t)&&isDeadlineActive(t)&&daysToDue(t)===0).sort(cardSort);
+  const inprog=mine.filter(t=>!isDone(t)&&same(t.status,'In progress')&&!isLate(t)&&!(isDeadlineActive(t)&&daysToDue(t)===0)).sort(cardSort);
+  const soon=mine.filter(t=>!isLate(t)&&isDeadlineActive(t)&&daysToDue(t)>0&&daysToDue(t)<=3).sort(cardSort);
+  const greeting=(function(){const h=new Date().getHours(); return h<11?'Selamat pagi':h<15?'Selamat siang':h<18?'Selamat sore':'Selamat malam';})();
+  const section=(title,icon,color,list,emptyMsg)=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4"><div class="flex items-center gap-2 mb-3"><span class="material-icons-round text-[18px] ${color}">${icon}</span><h3 class="font-semibold text-gray-900 dark:text-white">${title}</h3><span class="text-[11px] font-semibold text-gray-500 bg-gray-100 dark:bg-slate-800 rounded-full px-2 py-0.5">${list.length}</span></div>${list.length?`<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${list.map(t=>taskMiniCard(t,true)).join('')}</div>`:`<p class="text-sm text-gray-400 italic">${emptyMsg}</p>`}</div>`;
+  box.innerHTML=`<div class="rounded-xl p-4 text-white bg-gradient-to-r from-indigo-600 to-violet-600"><div class="text-sm opacity-90">${greeting},</div><div class="text-xl font-bold">${escapeHtml(me)}</div><div class="text-[12px] opacity-90 mt-1">${overdue.length} overdue • ${today.length} jatuh tempo hari ini • ${inprog.length} sedang dikerjakan</div></div>`
+    + section('Overdue','warning_amber','text-rose-600',overdue,'Tidak ada yang overdue. Mantap!')
+    + section('Jatuh tempo hari ini','today','text-pink-600',today,'Tidak ada deadline hari ini.')
+    + section('Sedang dikerjakan','pending_actions','text-indigo-600',inprog,'Belum ada yang berstatus In progress.')
+    + section('Jatuh tempo ≤ 3 hari','event_busy','text-violet-600',soon,'Aman, tidak ada yang mepet.');
+}
+
+/* ---------- Catatan Saya (per user) ---------- */
+function findNoteByRow(row){ return (state.notes||[]).find(n=>String(n.row)===String(row)); }
+function renderMyNotes(){
+  const list=document.getElementById('myNotesList'); if(!list) return;
+  const me=state.currentUser;
+  const forEl=document.getElementById('myNotesFor'); if(forEl) forEl.textContent='Catatan pribadi untuk mode: '+me;
+  const mine=(state.notes||[]).filter(n=>String(n.user||'').toLowerCase()===String(me||'').toLowerCase()).sort((a,b)=>String(b.updatedAt||'').localeCompare(String(a.updatedAt||'')));
+  list.innerHTML = mine.length ? mine.map(n=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3 flex flex-col"><div class="flex items-start justify-between gap-2"><div class="font-semibold text-sm text-gray-900 dark:text-white break-words flex-1">${escapeHtml(n.title||'(tanpa judul)')}</div><div class="flex gap-1 shrink-0"><button title="Edit" onclick="editNote(${n.row})" class="text-gray-400 hover:text-indigo-600"><span class="material-icons-round text-[16px]">edit</span></button><button title="Hapus" onclick="deleteNote(${n.row})" class="text-rose-500 hover:text-rose-600"><span class="material-icons-round text-[16px]">delete</span></button></div></div><p class="text-[13px] text-gray-600 dark:text-slate-300 mt-1 whitespace-pre-wrap break-words">${escapeHtml(n.body||'')}</p>${n.updatedAt?`<div class="text-[10px] text-gray-400 mt-2">${escapeHtml(n.updatedAt)}</div>`:''}</div>`).join('') : emptyState('Belum ada catatan. Tulis di atas lalu simpan.');
+}
+function addNote(){
+  const tEl=document.getElementById('newNoteTitle'), bEl=document.getElementById('newNoteBody');
+  const title=(tEl?tEl.value:'').trim(), body=(bEl?bEl.value:'').trim();
+  if(!title && !body){ showToast('Catatan tidak boleh kosong.', false); return; }
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan catatan', false); return; } state.notes=res.notes||state.notes; if(tEl)tEl.value=''; if(bEl)bEl.value=''; showToast(res.message||'Catatan disimpan.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).addNote(state.currentUser, title, body);
+}
+function editNote(row){
+  const n=findNoteByRow(row); if(!n) return;
+  const nt=prompt('Judul:', n.title||''); if(nt===null) return;
+  const nb=prompt('Isi catatan:', n.body||''); if(nb===null) return;
+  if(!String(nt).trim() && !String(nb).trim()){ showToast('Catatan tidak boleh kosong.', false); return; }
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah catatan', false); return; } state.notes=res.notes||state.notes; showToast(res.message||'Catatan diperbarui.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).updateNote(state.currentUser, row, String(nt).trim(), String(nb).trim());
+}
+function deleteNote(row){
+  const n=findNoteByRow(row); if(!n) return;
+  if(!confirm('Hapus catatan "'+(n.title||'(tanpa judul)')+'"?')) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus catatan', false); return; } state.notes=res.notes||state.notes; showToast(res.message||'Catatan dihapus.'); renderMyNotes(); }).withFailureHandler(err=>showToast(err.message||err,false)).deleteNote(state.currentUser, row);
+}
+
+/* ---------- Laporan (digest mingguan, manager/dev) ---------- */
+function parseDateLoose(s){ if(!s) return null; const d=new Date(String(s).trim().replace(' ','T')); return isNaN(d.getTime())?null:d; }
+function renderReport(){
+  const box=document.getElementById('reportContent'); if(!box) return;
+  const tasks=[...state.tasks];
+  const now=new Date(); const weekAgo=new Date(now); weekAgo.setDate(now.getDate()-7);
+  const inWeek=s=>{ const d=parseDateLoose(s); return !!d && d>=weekAgo && d<=now; };
+  const done=tasks.filter(isDone), active=tasks.filter(t=>!isDone(t)), overdue=tasks.filter(isLate);
+  const newThisWeek=tasks.filter(t=>inWeek(t.createdDate));
+  const doneEvents=(state.activity||[]).filter(a=>/→\s*done/i.test(String(a.detail||''))&&inWeek(a.timestamp));
+  const doneThisWeek=[...new Set(doneEvents.map(a=>a.taskId).filter(Boolean))].length;
+  const commentsThisWeek=(state.activity||[]).filter(a=>String(a.action||'').toLowerCase()==='comment'&&inWeek(a.timestamp)).length;
+  const pics=[...new Set(tasks.map(t=>String(t.pic||'').trim()).filter(Boolean))].sort();
+  const picRows=pics.map(p=>({pic:p, aktif:tasks.filter(t=>same(t.pic,p)&&!isDone(t)).length, selesai:tasks.filter(t=>same(t.pic,p)&&isDone(t)).length, overdue:tasks.filter(t=>same(t.pic,p)&&isLate(t)).length, baru:newThisWeek.filter(t=>same(t.pic,p)).length}));
+  const stages=[...new Set(tasks.map(t=>String(t.stage||'').trim()).filter(Boolean))];
+  const stageRows=stages.map(s=>({stage:s, jumlah:tasks.filter(t=>same(t.stage,s)&&!isDone(t)).length})).filter(r=>r.jumlah>0).sort((a,b)=>b.jumlah-a.jumlah);
+  const summary={total:tasks.length, active:active.length, done:done.length, overdue:overdue.length, newThisWeek:newThisWeek.length, doneThisWeek, commentsThisWeek};
+  window._reportData={picRows, stageRows, summary};
+  const kpis=[['Total',summary.total,''],['Aktif',summary.active,'text-indigo-600'],['Selesai',summary.done,'text-emerald-600'],['Overdue',summary.overdue,'text-rose-600'],['Baru mgg ini',summary.newThisWeek,'text-blue-600'],['Selesai mgg ini',summary.doneThisWeek,'text-emerald-600'],['Komentar mgg ini',summary.commentsThisWeek,'text-amber-600']];
+  const kpiHtml=kpis.map(k=>`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-3"><div class="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">${k[0]}</div><div class="text-2xl font-bold mt-0.5 ${k[2]||'text-gray-900 dark:text-white'}">${k[1]}</div></div>`).join('');
+  const picTable=`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="px-4 py-3 border-b border-gray-100 dark:border-slate-800 font-semibold text-sm text-gray-900 dark:text-white">Per PIC</div><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-[11px] uppercase tracking-wider text-gray-400"><th class="px-4 py-2">PIC</th><th class="px-4 py-2">Aktif</th><th class="px-4 py-2">Selesai</th><th class="px-4 py-2">Overdue</th><th class="px-4 py-2">Baru mgg ini</th></tr></thead><tbody>${picRows.length?picRows.map(r=>`<tr class="border-t border-gray-100 dark:border-slate-800"><td class="px-4 py-2 font-medium text-gray-800 dark:text-slate-200">${escapeHtml(r.pic)}</td><td class="px-4 py-2">${r.aktif}</td><td class="px-4 py-2 text-emerald-600">${r.selesai}</td><td class="px-4 py-2 ${r.overdue?'text-rose-600 font-semibold':''}">${r.overdue}</td><td class="px-4 py-2">${r.baru}</td></tr>`).join(''):`<tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">Tidak ada data.</td></tr>`}</tbody></table></div></div>`;
+  const stageTable=`<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden"><div class="px-4 py-3 border-b border-gray-100 dark:border-slate-800 font-semibold text-sm text-gray-900 dark:text-white">Per Stage (task aktif)</div><div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-[11px] uppercase tracking-wider text-gray-400"><th class="px-4 py-2">Stage</th><th class="px-4 py-2">Jumlah aktif</th></tr></thead><tbody>${stageRows.length?stageRows.map(r=>`<tr class="border-t border-gray-100 dark:border-slate-800"><td class="px-4 py-2 font-medium text-gray-800 dark:text-slate-200">${escapeHtml(r.stage)}</td><td class="px-4 py-2">${r.jumlah}</td></tr>`).join(''):`<tr><td colspan="2" class="px-4 py-6 text-center text-gray-400">Tidak ada data.</td></tr>`}</tbody></table></div></div>`;
+  box.innerHTML=`<div class="flex items-center justify-between gap-3 flex-wrap"><div><h2 class="text-lg font-semibold text-gray-900 dark:text-white">Laporan Mingguan</h2><p class="text-sm text-gray-500">Ringkasan 7 hari terakhir + snapshot saat ini.</p></div><div class="flex gap-2"><button onclick="exportReportCSV()" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">download</span> Export CSV</button><button onclick="window.print()" class="px-3 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-semibold flex items-center gap-1.5"><span class="material-icons-round text-[18px]">print</span> Print/PDF</button></div></div><div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">${kpiHtml}</div><div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${picTable}${stageTable}</div>`;
+}
+function exportReportCSV(){
+  const d=window._reportData; if(!d){ showToast('Buka Laporan dulu.', false); return; }
+  const S=d.summary; const rows=[];
+  rows.push(['Laporan Mingguan — ProductTrack']);
+  rows.push(['Diekspor', new Date().toLocaleString('id-ID')]);
+  rows.push([]);
+  rows.push(['Ringkasan']);
+  rows.push(['Total task', S.total]); rows.push(['Aktif', S.active]); rows.push(['Selesai', S.done]); rows.push(['Overdue', S.overdue]);
+  rows.push(['Baru minggu ini', S.newThisWeek]); rows.push(['Selesai minggu ini', S.doneThisWeek]); rows.push(['Komentar minggu ini', S.commentsThisWeek]);
+  rows.push([]);
+  rows.push(['Per PIC','Aktif','Selesai','Overdue','Baru minggu ini']);
+  d.picRows.forEach(r=>rows.push([r.pic, r.aktif, r.selesai, r.overdue, r.baru]));
+  rows.push([]);
+  rows.push(['Per Stage (aktif)','Jumlah']);
+  d.stageRows.forEach(r=>rows.push([r.stage, r.jumlah]));
+  const csv=rows.map(r=>r.map(c=>{ const s=String(c==null?'':c); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='laporan_productrack_'+todayStr()+'.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('Laporan CSV diunduh.');
 }
 function findLinkByRow(row){ return (state.links||[]).find(l=>String(l.row)===String(row)); }
 function attrJs(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');}

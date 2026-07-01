@@ -47,7 +47,7 @@ eq('TSK-007 ada di indeks 1 -> baris 5', findRowByTaskId(['TSK-001', 'TSK-007', 
 eq('tidak ada -> -1', findRowByTaskId(['TSK-001'], 'TSK-999'), -1);
 eq('id kosong -> -1', findRowByTaskId(['TSK-001'], ''), -1);
 
-console.log('rowToTask / taskToRow (round-trip kolom B..N):');
+console.log('rowToTask / taskToRow (round-trip kolom B..V):');
 const row = ['TSK-002', 46176, 46194, 'In progress', 'Urgent', 'Bikin dashboard',
   'Manajemen Sistem', 'All Platform', 'Ali', 'Nynda, Kiki', 'Spreadsheet',
   'Backend siap', 'Cek dropdown'];
@@ -66,7 +66,7 @@ const back = taskToRow({
   platform: 'All Platform', pic: 'Ali', support: ['Nynda', 'Kiki'], document: 'Spreadsheet',
   picNotes: 'Backend siap', pmNotes: 'Cek dropdown',
 }, null);
-eq('taskToRow panjang 13 kolom', back.length, 13);
+eq('taskToRow panjang 21 kolom (B..V)', back.length, 21);
 eq('taskToRow[0] id', back[0], 'TSK-002');
 eq('taskToRow support array -> string', back[9], 'Nynda, Kiki');
 eq('taskToRow status', back[3], 'In progress');
