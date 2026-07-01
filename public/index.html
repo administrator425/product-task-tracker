@@ -668,6 +668,14 @@ function canCreateExternal(){ return !isViewOnly() && isManager(state.currentUse
 function canEditTask(t){ if(isViewOnly()) return false; if(isExternalTask(t)) return isManager(state.currentUser); return true; }
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
+// Peran user pada sebuah task: PIC (penanggung jawab) vs Support (hanya membantu).
+function isPicOf(t,user){return same(t&&t.pic,user);}
+function isSupportOnly(t,user){return !same(t&&t.pic,user) && supportNames(t).some(s=>same(s,user));}
+function roleChip(t){
+  if(isPicOf(t,state.currentUser)) return `<span class="inline-flex items-center h-[16px] px-1.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 text-[9px] font-bold tracking-wide">PIC</span>`;
+  if(isSupportOnly(t,state.currentUser)) return `<span class="inline-flex items-center h-[16px] px-1.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[9px] font-bold tracking-wide">SUPPORT</span>`;
+  return '';
+}
 function scopedTasks(){
   if(isViewOnly()) return state.tasks.filter(inLintasView);   // task lintas divisi + task internal yang di-mirror PM/Dev
   if(isManager(state.currentUser)){
@@ -1105,9 +1113,14 @@ function renderCharts(){
       const priDatasets=priList.map(pr=>({label:pr,data:picLabels.map(pic=>tasks.filter(t=>same(t.pic,pic)&&same(t.priority,pr)).length),backgroundColor:priColor(pr),borderRadius:6,stack:'beban'}));
       cfg={type:'bar',data:{labels:picLabels,datasets:priDatasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,boxHeight:10,padding:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}};
     } else {
-      // User biasa: 4 bar per Priority (task milik dia)
-      const data=priList.map(pr=>tasks.filter(t=>same(t.priority,pr)).length);
-      cfg={type:'bar',data:{labels:priList,datasets:[{label:'Jumlah Task',data:data,backgroundColor:priList.map(priColor),borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0}}}}};
+      // User biasa: per Priority, dipisah warna — sebagai PIC (indigo) vs hanya Support (amber).
+      const me=state.currentUser;
+      const picData=priList.map(pr=>tasks.filter(t=>same(t.priority,pr)&&isPicOf(t,me)).length);
+      const supData=priList.map(pr=>tasks.filter(t=>same(t.priority,pr)&&isSupportOnly(t,me)).length);
+      cfg={type:'bar',data:{labels:priList,datasets:[
+        {label:'Sebagai PIC',data:picData,backgroundColor:'#6366f1',borderRadius:6,stack:'beban'},
+        {label:'Sebagai Support',data:supData,backgroundColor:'#f59e0b',borderRadius:6,stack:'beban'}
+      ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',labels:{boxWidth:10,boxHeight:10,padding:12}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0}}}}};
     }
     state.chartPic=new Chart(picCtx,cfg);
   }
@@ -1175,6 +1188,7 @@ function taskCard(t){
     <p class="text-[13px] font-medium leading-snug text-gray-800 dark:text-slate-100 mt-1.5 line-clamp-3">${escapeHtml(t.taskName||'-')}</p>
     <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
       ${priorityPill(t.priority)}
+      ${isSupportOnly(t,state.currentUser)?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Support</span>`:''}
       ${isExternalTask(t)?`<span class="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[12px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}
       ${t.platform?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform)}</span>`:''}
       ${t.stage?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage)}</span>`:''}
@@ -1207,7 +1221,7 @@ function renderTable(){
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
-    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${t.createdBy?' • Dari: '+escapeHtml(t.createdBy):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
+    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isSupportOnly(t,state.currentUser)?` <span class="inline-flex items-center align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Support</span>`:''}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${t.createdBy?' • Dari: '+escapeHtml(t.createdBy):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
     <td class="px-4 py-3">${inlineSelect('status', t)}</td>
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
     <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
@@ -1375,14 +1389,14 @@ function renderCommunicationTasks(){
     })
     .slice(0,120);
   // Sengaja TIDAK auto-pilih task — biar user memilih sendiri.
-  document.getElementById('commTaskList').innerHTML=arr.map(({t,unread})=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${unread>0?'border-l-4 border-l-rose-500 ':''}${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="flex items-center gap-2"><div class="${unread>0?'font-bold':'font-medium'} text-sm text-gray-900 dark:text-white truncate flex-1">${escapeHtml(t.taskName||'-')}</div>${unread>0?`<span class="shrink-0 inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold"><span class="material-icons-round text-[12px]">chat</span>${unread}</span>`:''}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task sesuai filter.');
+  document.getElementById('commTaskList').innerHTML=arr.map(({t,unread})=>`<button onclick="selectCommunicationTask('${escapeAttr(t.id)}')" class="w-full text-left p-2.5 rounded-lg border ${unread>0?'border-l-4 border-l-rose-500 ':(isSupportOnly(t,state.currentUser)?'border-l-4 border-l-amber-400 ':(isPicOf(t,state.currentUser)?'border-l-4 border-l-indigo-400 ':''))}${state.selectedTaskId===t.id?'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-200 dark:border-indigo-800':'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50'}"><div class="flex items-center gap-2"><div class="${unread>0?'font-bold':'font-medium'} text-sm text-gray-900 dark:text-white truncate flex-1">${escapeHtml(t.taskName||'-')}</div>${unread>0?`<span class="shrink-0 inline-flex items-center justify-center gap-0.5 h-[18px] px-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold"><span class="material-icons-round text-[12px]">chat</span>${unread}</span>`:''}</div><div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">${escapeHtml(t.id)} • ${escapeHtml(t.pic||'-')} ${roleChip(t)} ${statusChip(t.status)}</div></button>`).join('') || emptyState('Tidak ada task sesuai filter.');
 }
 function selectCommunicationTask(id){state.selectedTaskId=id;loadComments(id);renderCommunicationPanel();}
 function closeCommChat(){ state.selectedTaskId=null; renderCommunicationPanel(); if(state.activeView==='communication') renderCommunicationTasks(); }
 function renderCommunicationPanel(){
   const t=state.tasks.find(x=>x.id===state.selectedTaskId);
   if(!t){document.getElementById('commHeader').innerHTML='<div class="font-medium text-gray-400 text-sm">Pilih task terlebih dahulu.</div>';document.getElementById('commMessages').innerHTML='';return;}
-  document.getElementById('commHeader').innerHTML=`<div class="flex items-start justify-between gap-3"><div><div class="text-[11px] font-mono text-gray-400">${escapeHtml(t.id)}</div><div class="font-semibold text-base mt-0.5 text-gray-900 dark:text-white">${escapeHtml(t.taskName)}</div><div class="text-xs text-gray-500 mt-1">PIC: <b>${escapeHtml(t.pic||'-')}</b> • Stage: <b>${escapeHtml(t.stage||'-')}</b></div></div>${statusChip(t.status)}</div>`;
+  document.getElementById('commHeader').innerHTML=`<div class="flex items-start justify-between gap-3"><div><div class="text-[11px] font-mono text-gray-400">${escapeHtml(t.id)}</div><div class="font-semibold text-base mt-0.5 text-gray-900 dark:text-white">${escapeHtml(t.taskName)}</div><div class="text-xs text-gray-500 mt-1">PIC: <b>${escapeHtml(t.pic||'-')}</b> • Stage: <b>${escapeHtml(t.stage||'-')}</b> ${roleChip(t)}</div></div>${statusChip(t.status)}</div>`;
   renderComments('commMessages', state.comments);
 }
 function loadComments(taskId, cb){
