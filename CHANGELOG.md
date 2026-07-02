@@ -10,6 +10,9 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.24.1 — Legend warna di Timeline & Calendar
+- Tambah keterangan warna (status) di **Timeline** dan **Calendar** agar semua user (termasuk Lintas Divisi) paham arti tiap warna bar/acara. Hanya menampilkan status yang sedang tampil.
+
 ## 1.24.0 — Folder untuk Catatan Saya
 - Catatan Saya kini punya **folder + pencarian** (sama seperti Link Saya): kelompokkan per folder, cari cepat, ubah nama/hapus folder (catatan pindah ke Umum), pindahkan catatan antar folder.
 

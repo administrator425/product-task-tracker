@@ -303,6 +303,7 @@
             <button onclick="setGanttMode('Month')" id="gmode-Month" class="gmode px-3 py-1.5 text-sm rounded-lg font-medium border">Bulan</button>
             <span class="ml-auto text-[11px] text-gray-400 font-medium hidden sm:inline">Klik bar = detail • tarik/ulur = ubah jadwal</span>
           </div>
+          <div id="timelineLegend"></div>
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4 overflow-x-auto">
             <div id="ganttWrap"></div>
           </div>
@@ -310,6 +311,7 @@
 
         <!-- CALENDAR -->
         <div id="calendarView" class="view hide space-y-4 max-w-[1200px] mx-auto">
+          <div id="calendarLegend"></div>
           <div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-4">
             <div id="calendarRoot"></div>
           </div>
@@ -571,7 +573,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.24.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.24.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
@@ -1285,6 +1287,7 @@ function renderTimeline(){
   updateGanttModeButtons();
   const wrap=document.getElementById('ganttWrap'); if(!wrap) return;
   const tasks=viewTasks().filter(t=>t.dueDate||t.startDate);
+  const _tl=document.getElementById('timelineLegend'); if(_tl) _tl.innerHTML=statusLegendHtml(tasks);
   if(!window.Gantt){wrap.innerHTML=emptyState('Komponen timeline belum termuat. Pastikan ada koneksi internet, lalu muat ulang.'); return;}
   if(!tasks.length){wrap.innerHTML=emptyState('Tidak ada task dengan tanggal untuk ditampilkan.'); state.gantt=null; return;}
   wrap.innerHTML='<svg id="ganttSvg"></svg>';
@@ -1323,6 +1326,7 @@ function renderCalendar(){
   if(state.calendar){try{state.calendar.destroy();}catch(e){} state.calendar=null;}
   el.innerHTML='';
   const tasks=viewTasks().filter(t=>t.dueDate||t.startDate);
+  const _cl=document.getElementById('calendarLegend'); if(_cl) _cl.innerHTML=statusLegendHtml(tasks);
   const events=tasks.map(t=>{
     const start=fmtDate(t.startDate||t.dueDate);
     const due=fmtDate(t.dueDate||t.startDate);
@@ -1940,6 +1944,14 @@ function statusHex(s){
   return STATUS_FALLBACK[h%STATUS_FALLBACK.length];
 }
 function statusMeta(s){return {dot:statusHex(s)};}
+// Legend warna (status) untuk Timeline & Calendar — hanya menampilkan status yang ada di tampilan.
+function statusLegendHtml(tasks){
+  const ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
+  const present=[...new Set((tasks||[]).map(t=>String(t.status||'').trim()||'Tanpa Status'))];
+  present.sort((a,b)=>{const ia=ORDER.findIndex(o=>o.toLowerCase()===a.toLowerCase()),ib=ORDER.findIndex(o=>o.toLowerCase()===b.toLowerCase());return (ia<0?99:ia)-(ib<0?99:ib);});
+  if(!present.length) return '';
+  return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 px-3 py-2"><span class="text-[11px] font-semibold text-gray-500 flex items-center gap-1"><span class="material-icons-round text-[15px]">palette</span>Arti warna (status):</span>${present.map(s=>`<span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 dark:text-slate-300"><span class="w-3 h-3 rounded-full shrink-0" style="background:${statusHex(s)}"></span>${escapeHtml(s)}</span>`).join('')}</div>`;
+}
 function shadeColor(hex,percent){
   const n=parseInt(String(hex).replace('#',''),16); if(isNaN(n))return hex;
   let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
