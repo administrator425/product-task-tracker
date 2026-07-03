@@ -96,20 +96,27 @@
   <div id="toast" class="fixed right-5 bottom-5 z-[120] hide px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium"></div>
 
   <!-- Login gate (aktif hanya jika env APP_PASSWORD diisi di server) -->
-  <div id="loginGate" class="hide fixed inset-0 z-[130] bg-slate-950/95 flex items-center justify-center p-4">
+  <div id="loginGate" class="hide fixed inset-0 z-[130] bg-gray-100 dark:bg-slate-950 flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-6">
       <div class="flex items-center gap-2.5 mb-1">
         <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">lock</span></div>
         <div class="text-lg font-bold text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span></div>
       </div>
-      <p class="text-sm text-gray-500 mb-4">Masukkan email &amp; PIN 6 digit untuk akses penuh. Tanpa PIN, Anda tetap bisa melihat (mode lihat-saja).</p>
-      <form onsubmit="event.preventDefault(); submitLogin();">
-        <input id="loginEmail" type="email" placeholder="Email (mis. nama@cerebrum.id)" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 mb-2 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
-        <input id="loginPw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN 6 digit" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm tracking-[0.3em]">
+      <p class="text-sm text-gray-500 mb-4">Masukkan PIN untuk mengakses. PIN penuh untuk kelola task; PIN lihat untuk mode lihat-saja.</p>
+      <form onsubmit="event.preventDefault(); submitGatePin();">
+        <input id="loginPw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="• • • • • •" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-3 outline-none focus:ring-2 focus:ring-indigo-300 text-center text-lg tracking-[0.4em]">
         <div id="loginErr" class="hide text-sm text-rose-600 mt-2">PIN salah. Coba lagi.</div>
-        <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk penuh</button>
-        <button type="button" onclick="hideLoginGate()" class="w-full mt-2 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800">Lihat saja (tamu)</button>
+        <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk</button>
+        <button type="button" id="gateCancel" onclick="hideLoginGate()" class="hide w-full mt-2 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800">Batal</button>
       </form>
+      <div class="mt-3 text-center">
+        <button type="button" onclick="toggleAdminLogin()" class="text-xs text-gray-400 hover:text-indigo-600 underline">Admin officecerebrum? Masuk dengan email</button>
+      </div>
+      <div id="adminLoginBox" class="hide mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
+        <input id="loginEmail" type="email" placeholder="Email admin terdaftar" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
+        <div id="adminErr" class="hide text-sm text-rose-600 mt-2">Email tidak dikenali.</div>
+        <button type="button" onclick="submitAdminEmail()" class="w-full mt-2 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 text-white font-semibold text-sm">Masuk sebagai admin</button>
+      </div>
     </div>
   </div>
 
@@ -202,7 +209,7 @@
         <div id="guestUnlockBox" class="hide p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-900/40">
           <div class="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-widest mb-1 flex items-center gap-1"><span class="material-icons-round text-[14px]">visibility</span>Mode Lihat-saja</div>
           <p class="text-[11px] text-gray-500 dark:text-slate-400 mb-2 leading-snug">Anda melihat sebagai tamu. Masukkan PIN untuk akses penuh (tambah/edit task, semua tab).</p>
-          <button onclick="showLoginGate()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"><span class="material-icons-round text-[15px]">lock_open</span>Masuk penuh (PIN)</button>
+          <button onclick="showLoginGate(true)" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"><span class="material-icons-round text-[15px]">lock_open</span>Masuk penuh (PIN)</button>
         </div>
         <div id="managerFocusBox" class="hide p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40">
           <div class="text-[10px] font-bold text-amber-600 dark:text-amber-300 uppercase tracking-widest mb-1.5 flex items-center gap-1"><span class="material-icons-round text-[14px]">supervisor_account</span>Fokus PIC</div>
@@ -579,12 +586,13 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.25.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
-var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
+const APP_VERSION = '1.26.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
+var USER_EMAIL = (function(){ try { return localStorage.getItem('tt_user_email') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW },
+    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW, 'x-user-email': USER_EMAIL },
     body: JSON.stringify({ action: action, args: args || [] })
   }).then(function(r){
     return r.text().then(function(txt){
@@ -597,22 +605,32 @@ function callApi(action, args){
     });
   });
 }
-function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var em=document.getElementById('loginEmail'); if(em && !em.value){ try{ em.value=localStorage.getItem('tt_user_email')||''; }catch(_){ } } var pw=document.getElementById('loginPw'); if(pw) pw.value=''; var er=document.getElementById('loginErr'); if(er) er.classList.add('hide'); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },50); }
+function showLoginGate(canCancel){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var pw=document.getElementById('loginPw'); if(pw) pw.value=''; ['loginErr','adminErr'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.add('hide'); }); var c=document.getElementById('gateCancel'); if(c) c.classList.toggle('hide', !canCancel); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },60); }
 function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
 // Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
-var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' };
+var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' , 'administrator@officecerebrum.com':'Nynda' };
 function applyEmailUser(email){ var e=String(email||'').trim().toLowerCase(); if(typeof DEV_EMAILS!=='undefined' && DEV_EMAILS.map(function(x){return String(x).toLowerCase();}).includes(e)){ try{ localStorage.setItem('tt_current_user','Dev'); }catch(_){ } return; } var u=EMAIL_TO_USER[e]; if(u){ try{ localStorage.setItem('tt_current_user', u); }catch(_){ } } }
 // Email developer/admin: akses penuh (lihat semua task) + bebas pilih mode apa pun, lewati pembatasan.
 var DEV_EMAILS = ['akbaralqahri@gmail.com'];
 function isDevEmail(){ var e=loginEmail(); return !!e && DEV_EMAILS.map(function(x){return String(x).toLowerCase();}).includes(String(e).trim().toLowerCase()); }
-function submitLogin(){
-  var email=(document.getElementById('loginEmail')||{}).value||'';
+// PIN penuh -> akses penuh; PIN lihat -> mode lihat-saja. Backend yang menentukan level. (beda dari submitPin utk ganti mode)
+function submitGatePin(){
   var pw=(document.getElementById('loginPw')||{}).value||'';
   fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json','x-app-password':pw},body:JSON.stringify({action:'login',args:[]})})
     .then(function(r){ return r.json(); }).then(function(d){
-      if(d && d.success){ try{ sessionStorage.setItem('tt_app_pw', pw); localStorage.setItem('tt_user_email', email); }catch(e){} applyEmailUser(email); location.reload(); }
+      if(d && d.level && d.level!=='none'){ try{ localStorage.setItem('tt_app_pw', pw); }catch(e){} location.reload(); }
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
+}
+function toggleAdminLogin(){ var b=document.getElementById('adminLoginBox'); if(b) b.classList.toggle('hide'); var em=document.getElementById('loginEmail'); if(em){ try{ if(!em.value) em.value=localStorage.getItem('tt_user_email')||''; }catch(_){ } setTimeout(function(){ em.focus(); },50); } }
+// Login admin via email terdaftar (administrator@officecerebrum.com / nyndaramadhanti@cerebrum.id) -> penuh tanpa PIN.
+function submitAdminEmail(){
+  var email=((document.getElementById('loginEmail')||{}).value||'').trim();
+  fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':email},body:JSON.stringify({action:'login',args:[]})})
+    .then(function(r){ return r.json(); }).then(function(d){
+      if(d && d.level==='full'){ try{ localStorage.setItem('tt_user_email', email); }catch(e){} applyEmailUser(email); location.reload(); }
+      else { var e=document.getElementById('adminErr'); if(e) e.classList.remove('hide'); }
+    }).catch(function(){ var e=document.getElementById('adminErr'); if(e) e.classList.remove('hide'); });
 }
 var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
 function makeRunner(){
@@ -677,6 +695,8 @@ function init() {
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
+      var gate=document.getElementById('loginGate');
+      if(gate && !gate.classList.contains('hide')){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); return; } // gerbang PIN tampil -> jangan toast/render
       showToast('Gagal memuat data: ' + (err.message || err), false);
       state.tasks = []; state.options = dummyOptions; afterLoad();
     }).getBootstrapData();

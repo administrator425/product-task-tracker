@@ -10,6 +10,12 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.26.0 — Gerbang PIN ganda + auto-login admin
+- Gerbang kini **memblokir total** (tak ada isi yang terlihat) sampai lolos salah satu: **PIN penuh** (env `ACCESS_PIN`), **PIN lihat-saja** (env `VIEW_PIN`), atau **email admin terdaftar** (`administrator@officecerebrum.com` / `nyndaramadhanti@cerebrum.id`) yang **langsung masuk tanpa PIN**.
+- Popup PIN muncul dari awal untuk selain admin — **PIN saja, tanpa input email**. PIN penuh → kelola task; PIN lihat → mode Lintas (lihat-saja + chat).
+- Email admin bisa ditambah/ubah via env `AUTHORIZED_EMAILS` (default sudah berisi dua email di atas). PIN tersimpan di perangkat agar tak perlu ketik ulang.
+- Catatan keamanan: karena belum ada login Google, "email admin" dikenali dari yang diketik/diingat perangkat (bisa dipalsukan) — PIN tetap gerbang utama.
+
 ## 1.25.0 — Gerbang PIN + fallback lihat-saja
 - Akses penuh kini butuh **PIN 6 digit** (di-set lewat env `ACCESS_PIN` di Vercel — bukan di kode, jadi tidak bocor di repo publik). Tanpa/salah PIN, siapa pun yang membuka app otomatis masuk **mode lihat-saja (Lintas)**: hanya melihat task eksternal + yang di-mirror, boleh chat, tidak bisa edit.
 - Server hanya mengirim **data terbatas** ke tamu (bukan semua task), dan menolak semua aksi tulis tanpa PIN — jadi link app boleh tetap publik/terhubung GitHub tanpa risiko orang awam mengubah data.

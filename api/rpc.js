@@ -93,19 +93,34 @@ module.exports = async (req, res) => {
     return res.status(400).end(JSON.stringify({ __error: true, message: 'Body tidak valid.' }));
   }
 
-  // Gerbang akses via PIN (env ACCESS_PIN; fallback APP_PASSWORD utk kompatibilitas lama).
-  // - PIN benar / gerbang nonaktif -> akses penuh.
-  // - PIN salah/kosong             -> mode view-only (Lintas): hanya boleh MEMBACA data
-  //                                    terbatas (getBootstrapData) + kirim chat. Aksi tulis ditolak.
-  const ACCESS_PIN = (process.env.ACCESS_PIN || process.env.APP_PASSWORD || '').trim();
-  const authed = !ACCESS_PIN || authProvided === ACCESS_PIN;
-  // Action yang boleh diakses tamu (tanpa PIN benar) untuk mendukung mode view-only.
+  // Gerbang akses berlapis:
+  //  - Email admin terdaftar (AUTHORIZED_EMAILS) -> akses PENUH tanpa PIN.
+  //  - PIN penuh (ACCESS_PIN)  -> akses PENUH (kelola task).
+  //  - PIN lihat (VIEW_PIN)    -> mode LIHAT-SAJA (Lintas): baca terbatas + chat, tak bisa tulis.
+  //  - selain itu              -> DIBLOKIR total (tak ada data sama sekali).
+  // Gerbang hanya aktif bila minimal satu PIN di-set; kalau kosong, app terbuka penuh (anti-terkunci).
+  const FULL_PIN = (process.env.ACCESS_PIN || process.env.APP_PASSWORD || '').trim();
+  const VIEW_PIN = (process.env.VIEW_PIN || '').trim();
+  const DEFAULT_ALLOW = ['administrator@officecerebrum.com', 'nyndaramadhanti@cerebrum.id'];
+  const envAllow = (process.env.AUTHORIZED_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const ALLOW_EMAILS = envAllow.length ? envAllow : DEFAULT_ALLOW;
+  const userEmail = (req.headers['x-user-email'] || '').toString().trim().toLowerCase();
+  const gateOn = !!(FULL_PIN || VIEW_PIN);
+  let level;
+  if (!gateOn) level = 'full';
+  else if ((FULL_PIN && authProvided === FULL_PIN) || (userEmail && ALLOW_EMAILS.includes(userEmail))) level = 'full';
+  else if (VIEW_PIN && authProvided === VIEW_PIN) level = 'view';
+  else level = 'none';
+  // Action yang boleh diakses di level "view" (lihat-saja): baca terbatas + chat.
   const GUEST_ACTIONS = { getBootstrapData: 1, getComments: 1, addComment: 1 };
 
   if (action === 'login') {
-    return res.status(200).end(JSON.stringify({ success: authed, authRequired: !!ACCESS_PIN, message: authed ? 'PIN benar.' : 'PIN salah.' }));
+    return res.status(200).end(JSON.stringify({ success: level !== 'none', level: level, gateOn: gateOn, message: level === 'none' ? 'PIN salah.' : 'Berhasil.' }));
   }
-  if (!authed && !GUEST_ACTIONS[action]) {
+  if (level === 'none') {
+    return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Perlu PIN.' }));
+  }
+  if (level === 'view' && !GUEST_ACTIONS[action]) {
     return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Perlu PIN akses penuh.' }));
   }
 
@@ -117,7 +132,7 @@ module.exports = async (req, res) => {
   try {
     // Tamu (tanpa PIN) hanya menerima data terbatas dari bootstrap.
     const result = (action === 'getBootstrapData')
-      ? await backend.getBootstrapData({ viewOnly: !authed })
+      ? await backend.getBootstrapData({ viewOnly: level === 'view' })
       : await handler(...args);
     // Hasil bisa berupa objek {success,...}, array, atau primitif.
     return res.status(200).end(JSON.stringify(result === undefined ? null : result));
