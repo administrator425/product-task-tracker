@@ -10,6 +10,10 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.28.0 — Halaman pilih identitas (login PIN)
+- Setelah masuk pakai **PIN penuh (676767)**, muncul halaman **"Masuk sebagai siapa?"** dulu — tidak langsung jatuh ke mode Manager. Pilih identitas (PIC / Dev), baru masuk dashboard. Pilihan diingat; ada tombol **"Ganti identitas"** di kotak Mode User untuk memilih ulang.
+- Menghormati PIN per-user yang sudah ada (kalau identitas terkunci PIN, tetap diminta). **Admin (login Google)** dan **mode lihat-saja (098098)** tidak menampilkan halaman ini — mereka sudah teridentifikasi.
+
 ## 1.27.0 — Login Google (OAuth) untuk admin
 - Ganti kotak "email admin" (yang bisa dipalsukan) dengan tombol **Masuk dengan Google**. Google memverifikasi email ASLI; backend cek tanda tangan token + daftar email admin, lalu menerbitkan **sesi ber-tanda-tangan (HMAC)** 30 hari. Email admin kini **tidak lagi dipercaya dari header mentah** — hanya dari sesi terverifikasi.
 - Nynda & administrator: klik Masuk dengan Google → **langsung akses penuh tanpa PIN**, dan **bisa ganti mode user** (bug "terkunci" saat login email diperbaiki — admin diperlakukan bebas seperti Dev).

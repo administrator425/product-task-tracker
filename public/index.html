@@ -119,6 +119,18 @@
     </div>
   </div>
 
+  <!-- Halaman pilih identitas (muncul setelah login PIN penuh, sebelum masuk dashboard) -->
+  <div id="identityGate" class="hide fixed inset-0 z-[125] bg-gray-100 dark:bg-slate-950 flex items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-6">
+      <div class="flex items-center gap-2.5 mb-1">
+        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">badge</span></div>
+        <div class="text-lg font-bold text-gray-900 dark:text-white">Masuk sebagai siapa?</div>
+      </div>
+      <p class="text-sm text-gray-500 mb-4">Pilih identitas Anda untuk melanjutkan. Bisa diganti nanti lewat kotak "Mode User".</p>
+      <div id="identityGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+    </div>
+  </div>
+
   <!-- PIN gate (verifikasi pindah mode user / akses Dev) -->
   <div id="pinGate" class="hide fixed inset-0 z-[135] bg-slate-950/80 flex items-center justify-center p-4">
     <div class="w-full max-w-xs bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-5">
@@ -204,6 +216,7 @@
             <select id="currentUser" onchange="requestUserSwitch(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200"></select>
           </div>
           <div id="myTasksBadge" class="mt-2 text-[11px] font-medium text-gray-500 dark:text-slate-400"></div>
+          <button onclick="showIdentityGate()" class="mt-2 w-full text-[11px] font-semibold text-indigo-600 hover:underline flex items-center justify-center gap-1"><span class="material-icons-round text-[13px]">badge</span>Ganti identitas</button>
         </div>
         <div id="guestUnlockBox" class="hide p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-900/40">
           <div class="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-widest mb-1 flex items-center gap-1"><span class="material-icons-round text-[14px]">visibility</span>Mode Lihat-saja</div>
@@ -585,7 +598,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.27.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.28.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -724,7 +737,7 @@ function init() {
 function renderAppVersion(){ const label='v'+APP_VERSION; ['appVersion','appVersionSettings'].forEach(id=>{ const el=document.getElementById(id); if(el) el.textContent=label; }); }
 function afterLoad() {
   renderAppVersion();
-  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad();
+  populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad(); if(needIdentityPick()) showIdentityGate();
   if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); }); document.addEventListener('keydown', e=>{ if(e.key==='Escape' && state.activeView==='communication' && state.selectedTaskId && document.getElementById('taskModal').classList.contains('hide')){ closeCommChat(); } });}
   document.getElementById('loading').classList.add('hide');
 }
@@ -882,7 +895,34 @@ function populateUserSelect(){
   select.value = state.currentUser;
   select.disabled = !!locked;
 }
-function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
+function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);try{localStorage.setItem('tt_identity_confirmed','1');}catch(_){ }hideIdentityGate();state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
+// ---- Halaman pilih identitas (setelah login PIN penuh) ----
+function identityConfirmed(){ try{ return localStorage.getItem('tt_identity_confirmed')==='1'; }catch(_){ return false; } }
+function needIdentityPick(){
+  if(isViewOnly() || state.lockView) return false;             // view/guest/lintas -> tidak perlu
+  var adminSess=false; try{ adminSess=!!localStorage.getItem('tt_session'); }catch(_){ }
+  if(adminSess) return false;                                   // admin Google sudah teridentifikasi
+  if(!APP_PW) return false;                                     // hanya untuk yang login via PIN penuh
+  return !identityConfirmed();
+}
+function hideIdentityGate(){ var g=document.getElementById('identityGate'); if(g) g.classList.add('hide'); }
+function showIdentityGate(){
+  var g=document.getElementById('identityGate'), grid=document.getElementById('identityGrid'); if(!g||!grid) return;
+  var pics=(state.options.pic||[]).filter(function(p){ return baseName(p)!==baseName(VIEWONLY_USER); });
+  var items=pics.slice(); items.push('Dev');
+  grid.innerHTML=items.map(function(p){
+    var isDev=(p==='Dev');
+    var face=isDev?'<span class="material-icons-round text-[18px]">code</span>':escapeHtml(initials(p));
+    return '<button type="button" onclick="chooseIdentity(\''+String(p).replace(/\\/g,"\\\\").replace(/'/g,"\\'")+'\')" class="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-200 dark:border-slate-700 hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition">'
+      +'<span class="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-sm" style="background:'+avatarBg(isDev?'Dev':p)+'">'+face+'</span>'
+      +'<span class="text-xs font-medium text-gray-700 dark:text-slate-200">'+(isDev?'Dev':escapeHtml(p))+'</span></button>';
+  }).join('');
+  g.classList.remove('hide');
+}
+function chooseIdentity(name){
+  if(baseName(name)===baseName(state.currentUser)){ try{ localStorage.setItem('tt_identity_confirmed','1'); }catch(_){ } hideIdentityGate(); applyRoleUI(); return; }
+  requestUserSwitch(name);   // hormati PIN per-user / Dev; saat sukses, setCurrentUser menutup gate & menandai confirmed
+}
 function requestUserSwitch(value){
   if(!value || value===state.currentUser) return;
   if(value==='Dev'){
