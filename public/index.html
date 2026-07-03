@@ -598,7 +598,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.28.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.28.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -920,8 +920,14 @@ function showIdentityGate(){
   g.classList.remove('hide');
 }
 function chooseIdentity(name){
-  if(baseName(name)===baseName(state.currentUser)){ try{ localStorage.setItem('tt_identity_confirmed','1'); }catch(_){ } hideIdentityGate(); applyRoleUI(); return; }
-  requestUserSwitch(name);   // hormati PIN per-user / Dev; saat sukses, setCurrentUser menutup gate & menandai confirmed
+  // Selalu verifikasi PIN identitas yang dipilih — JANGAN lewati walau default saat ini kebetulan sama namanya.
+  if(name==='Dev'){
+    if(isDevEmail()){ setCurrentUser('Dev'); return; }
+    openPinModal('__dev__','Dev','Mode Dev'); return;
+  }
+  var pu=(state.pinUsers||[]).find(function(u){ return baseName(u)===baseName(name); });
+  if(pu){ openPinModal(pu, name, name); return; }   // verifyUser = nama tersimpan di AUTH; target = identitas terpilih; sukses -> setCurrentUser tutup gate
+  setCurrentUser(name);
 }
 function requestUserSwitch(value){
   if(!value || value===state.currentUser) return;
