@@ -102,12 +102,13 @@
         <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">lock</span></div>
         <div class="text-lg font-bold text-gray-900 dark:text-white">Product<span class="text-indigo-600">Track</span></div>
       </div>
-      <p class="text-sm text-gray-500 mb-4">Masukkan email &amp; password tim untuk mengakses.</p>
+      <p class="text-sm text-gray-500 mb-4">Masukkan email &amp; PIN 6 digit untuk akses penuh. Tanpa PIN, Anda tetap bisa melihat (mode lihat-saja).</p>
       <form onsubmit="event.preventDefault(); submitLogin();">
         <input id="loginEmail" type="email" placeholder="Email (mis. nama@cerebrum.id)" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 mb-2 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
-        <input id="loginPw" type="password" placeholder="Password" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
-        <div id="loginErr" class="hide text-sm text-rose-600 mt-2">Password salah. Coba lagi.</div>
-        <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk</button>
+        <input id="loginPw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN 6 digit" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm tracking-[0.3em]">
+        <div id="loginErr" class="hide text-sm text-rose-600 mt-2">PIN salah. Coba lagi.</div>
+        <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk penuh</button>
+        <button type="button" onclick="hideLoginGate()" class="w-full mt-2 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800">Lihat saja (tamu)</button>
       </form>
     </div>
   </div>
@@ -197,6 +198,11 @@
             <select id="currentUser" onchange="requestUserSwitch(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200"></select>
           </div>
           <div id="myTasksBadge" class="mt-2 text-[11px] font-medium text-gray-500 dark:text-slate-400"></div>
+        </div>
+        <div id="guestUnlockBox" class="hide p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-900/40">
+          <div class="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-widest mb-1 flex items-center gap-1"><span class="material-icons-round text-[14px]">visibility</span>Mode Lihat-saja</div>
+          <p class="text-[11px] text-gray-500 dark:text-slate-400 mb-2 leading-snug">Anda melihat sebagai tamu. Masukkan PIN untuk akses penuh (tambah/edit task, semua tab).</p>
+          <button onclick="showLoginGate()" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"><span class="material-icons-round text-[15px]">lock_open</span>Masuk penuh (PIN)</button>
         </div>
         <div id="managerFocusBox" class="hide p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40">
           <div class="text-[10px] font-bold text-amber-600 dark:text-amber-300 uppercase tracking-widest mb-1.5 flex items-center gap-1"><span class="material-icons-round text-[14px]">supervisor_account</span>Fokus PIC</div>
@@ -573,7 +579,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.24.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.25.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return sessionStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
@@ -591,7 +597,7 @@ function callApi(action, args){
     });
   });
 }
-function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },50); }
+function showLoginGate(){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var em=document.getElementById('loginEmail'); if(em && !em.value){ try{ em.value=localStorage.getItem('tt_user_email')||''; }catch(_){ } } var pw=document.getElementById('loginPw'); if(pw) pw.value=''; var er=document.getElementById('loginErr'); if(er) er.classList.add('hide'); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },50); }
 function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
 // Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
 var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' };
@@ -666,6 +672,8 @@ function init() {
       state.links = data.links || [];
       state.dashboards = data.dashboards || [];
       state.notes = data.notes || [];
+      state.guestMode = !!data.viewOnly;                 // backend: tak ada PIN benar -> data terbatas
+      if (state.guestMode) state.currentUser = VIEWONLY_USER;
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       afterLoad();
     }).withFailureHandler(err => {
@@ -693,7 +701,7 @@ function isManager(user){if(String(user||'').toLowerCase()==='dev') return true;
 // Mode "Lintas Divisi" = akses lihat-saja untuk divisi lain (IT, Marketing, Sales):
 // melihat SEMUA task produk, tapi tidak bisa edit & hanya tab Dashboard/Kanban/List/Timeline/Calendar.
 const VIEWONLY_USER='Lintas Divisi';
-function isViewOnly(){ return baseName(state.currentUser)===baseName(VIEWONLY_USER); }
+function isViewOnly(){ return !!state.guestMode || baseName(state.currentUser)===baseName(VIEWONLY_USER); }
 function isDev(){ return String(state.currentUser||'').toLowerCase()==='dev'; }
 function seesAll(){ return isManager(state.currentUser) || isViewOnly(); }
 // Task eksternal (lintas divisi) = punya Divisi Tujuan. Hanya manager/dev yang boleh buat/edit/hapus.
@@ -751,8 +759,10 @@ function applyRoleUI(){
   ['nav-extdash','nav-mylinks','nav-hariini','nav-mynotes'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
   const navComm=document.getElementById('nav-communication'); if(navComm) navComm.classList.remove('hide');
   const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
-  // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas).
-  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView);
+  // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas) ATAU tamu tanpa PIN.
+  const guest=!!state.guestMode;
+  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView||guest);
+  const guestBox=document.getElementById('guestUnlockBox'); if(guestBox) guestBox.classList.toggle('hide',!guest);
   // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
   const hiddenForVo=['activity','settings','report','extdash','mylinks','hariini','mynotes'];
   if(vo && hiddenForVo.includes(state.activeView)) switchView('dashboard');

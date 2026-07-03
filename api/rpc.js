@@ -11,7 +11,7 @@
  * ============================================================
  */
 
-const backend = require('./_sheets');
+const backend = require('./_sheets'); // rpc dispatcher
 
 // Whitelist action -> fungsi backend. Argumen diteruskan sesuai urutan
 // pemanggilan google.script.run pada versi Apps Script.
@@ -93,15 +93,20 @@ module.exports = async (req, res) => {
     return res.status(400).end(JSON.stringify({ __error: true, message: 'Body tidak valid.' }));
   }
 
-  // Proteksi opsional: jika env APP_PASSWORD diisi, SEMUA action butuh password yang cocok.
-  // Bila APP_PASSWORD kosong, gerbang ini nonaktif (app terbuka seperti biasa).
-  const APP_PASSWORD = (process.env.APP_PASSWORD || '').trim();
+  // Gerbang akses via PIN (env ACCESS_PIN; fallback APP_PASSWORD utk kompatibilitas lama).
+  // - PIN benar / gerbang nonaktif -> akses penuh.
+  // - PIN salah/kosong             -> mode view-only (Lintas): hanya boleh MEMBACA data
+  //                                    terbatas (getBootstrapData) + kirim chat. Aksi tulis ditolak.
+  const ACCESS_PIN = (process.env.ACCESS_PIN || process.env.APP_PASSWORD || '').trim();
+  const authed = !ACCESS_PIN || authProvided === ACCESS_PIN;
+  // Action yang boleh diakses tamu (tanpa PIN benar) untuk mendukung mode view-only.
+  const GUEST_ACTIONS = { getBootstrapData: 1, getComments: 1, addComment: 1 };
+
   if (action === 'login') {
-    const okPw = !APP_PASSWORD || authProvided === APP_PASSWORD;
-    return res.status(200).end(JSON.stringify({ success: okPw, authRequired: !!APP_PASSWORD, message: okPw ? 'Login berhasil.' : 'Password salah.' }));
+    return res.status(200).end(JSON.stringify({ success: authed, authRequired: !!ACCESS_PIN, message: authed ? 'PIN benar.' : 'PIN salah.' }));
   }
-  if (APP_PASSWORD && authProvided !== APP_PASSWORD) {
-    return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Perlu login.' }));
+  if (!authed && !GUEST_ACTIONS[action]) {
+    return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Perlu PIN akses penuh.' }));
   }
 
   const handler = HANDLERS[action];
@@ -110,7 +115,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const result = await handler(...args);
+    // Tamu (tanpa PIN) hanya menerima data terbatas dari bootstrap.
+    const result = (action === 'getBootstrapData')
+      ? await backend.getBootstrapData({ viewOnly: !authed })
+      : await handler(...args);
     // Hasil bisa berupa objek {success,...}, array, atau primitif.
     return res.status(200).end(JSON.stringify(result === undefined ? null : result));
   } catch (err) {

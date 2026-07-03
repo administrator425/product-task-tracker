@@ -661,7 +661,8 @@ async function getAllCommentsLite() {
     .filter(c => c.taskId);
 }
 
-async function getBootstrapData() {
+async function getBootstrapData(opts) {
+  const viewOnly = !!(opts && opts.viewOnly);
   const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes] = await Promise.all([
     getTasks(),
     getOptions(),
@@ -672,6 +673,33 @@ async function getBootstrapData() {
     getAllDashboards(),
     getAllNotes(),
   ]);
+  if (viewOnly) {
+    // Tamu tanpa PIN: hanya task yang di-set Lintas (punya Divisi Tujuan) atau di-mirror,
+    // plus opsi (utk label/warna), dashboards, dan ringkasan chat pada task tsb.
+    const isShown = (t) => {
+      const ext = String((t && t.divisiTujuan) || '').trim() !== '';
+      const mir = /^(ya|yes|true|1)$/i.test(String((t && t.mirror) || '').trim());
+      return ext || mir;
+    };
+    const shown = (tasks || []).filter(isShown);
+    const shownIds = new Set(shown.map(t => t.id));
+    return {
+      tasks: shown,
+      options,
+      activity: [],
+      commentsSummary: (commentsSummary || []).filter(c => shownIds.has(c.taskId)),
+      pinUsers: [],
+      links: [],
+      dashboards: dashboards || [],
+      notes: [],
+      viewOnly: true,
+      meta: {
+        sheetName: CONFIG.TASK_SHEET,
+        managers: getManagers(),
+        generatedAt: nowStamp(),
+      },
+    };
+  }
   return {
     tasks,
     options,
