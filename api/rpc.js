@@ -12,6 +12,29 @@
  */
 
 const backend = require('./_sheets'); // rpc dispatcher
+const crypto = require('crypto');
+
+// Sesi admin ringan (HMAC) untuk login Google: payload {email, exp} ditandatangani SESSION_SECRET.
+// Tak bisa dipalsukan tanpa secret, dan otomatis kedaluwarsa.
+function b64url(v){ return Buffer.from(v).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function signSession(email, secret, days) {
+  const exp = Date.now() + ((days || 30) * 86400000);
+  const p = b64url(JSON.stringify({ email: email, exp: exp }));
+  const sig = b64url(crypto.createHmac('sha256', secret).update(p).digest());
+  return p + '.' + sig;
+}
+function verifySession(token, secret) {
+  if (!token || String(token).indexOf('.') < 0) return null;
+  const parts = String(token).split('.');
+  const p = parts[0], sig = parts[1];
+  const expect = b64url(crypto.createHmac('sha256', secret).update(p).digest());
+  if (sig !== expect) return null;
+  try {
+    const o = JSON.parse(Buffer.from(p.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    if (!o || !o.exp || o.exp < Date.now()) return null;
+    return o;
+  } catch (e) { return null; }
+}
 
 // Whitelist action -> fungsi backend. Argumen diteruskan sesuai urutan
 // pemanggilan google.script.run pada versi Apps Script.
@@ -94,21 +117,51 @@ module.exports = async (req, res) => {
   }
 
   // Gerbang akses berlapis:
-  //  - Email admin terdaftar (AUTHORIZED_EMAILS) -> akses PENUH tanpa PIN.
+  //  - Login Google terverifikasi + email admin terdaftar -> akses PENUH tanpa PIN (aman, tak bisa dipalsukan).
   //  - PIN penuh (ACCESS_PIN)  -> akses PENUH (kelola task).
   //  - PIN lihat (VIEW_PIN)    -> mode LIHAT-SAJA (Lintas): baca terbatas + chat, tak bisa tulis.
   //  - selain itu              -> DIBLOKIR total (tak ada data sama sekali).
-  // Gerbang hanya aktif bila minimal satu PIN di-set; kalau kosong, app terbuka penuh (anti-terkunci).
+  // Gerbang aktif bila ada PIN atau Google dikonfigurasi; kalau semua kosong, app terbuka (anti-terkunci).
   const FULL_PIN = (process.env.ACCESS_PIN || process.env.APP_PASSWORD || '').trim();
   const VIEW_PIN = (process.env.VIEW_PIN || '').trim();
   const DEFAULT_ALLOW = ['administrator@officecerebrum.com', 'nyndaramadhanti@cerebrum.id'];
   const envAllow = (process.env.AUTHORIZED_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   const ALLOW_EMAILS = envAllow.length ? envAllow : DEFAULT_ALLOW;
-  const userEmail = (req.headers['x-user-email'] || '').toString().trim().toLowerCase();
-  const gateOn = !!(FULL_PIN || VIEW_PIN);
+  const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+  const SESSION_SECRET = (process.env.SESSION_SECRET || '').trim();
+  const googleOn = !!(GOOGLE_CLIENT_ID && SESSION_SECRET);
+  // Email admin HANYA dipercaya dari sesi terverifikasi (hasil login Google), bukan header mentah yang bisa dipalsukan.
+  const sess = (googleOn && req.headers['x-session']) ? verifySession(req.headers['x-session'], SESSION_SECRET) : null;
+  const sessionEmail = sess ? String(sess.email || '').toLowerCase() : '';
+
+  // Konfigurasi publik untuk frontend: apakah tombol Google ditampilkan + client id-nya.
+  if (action === 'getConfig') {
+    return res.status(200).end(JSON.stringify({ googleEnabled: googleOn, googleClientId: GOOGLE_CLIENT_ID }));
+  }
+  // Verifikasi kredensial Google -> terbitkan sesi admin bila email diizinkan.
+  if (action === 'verifyGoogle') {
+    if (!googleOn) return res.status(200).end(JSON.stringify({ success: false, message: 'Login Google belum dikonfigurasi.' }));
+    try {
+      const idToken = (args && args[0]) ? String(args[0]) : '';
+      const { google } = require('googleapis');
+      const gclient = new google.auth.OAuth2(GOOGLE_CLIENT_ID);
+      const ticket = await gclient.verifyIdToken({ idToken: idToken, audience: GOOGLE_CLIENT_ID });
+      const payload = ticket.getPayload() || {};
+      const email = String(payload.email || '').toLowerCase();
+      const verified = (payload.email_verified === true || payload.email_verified === 'true');
+      if (verified && email && ALLOW_EMAILS.includes(email)) {
+        return res.status(200).end(JSON.stringify({ success: true, level: 'full', email: email, session: signSession(email, SESSION_SECRET) }));
+      }
+      return res.status(200).end(JSON.stringify({ success: false, level: 'none', email: email, message: 'Email ini tidak diizinkan sebagai admin.' }));
+    } catch (e) {
+      return res.status(200).end(JSON.stringify({ success: false, message: 'Verifikasi Google gagal. Coba lagi.' }));
+    }
+  }
+
+  const gateOn = !!(FULL_PIN || VIEW_PIN || googleOn);
   let level;
   if (!gateOn) level = 'full';
-  else if ((FULL_PIN && authProvided === FULL_PIN) || (userEmail && ALLOW_EMAILS.includes(userEmail))) level = 'full';
+  else if ((FULL_PIN && authProvided === FULL_PIN) || (sessionEmail && ALLOW_EMAILS.includes(sessionEmail))) level = 'full';
   else if (VIEW_PIN && authProvided === VIEW_PIN) level = 'view';
   else level = 'none';
   // Action yang boleh diakses di level "view" (lihat-saja): baca terbatas + chat.

@@ -96,6 +96,7 @@
   <div id="toast" class="fixed right-5 bottom-5 z-[120] hide px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium"></div>
 
   <!-- Login gate (aktif hanya jika env APP_PASSWORD diisi di server) -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <div id="loginGate" class="hide fixed inset-0 z-[130] bg-gray-100 dark:bg-slate-950 flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-6">
       <div class="flex items-center gap-2.5 mb-1">
@@ -109,13 +110,11 @@
         <button type="submit" class="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Masuk</button>
         <button type="button" id="gateCancel" onclick="hideLoginGate()" class="hide w-full mt-2 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800">Batal</button>
       </form>
-      <div class="mt-3 text-center">
-        <button type="button" onclick="toggleAdminLogin()" class="text-xs text-gray-400 hover:text-indigo-600 underline">Admin officecerebrum? Masuk dengan email</button>
-      </div>
-      <div id="adminLoginBox" class="hide mt-3 pt-3 border-t border-gray-100 dark:border-slate-800">
-        <input id="loginEmail" type="email" placeholder="Email admin terdaftar" class="w-full rounded-lg bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
-        <div id="adminErr" class="hide text-sm text-rose-600 mt-2">Email tidak dikenali.</div>
-        <button type="button" onclick="submitAdminEmail()" class="w-full mt-2 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-900 dark:bg-slate-700 text-white font-semibold text-sm">Masuk sebagai admin</button>
+      <div id="googleBox" class="hide">
+        <div class="flex items-center gap-3 my-4"><div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div><span class="text-xs text-gray-400">atau</span><div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div></div>
+        <div class="flex justify-center"><div id="googleBtn"></div></div>
+        <div id="googleErr" class="hide text-sm text-rose-600 mt-2 text-center">Email tidak diizinkan.</div>
+        <p class="text-[11px] text-gray-400 text-center mt-2">Admin (nynda / administrator) masuk lewat Google — otomatis, tanpa PIN.</p>
       </div>
     </div>
   </div>
@@ -586,13 +585,13 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.26.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.27.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
-var USER_EMAIL = (function(){ try { return localStorage.getItem('tt_user_email') || ''; } catch(e){ return ''; } })();
+var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW, 'x-user-email': USER_EMAIL },
+    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW, 'x-session': SESSION_TOKEN },
     body: JSON.stringify({ action: action, args: args || [] })
   }).then(function(r){
     return r.text().then(function(txt){
@@ -605,7 +604,7 @@ function callApi(action, args){
     });
   });
 }
-function showLoginGate(canCancel){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var pw=document.getElementById('loginPw'); if(pw) pw.value=''; ['loginErr','adminErr'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.add('hide'); }); var c=document.getElementById('gateCancel'); if(c) c.classList.toggle('hide', !canCancel); var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },60); }
+function showLoginGate(canCancel){ var l=document.getElementById('loading'); if(l) l.classList.add('hide'); var g=document.getElementById('loginGate'); if(g) g.classList.remove('hide'); var pw=document.getElementById('loginPw'); if(pw) pw.value=''; ['loginErr','googleErr'].forEach(function(id){ var e=document.getElementById(id); if(e) e.classList.add('hide'); }); var c=document.getElementById('gateCancel'); if(c) c.classList.toggle('hide', !canCancel); try{ initGoogleButton(); }catch(_){ } var f=document.getElementById('loginPw'); if(f) setTimeout(function(){ f.focus(); },60); }
 function hideLoginGate(){ var g=document.getElementById('loginGate'); if(g) g.classList.add('hide'); }
 // Pemetaan email -> mode user. Tambah baris untuk anggota tim lain di sini (huruf kecil).
 var EMAIL_TO_USER = { 'nyndaramadhanti@cerebrum.id':'Nynda' , 'akbaralqahri@gmail.com':'Ali' , 'administrator@officecerebrum.com':'Nynda' };
@@ -622,15 +621,30 @@ function submitGatePin(){
       else { var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); }
     }).catch(function(){ var e=document.getElementById('loginErr'); if(e) e.classList.remove('hide'); });
 }
-function toggleAdminLogin(){ var b=document.getElementById('adminLoginBox'); if(b) b.classList.toggle('hide'); var em=document.getElementById('loginEmail'); if(em){ try{ if(!em.value) em.value=localStorage.getItem('tt_user_email')||''; }catch(_){ } setTimeout(function(){ em.focus(); },50); } }
-// Login admin via email terdaftar (administrator@officecerebrum.com / nyndaramadhanti@cerebrum.id) -> penuh tanpa PIN.
-function submitAdminEmail(){
-  var email=((document.getElementById('loginEmail')||{}).value||'').trim();
-  fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json','x-user-email':email},body:JSON.stringify({action:'login',args:[]})})
+// Login Google (OAuth): Google memverifikasi email ASLI -> backend terbitkan sesi admin bila email diizinkan.
+var _googleInited=false;
+function initGoogleButton(){
+  fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getConfig',args:[]})})
+    .then(function(r){ return r.json(); }).then(function(cfg){
+      var box=document.getElementById('googleBox');
+      if(!cfg || !cfg.googleEnabled || !cfg.googleClientId){ if(box) box.classList.add('hide'); return; }
+      if(box) box.classList.remove('hide');
+      (function render(tries){
+        if(window.google && google.accounts && google.accounts.id){
+          if(!_googleInited){ google.accounts.id.initialize({ client_id: cfg.googleClientId, callback: onGoogleCredential }); _googleInited=true; }
+          var el=document.getElementById('googleBtn'); if(el){ el.innerHTML=''; google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:280 }); }
+        } else if(tries<40){ setTimeout(function(){ render(tries+1); }, 150); }
+      })(0);
+    }).catch(function(){});
+}
+function onGoogleCredential(resp){
+  var idToken = resp && resp.credential; if(!idToken) return;
+  var err=document.getElementById('googleErr'); if(err) err.classList.add('hide');
+  fetch(API_BASE,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'verifyGoogle',args:[idToken]})})
     .then(function(r){ return r.json(); }).then(function(d){
-      if(d && d.level==='full'){ try{ localStorage.setItem('tt_user_email', email); }catch(e){} applyEmailUser(email); location.reload(); }
-      else { var e=document.getElementById('adminErr'); if(e) e.classList.remove('hide'); }
-    }).catch(function(){ var e=document.getElementById('adminErr'); if(e) e.classList.remove('hide'); });
+      if(d && d.success && d.session){ try{ localStorage.setItem('tt_session', d.session); localStorage.setItem('tt_user_email', d.email||''); }catch(e){} if(d.email) applyEmailUser(d.email); location.reload(); }
+      else { var e=document.getElementById('googleErr'); if(e){ e.textContent=(d&&d.message)||'Email tidak diizinkan.'; e.classList.remove('hide'); } }
+    }).catch(function(){ var e=document.getElementById('googleErr'); if(e) e.classList.remove('hide'); });
 }
 var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
 function makeRunner(){
@@ -851,11 +865,12 @@ function populateUserSelect(){
   const pics = state.options.pic || ['Nynda'];
   const EMAP = (typeof EMAIL_TO_USER==='object' && EMAIL_TO_USER) ? EMAIL_TO_USER : {};
   const email = loginEmail();
+  const adminSession = (function(){ try{ return !!localStorage.getItem('tt_session'); }catch(_){ return false; } })(); // login Google admin -> bebas seperti dev
   const dev = isDevEmail();
-  const locked = (!dev && email) ? (EMAP[String(email).trim().toLowerCase()]||null) : null;
+  const locked = (!dev && !adminSession && email) ? (EMAP[String(email).trim().toLowerCase()]||null) : null;
   const claimed = Object.values(EMAP).map(u=>baseName(u));
   let allowed;
-  if(dev) allowed = pics.slice();                                             // developer -> bebas pilih semua mode
+  if(dev || adminSession) allowed = pics.slice();                             // developer / admin Google -> bebas pilih semua mode
   else if(locked) allowed = pics.filter(p=>baseName(p)===baseName(locked));    // email terpetakan -> hanya user itu
   else if(email) allowed = pics.filter(p=>!claimed.includes(baseName(p)));     // login email lain -> user "diklaim" disembunyikan
   else allowed = pics.slice();                                                 // belum login email -> bebas

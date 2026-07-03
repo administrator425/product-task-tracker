@@ -10,6 +10,12 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.27.0 — Login Google (OAuth) untuk admin
+- Ganti kotak "email admin" (yang bisa dipalsukan) dengan tombol **Masuk dengan Google**. Google memverifikasi email ASLI; backend cek tanda tangan token + daftar email admin, lalu menerbitkan **sesi ber-tanda-tangan (HMAC)** 30 hari. Email admin kini **tidak lagi dipercaya dari header mentah** — hanya dari sesi terverifikasi.
+- Nynda & administrator: klik Masuk dengan Google → **langsung akses penuh tanpa PIN**, dan **bisa ganti mode user** (bug "terkunci" saat login email diperbaiki — admin diperlakukan bebas seperti Dev).
+- PIN tetap: **676767** penuh, **098098** lihat-saja untuk yang bukan admin.
+- Env baru di Vercel: `GOOGLE_CLIENT_ID` (dari Google Cloud) + `SESSION_SECRET` (teks acak). Bila keduanya kosong, tombol Google tak muncul (app tetap jalan dengan PIN).
+
 ## 1.26.0 — Gerbang PIN ganda + auto-login admin
 - Gerbang kini **memblokir total** (tak ada isi yang terlihat) sampai lolos salah satu: **PIN penuh** (env `ACCESS_PIN`), **PIN lihat-saja** (env `VIEW_PIN`), atau **email admin terdaftar** (`administrator@officecerebrum.com` / `nyndaramadhanti@cerebrum.id`) yang **langsung masuk tanpa PIN**.
 - Popup PIN muncul dari awal untuk selain admin — **PIN saja, tanpa input email**. PIN penuh → kelola task; PIN lihat → mode Lintas (lihat-saja + chat).
