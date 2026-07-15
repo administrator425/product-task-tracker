@@ -10,6 +10,19 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.30.0 — Mode Dev tersembunyi (trigger rahasia)
+- Opsi **"Dev"** kini **disembunyikan** dari halaman pilih identitas dan dropdown **Mode User** — supaya bisa dites sebagai user biasa. Tidak ada lagi tombol Dev yang terlihat.
+- Masuk Mode Dev lewat **trigger rahasia**: **tekan-tahan logo ProductTrack ~2 detik** (di sidebar) → muncul prompt **PIN Dev**. Jalan di desktop maupun HP (di HP: buka menu/sidebar dulu).
+- **Tetap butuh kredensial**: PIN Dev = env `DEV_PIN` (default `3108`), diverifikasi di server — berlaku walau PIN per-user sudah di-set. Login **email dev** (Google) tetap langsung jadi Dev tanpa PIN.
+- **Selalu tersembunyi**: setelah pindah dari Dev ke user biasa, harus ulangi trigger + PIN untuk kembali ke Dev. Saat sedang aktif sebagai Dev, mode-nya tetap tampil di switcher agar jelas.
+- Dev = super-user testing: melihat semua task & bisa semua aksi (termasuk menetapkan "Done").
+
+## 1.29.0 — Status "Done" hanya untuk manager
+- Status **"Done"** kini **hanya bisa ditetapkan oleh manager (Nynda) / Dev**. User biasa (PIC lain) maksimal memindahkan task sampai **"Review PM"** — dari situ manager yang memutuskan Done.
+- Opsi "Done" **disembunyikan** dari dropdown status (tabel List & modal task) untuk non-manager, kecuali task-nya memang sudah Done. Mencoba men-drag kartu ke kolom **Done** di Kanban akan ditolak dengan pesan dan kartu kembali ke posisi semula.
+- Task yang **sudah** Done tetap **boleh ditarik balik** oleh user biasa (mis. ke Revisi/In progress) — yang dilarang hanya aksi *menetapkan* Done.
+- Ditegakkan **dua lapis**: UI (`public/index.html`) dan **backend** (`api/_sheets.js` pada `saveTask` & `quickUpdateField`) sehingga tak bisa diakali lewat request langsung. Daftar manager mengikuti env `MANAGERS` (default `Nynda`).
+
 ## 1.28.1 — Perbaikan: PIN identitas selalu diminta
 - Fix: di halaman "Masuk sebagai siapa?", memilih identitas yang **kebetulan sama dengan default** (mis. Nynda saat baru reset) tak lagi melewati PIN per-user. Sekarang PIN identitas **selalu** diminta bila di-set (Nynda, Dev, dll.), apa pun default-nya.
 

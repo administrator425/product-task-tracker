@@ -154,7 +154,7 @@
     <!-- Sidebar -->
     <aside id="sidebar" class="w-[260px] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 hidden md:flex flex-col shrink-0">
       <div class="h-16 px-5 flex items-center border-b border-gray-100 dark:border-slate-800">
-        <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center mr-2.5">
+        <div id="brandLogo" class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center mr-2.5" title="ProductTrack">
           <span class="material-icons-round text-[20px]">task_alt</span>
         </div>
         <div>
@@ -598,7 +598,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.28.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.30.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -706,6 +706,7 @@ const dummyTasks = [
 function init() {
   applyTheme();
   injectUtilityClasses();
+  setupDevUnlock();
   detectViewLock();
   if (IS_GAS) {
     GAS.withSuccessHandler(data => {
@@ -759,6 +760,11 @@ function canMirror(){ return !isViewOnly() && isManager(state.currentUser); } //
 function inLintasView(t){ return isExternalTask(t) || isMirrored(t); }
 function canCreateExternal(){ return !isViewOnly() && isManager(state.currentUser); }
 function canEditTask(t){ if(isViewOnly()) return false; if(isExternalTask(t)) return isManager(state.currentUser); return true; }
+// Status "Done" bersifat final: hanya manager/dev yang boleh menetapkannya.
+// User biasa maksimal sampai "Review PM"; task yang sudah Done tetap boleh ditarik balik.
+function canSetDone(){ return isManager(state.currentUser); }
+function isDoneStatus(v){ return String(v||'').trim().toLowerCase()==='done'; }
+function statusOptionsFor(currentStatus){ let o=state.options.status||[]; if(!canSetDone() && !isDoneStatus(currentStatus)) o=o.filter(s=>!isDoneStatus(s)); return o; }
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 // Peran user pada sebuah task: PIC (penanggung jawab) vs Support (hanya membantu).
@@ -888,14 +894,17 @@ function populateUserSelect(){
   else if(email) allowed = pics.filter(p=>!claimed.includes(baseName(p)));     // login email lain -> user "diklaim" disembunyikan
   else allowed = pics.slice();                                                 // belum login email -> bebas
   if(!allowed.length) allowed = pics;
-  if(!locked) allowed = ['Dev'].concat(allowed);   // mode Dev untuk yang tidak terkunci (akses via PIN; dev email tanpa PIN)
+  // Mode "Dev" TERSEMBUNYI: tidak ditawarkan sebagai opsi biasa. Masuk Dev hanya lewat
+  // trigger rahasia (long-press logo) + DEV_PIN. Tetap tampil bila memang sedang aktif
+  // sebagai Dev (agar switcher menampilkan mode saat ini) atau login via email dev.
+  if((state.currentUser==='Dev' || dev) && !locked) allowed = ['Dev'].concat(allowed.filter(p=>p!=='Dev'));
   select.innerHTML = allowed.map(p=>`<option value="${escapeHtml(p)}">${p==='Dev'?'Dev (lihat semua)':escapeHtml(p)}</option>`).join('');
   if(locked){ const lm=pics.find(p=>baseName(p)===baseName(locked)); if(lm) state.currentUser=lm; }
   if(!allowed.includes(state.currentUser)){ const match=allowed.find(p=>baseName(p)===baseName(state.currentUser)); state.currentUser = match || allowed[0]; }
   select.value = state.currentUser;
   select.disabled = !!locked;
 }
-function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);try{localStorage.setItem('tt_identity_confirmed','1');}catch(_){ }hideIdentityGate();state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
+function setCurrentUser(user){state.currentUser=user;localStorage.setItem('tt_current_user',user);try{localStorage.setItem('tt_identity_confirmed','1');}catch(_){ }hideIdentityGate();state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateUserSelect();populateModalDropdowns();renderAll();updateCommNavBadge();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
 // ---- Halaman pilih identitas (setelah login PIN penuh) ----
 function identityConfirmed(){ try{ return localStorage.getItem('tt_identity_confirmed')==='1'; }catch(_){ return false; } }
 function needIdentityPick(){
@@ -909,7 +918,7 @@ function hideIdentityGate(){ var g=document.getElementById('identityGate'); if(g
 function showIdentityGate(){
   var g=document.getElementById('identityGate'), grid=document.getElementById('identityGrid'); if(!g||!grid) return;
   var pics=(state.options.pic||[]).filter(function(p){ return baseName(p)!==baseName(VIEWONLY_USER); });
-  var items=pics.slice(); items.push('Dev');
+  var items=pics.slice(); // 'Dev' TERSEMBUNYI dari pemilih identitas — masuk lewat trigger rahasia (long-press logo) + DEV_PIN.
   grid.innerHTML=items.map(function(p){
     var isDev=(p==='Dev');
     var face=isDev?'<span class="material-icons-round text-[18px]">code</span>':escapeHtml(initials(p));
@@ -939,6 +948,23 @@ function requestUserSwitch(value){
     openPinModal(value, value, value); return;
   }
   setCurrentUser(value);
+}
+// ---- Trigger rahasia Mode Dev: tekan-tahan logo ProductTrack (~2 detik) -> prompt DEV_PIN ----
+function unlockDev(){
+  if(isViewOnly() || state.lockView) return;            // mode lihat-saja/berbagi: abaikan
+  if(isDev()){ showToast('Sudah dalam Mode Dev.'); return; }
+  if(isDevEmail()){ setCurrentUser('Dev'); showToast('Mode Dev aktif.'); return; }  // email dev = sudah kredensial
+  openPinModal('__dev__','Dev','Mode Dev (rahasia)');    // sukses -> setCurrentUser('Dev') via submitPin
+}
+function setupDevUnlock(){
+  var el=document.getElementById('brandLogo'); if(!el || el._devWired) return; el._devWired=true;
+  el.style.userSelect='none'; el.style.webkitUserSelect='none'; el.style.touchAction='manipulation';
+  var timer=null; var HOLD=2000;
+  function start(){ cancel(); timer=setTimeout(function(){ timer=null; unlockDev(); }, HOLD); }
+  function cancel(){ if(timer){ clearTimeout(timer); timer=null; } }
+  el.addEventListener('pointerdown', start);
+  ['pointerup','pointerleave','pointercancel'].forEach(function(ev){ el.addEventListener(ev, cancel); });
+  el.addEventListener('contextmenu', function(e){ e.preventDefault(); });  // cegah menu tekan-tahan di HP
 }
 function openPinModal(verifyUser, target, label){
   state._pinPending={verifyUser:verifyUser, target:target};
@@ -1183,6 +1209,8 @@ function quickUpdate(ev, id, field, value){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   if(!canEditTask(t)){ if(isExternalTask(t)&&!isViewOnly()) showToast('Hanya manager/dev yang bisa mengubah task lintas divisi.', false); return; }
   const prev=t[field]; if(same(prev,value)) return;
+  // Gerbang "Done": non-manager tak boleh memindahkan task KE Done (menarik balik boleh).
+  if(field==='status' && isDoneStatus(value) && !isDoneStatus(prev) && !canSetDone()){ showToast('Hanya manager yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan ke manager.', false); renderAll(); return; }
   t[field]=value; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
   if(IS_GAS){
     GAS.withSuccessHandler(res=>{
@@ -1194,7 +1222,7 @@ function quickUpdate(ev, id, field, value){
 function inlineSelect(field, t){
   const cur=t[field]||'';
   if(!canEditTask(t)) return `<span class="text-xs font-medium text-gray-700 dark:text-slate-200">${escapeHtml(cur||'—')}</span>`;
-  const opts=state.options[field]||[];
+  const opts=(field==='status') ? statusOptionsFor(cur) : (state.options[field]||[]);
   const options=opts.map(o=>`<option value="${escapeAttr(o)}" ${same(o,cur)?'selected':''}>${escapeHtml(o)}</option>`).join('');
   return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium text-gray-700 dark:text-slate-200 bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
 }
@@ -1569,7 +1597,7 @@ function openTaskModal(id=''){
   populateVerbSelect(t?.stage||'', t?.verb||'', t?.objek||'');
   setVal('fieldJumlah', t?.jumlah||''); setVal('fieldDetail', t?.detail||'');
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
-  setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal');
+  fillSelect('fieldStatus', statusOptionsFor(t?.status||'Todo'), null, t?.status||'Todo'); setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal');
   setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
   setVal('fieldDivisiTujuan', t?.divisiTujuan||''); setVal('fieldKontakDivisi', t?.kontakDivisi||'');
   const selectedPlatform=String(t?.platform||'').split(',').map(x=>x.trim()).filter(Boolean);
@@ -1602,6 +1630,8 @@ function saveTaskFromModal(){
   if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }
   const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
   if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
+  // Gerbang "Done": non-manager tak boleh menyimpan task sebagai Done kecuali sebelumnya memang sudah Done.
+  if(isDoneStatus(task.status) && !canSetDone() && !(existing && isDoneStatus(existing.status))){ showToast('Hanya manager yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan ke manager.', false); return; }
   task.actor=state.currentUser;
   document.getElementById('loading').classList.remove('hide');
   if(IS_GAS){GAS.withSuccessHandler(res=>{document.getElementById('loading').classList.add('hide'); if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).saveTask(task);}

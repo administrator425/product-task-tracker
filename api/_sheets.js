@@ -123,6 +123,25 @@ function getManagers() {
   return raw.split(',').map(s => s.trim()).filter(Boolean);
 }
 
+// Nama tanpa suffix "(...)" -> lowercase, untuk perbandingan yang toleran.
+function baseName(s) {
+  return String(s || '').replace(/\s*\(.*?\)\s*$/, '').trim().toLowerCase();
+}
+
+// Apakah actor seorang manager? (daftar MANAGERS atau akun Dev). Dipakai untuk
+// menegakkan aturan: hanya manager yang boleh menetapkan status "Done".
+function isManagerActor(name) {
+  const n = baseName(name);
+  if (!n) return false;
+  if (n === 'dev') return true;
+  return getManagers().some(m => baseName(m) === n);
+}
+
+// Status "Done" bersifat final dan hanya boleh diset oleh manager.
+function isDoneStatus(v) {
+  return String(v || '').trim().toLowerCase() === 'done';
+}
+
 /* ------------------------------------------------------------------ */
 /* Low-level Sheets helpers                                            */
 /* ------------------------------------------------------------------ */
@@ -359,6 +378,14 @@ async function saveTask(task) {
   const isUpdate = rowNumber !== -1;
   const actor = String(task.actor || '').trim() || 'Unknown';
 
+  // Gerbang "Done": hanya manager yang boleh MENETAPKAN status ke Done.
+  // Perpindahan KE Done oleh non-manager ditolak; task yang sudah Done boleh
+  // tetap Done atau ditarik balik (bukan aksi "membuat Done").
+  const oldStatus = (existingTask && existingTask.status) || '';
+  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !isManagerActor(actor)) {
+    return { success: false, message: 'Hanya manager yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan ke manager.' };
+  }
+
   // Pastikan ID terisi. createdBy = pembuat task (di-set saat create, dipertahankan saat update).
   const finalId = task.id || generateTaskId(ids);
   const createdBy = isUpdate ? ((existingTask && existingTask.createdBy) || task.createdBy || '') : actor;
@@ -422,6 +449,17 @@ async function quickUpdateField(taskId, field, value, actor) {
       return { success: true, message: `${f} dinonaktifkan (tidak disimpan).`, task: rowToTask(cur0[0] || [], row) };
     }
     return { success: false, message: 'Field tidak didukung: ' + field };
+  }
+
+  // Gerbang "Done": non-manager tak boleh memindahkan task KE Done. Task yang
+  // sudah Done tetap boleh diubah (mis. ditarik balik) — yang dilarang hanya
+  // aksi menetapkan Done. Baca status lama dulu untuk membedakannya.
+  if (f === 'status' && isDoneStatus(value) && !isManagerActor(actor)) {
+    const cur0 = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${row}:${CONFIG.LAST_COL_LETTER}${row}`);
+    const existing = rowToTask(cur0[0] || [], row);
+    if (!isDoneStatus(existing.status)) {
+      return { success: false, message: 'Hanya manager yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan ke manager.' };
+    }
   }
 
   await valuesUpdate(`${CONFIG.TASK_SHEET}!${col}${row}`, [[value]]);
