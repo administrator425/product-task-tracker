@@ -137,9 +137,26 @@ function isManagerActor(name) {
   return getManagers().some(m => baseName(m) === n);
 }
 
-// Status "Done" bersifat final dan hanya boleh diset oleh manager.
+// Status "Done" bersifat final dan hanya boleh diset oleh "Done approver".
 function isDoneStatus(v) {
   return String(v || '').trim().toLowerCase() === 'done';
+}
+
+// Siapa yang boleh MENETAPKAN status "Done". Sengaja TERPISAH dari hak manager:
+// Dhea & Alya boleh meng-approve Done tanpa ikut jadi manager (tetap Member).
+// Manager (MANAGERS) & Dev selalu ikut boleh.
+function getDoneApprovers() {
+  const raw = process.env.DONE_APPROVERS || 'Nynda,Dhea,Alya';
+  return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+function canApproveDone(name) {
+  if (!baseName(name)) return false;
+  if (isManagerActor(name)) return true;
+  const n = baseName(name);
+  return getDoneApprovers().some(a => baseName(a) === n);
+}
+function doneDeniedMessage() {
+  return 'Hanya ' + getDoneApprovers().join(', ') + ' yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan.';
 }
 
 /* ------------------------------------------------------------------ */
@@ -378,12 +395,12 @@ async function saveTask(task) {
   const isUpdate = rowNumber !== -1;
   const actor = String(task.actor || '').trim() || 'Unknown';
 
-  // Gerbang "Done": hanya manager yang boleh MENETAPKAN status ke Done.
-  // Perpindahan KE Done oleh non-manager ditolak; task yang sudah Done boleh
+  // Gerbang "Done": hanya Done approver yang boleh MENETAPKAN status ke Done.
+  // Perpindahan KE Done oleh yang tak berhak ditolak; task yang sudah Done boleh
   // tetap Done atau ditarik balik (bukan aksi "membuat Done").
   const oldStatus = (existingTask && existingTask.status) || '';
-  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !isManagerActor(actor)) {
-    return { success: false, message: 'Hanya manager yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan ke manager.' };
+  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !canApproveDone(actor)) {
+    return { success: false, message: doneDeniedMessage() };
   }
 
   // Pastikan ID terisi. createdBy = pembuat task (di-set saat create, dipertahankan saat update).
@@ -451,14 +468,14 @@ async function quickUpdateField(taskId, field, value, actor) {
     return { success: false, message: 'Field tidak didukung: ' + field };
   }
 
-  // Gerbang "Done": non-manager tak boleh memindahkan task KE Done. Task yang
-  // sudah Done tetap boleh diubah (mis. ditarik balik) — yang dilarang hanya
-  // aksi menetapkan Done. Baca status lama dulu untuk membedakannya.
-  if (f === 'status' && isDoneStatus(value) && !isManagerActor(actor)) {
+  // Gerbang "Done": yang bukan Done approver tak boleh memindahkan task KE Done.
+  // Task yang sudah Done tetap boleh diubah (mis. ditarik balik) — yang dilarang
+  // hanya aksi menetapkan Done. Baca status lama dulu untuk membedakannya.
+  if (f === 'status' && isDoneStatus(value) && !canApproveDone(actor)) {
     const cur0 = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${row}:${CONFIG.LAST_COL_LETTER}${row}`);
     const existing = rowToTask(cur0[0] || [], row);
     if (!isDoneStatus(existing.status)) {
-      return { success: false, message: 'Hanya manager yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan ke manager.' };
+      return { success: false, message: doneDeniedMessage() };
     }
   }
 
@@ -734,6 +751,7 @@ async function getBootstrapData(opts) {
       meta: {
         sheetName: CONFIG.TASK_SHEET,
         managers: getManagers(),
+        doneApprovers: getDoneApprovers(),
         generatedAt: nowStamp(),
       },
     };
@@ -750,6 +768,7 @@ async function getBootstrapData(opts) {
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
+      doneApprovers: getDoneApprovers(),
       generatedAt: nowStamp(),
     },
   };
@@ -1266,5 +1285,6 @@ module.exports = {
   // rumus nama task (kata kerja/objek)
   seedFormulaTemplate,
   // (exported for tests)
-  _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp },
+  _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp,
+    isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus },
 };

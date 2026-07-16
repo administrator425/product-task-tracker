@@ -163,46 +163,67 @@
         </div>
       </div>
 
-      <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
-        <button onclick="switchView('hariini')" id="nav-hariini" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">wb_sunny</span> Hari Ini
-        </button>
-        <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">space_dashboard</span> Dashboard
-        </button>
-        <button onclick="switchView('extdash')" id="nav-extdash" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">dashboard_customize</span> Dashboard Lain
-        </button>
-        <button onclick="switchView('mylinks')" id="nav-mylinks" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">bookmark</span> Link Saya
-        </button>
-        <button onclick="switchView('mynotes')" id="nav-mynotes" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">sticky_note_2</span> Catatan Saya
-        </button>
-        <button onclick="switchView('kanban')" id="nav-kanban" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">view_kanban</span> Kanban Status
-        </button>
-        <button onclick="switchView('list')" id="nav-list" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">table_rows</span> Task List
-        </button>
-        <button onclick="switchView('timeline')" id="nav-timeline" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">view_timeline</span> Timeline
-        </button>
-        <button onclick="switchView('calendar')" id="nav-calendar" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">calendar_month</span> Calendar
-        </button>
-        <button onclick="switchView('communication')" id="nav-communication" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">forum</span> Komunikasi
-        </button>
-        <button onclick="switchView('activity')" id="nav-activity" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">history_edu</span> Riwayat Aktivitas
-        </button>
-        <button onclick="switchView('report')" id="nav-report" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">summarize</span> Laporan
-        </button>
-        <button onclick="switchView('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-          <span class="material-icons-round text-[20px]">tune</span> Dropdown Master
-        </button>
+      <!-- Nav dikelompokkan (judul statis). Header grup otomatis disembunyikan
+           oleh syncNavGroups() bila semua tab di dalamnya tersembunyi untuk peran ini. -->
+      <nav class="p-3 flex-1 overflow-y-auto">
+        <div id="navgrp-ringkasan" class="nav-group space-y-1 mt-4 first:mt-0">
+          <div class="nav-group-title px-3 pb-1 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest select-none">Ringkasan</div>
+          <button onclick="switchView('hariini')" id="nav-hariini" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">wb_sunny</span> Hari Ini
+          </button>
+          <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">space_dashboard</span> Dashboard
+          </button>
+          <button onclick="switchView('extdash')" id="nav-extdash" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">dashboard_customize</span> Dashboard Lain
+          </button>
+        </div>
+
+        <div id="navgrp-task" class="nav-group space-y-1 mt-4 first:mt-0">
+          <div class="nav-group-title px-3 pb-1 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest select-none">Task</div>
+          <button onclick="switchView('kanban')" id="nav-kanban" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">view_kanban</span> Kanban Status
+          </button>
+          <button onclick="switchView('list')" id="nav-list" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">table_rows</span> Task List
+          </button>
+          <button onclick="switchView('timeline')" id="nav-timeline" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">view_timeline</span> Timeline
+          </button>
+          <button onclick="switchView('calendar')" id="nav-calendar" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">calendar_month</span> Calendar
+          </button>
+        </div>
+
+        <div id="navgrp-kolaborasi" class="nav-group space-y-1 mt-4 first:mt-0">
+          <div class="nav-group-title px-3 pb-1 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest select-none">Kolaborasi</div>
+          <button onclick="switchView('communication')" id="nav-communication" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">forum</span> Komunikasi
+          </button>
+        </div>
+
+        <div id="navgrp-ruangsaya" class="nav-group space-y-1 mt-4 first:mt-0">
+          <div class="nav-group-title px-3 pb-1 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest select-none">Ruang Saya</div>
+          <button onclick="switchView('mylinks')" id="nav-mylinks" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">bookmark</span> Link Saya
+          </button>
+          <button onclick="switchView('mynotes')" id="nav-mynotes" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">sticky_note_2</span> Catatan Saya
+          </button>
+        </div>
+
+        <div id="navgrp-manajer" class="nav-group space-y-1 mt-4 first:mt-0">
+          <div class="nav-group-title px-3 pb-1 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest select-none">Manajer</div>
+          <button onclick="switchView('report')" id="nav-report" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">summarize</span> Laporan
+          </button>
+          <button onclick="switchView('activity')" id="nav-activity" class="nav-item hide w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">history_edu</span> Riwayat Aktivitas
+          </button>
+          <button onclick="switchView('settings')" id="nav-settings" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">tune</span> Dropdown Master
+          </button>
+        </div>
       </nav>
 
       <div class="p-3 border-t border-gray-100 dark:border-slate-800 space-y-2.5">
@@ -598,7 +619,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.30.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.31.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -684,7 +705,7 @@ const IS_GAS = true; // selalu ada backend sekarang (GAS native ATAU Vercel API)
 const TODAY = new Date(); TODAY.setHours(0,0,0,0);
 let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
-  managers: ['Nynda'], managerFocus: '', activity: [], quickFilter: 'all',
+  managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
   selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
@@ -721,6 +742,7 @@ function init() {
       state.guestMode = !!data.viewOnly;                 // backend: tak ada PIN benar -> data terbatas
       if (state.guestMode) state.currentUser = VIEWONLY_USER;
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
+      if (data.meta && data.meta.doneApprovers && data.meta.doneApprovers.length) state.doneApprovers = data.meta.doneApprovers;
       afterLoad();
     }).withFailureHandler(err => {
       var gate=document.getElementById('loginGate');
@@ -760,11 +782,18 @@ function canMirror(){ return !isViewOnly() && isManager(state.currentUser); } //
 function inLintasView(t){ return isExternalTask(t) || isMirrored(t); }
 function canCreateExternal(){ return !isViewOnly() && isManager(state.currentUser); }
 function canEditTask(t){ if(isViewOnly()) return false; if(isExternalTask(t)) return isManager(state.currentUser); return true; }
-// Status "Done" bersifat final: hanya manager/dev yang boleh menetapkannya.
-// User biasa maksimal sampai "Review PM"; task yang sudah Done tetap boleh ditarik balik.
-function canSetDone(){ return isManager(state.currentUser); }
+// Status "Done" bersifat final: hanya "Done approver" yang boleh menetapkannya.
+// Daftar approver TERPISAH dari hak manager (Dhea & Alya boleh Done tapi tetap Member).
+// User lain maksimal sampai "Review PM"; task yang sudah Done tetap boleh ditarik balik.
+function canSetDone(){
+  if(isViewOnly()) return false;
+  if(isManager(state.currentUser)) return true;                 // manager + Dev
+  const u=baseName(state.currentUser);
+  return (state.doneApprovers||[]).some(a=>baseName(a)===u);
+}
 function isDoneStatus(v){ return String(v||'').trim().toLowerCase()==='done'; }
 function statusOptionsFor(currentStatus){ let o=state.options.status||[]; if(!canSetDone() && !isDoneStatus(currentStatus)) o=o.filter(s=>!isDoneStatus(s)); return o; }
+function doneDeniedMsg(){ return 'Hanya '+((state.doneApprovers||[]).join(', ')||'manager')+' yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan.'; }
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 // Peran user pada sebuah task: PIC (penanggung jawab) vs Support (hanya membantu).
@@ -825,6 +854,15 @@ function applyRoleUI(){
   const mineActive=mine.filter(t=>!isDone(t));
   const el=document.getElementById('myTasksBadge');
   if(el) el.textContent = vo ? `Mode lihat saja • semua task (${state.tasks.length})` : (mgr ? `Melihat semua task (${state.tasks.length})` : `${mineActive.length} task aktif Anda • ${mine.length} total`);
+  syncNavGroups();
+}
+// Judul grup nav ikut sembunyi bila SEMUA tab di dalamnya tersembunyi untuk peran ini
+// (mis. grup "Manajer" untuk Member, atau "Ruang Saya" saat mode lihat-saja).
+function syncNavGroups(){
+  document.querySelectorAll('.nav-group').forEach(function(g){
+    const anyVisible=[...g.querySelectorAll('.nav-item')].some(b=>!b.classList.contains('hide'));
+    g.classList.toggle('hide', !anyVisible);
+  });
 }
 
 /* ---------- Theme / chrome ---------- */
@@ -1209,8 +1247,8 @@ function quickUpdate(ev, id, field, value){
   const t=state.tasks.find(x=>x.id===id); if(!t) return;
   if(!canEditTask(t)){ if(isExternalTask(t)&&!isViewOnly()) showToast('Hanya manager/dev yang bisa mengubah task lintas divisi.', false); return; }
   const prev=t[field]; if(same(prev,value)) return;
-  // Gerbang "Done": non-manager tak boleh memindahkan task KE Done (menarik balik boleh).
-  if(field==='status' && isDoneStatus(value) && !isDoneStatus(prev) && !canSetDone()){ showToast('Hanya manager yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan ke manager.', false); renderAll(); return; }
+  // Gerbang "Done": yang bukan Done approver tak boleh memindahkan task KE Done (menarik balik boleh).
+  if(field==='status' && isDoneStatus(value) && !isDoneStatus(prev) && !canSetDone()){ showToast(doneDeniedMsg(), false); renderAll(); return; }
   t[field]=value; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
   if(IS_GAS){
     GAS.withSuccessHandler(res=>{
@@ -1630,8 +1668,8 @@ function saveTaskFromModal(){
   if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }
   const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
   if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
-  // Gerbang "Done": non-manager tak boleh menyimpan task sebagai Done kecuali sebelumnya memang sudah Done.
-  if(isDoneStatus(task.status) && !canSetDone() && !(existing && isDoneStatus(existing.status))){ showToast('Hanya manager yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan ke manager.', false); return; }
+  // Gerbang "Done": yang bukan Done approver tak boleh menyimpan task sebagai Done kecuali sebelumnya memang sudah Done.
+  if(isDoneStatus(task.status) && !canSetDone() && !(existing && isDoneStatus(existing.status))){ showToast(doneDeniedMsg(), false); return; }
   task.actor=state.currentUser;
   document.getElementById('loading').classList.remove('hide');
   if(IS_GAS){GAS.withSuccessHandler(res=>{document.getElementById('loading').classList.add('hide'); if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).saveTask(task);}

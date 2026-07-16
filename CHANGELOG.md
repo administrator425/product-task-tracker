@@ -10,6 +10,13 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.31.0 — Done approver (Nynda, Dhea, Alya) + tab dikelompokkan
+- **Siapa yang boleh set "Done"** kini: **Nynda, Dhea, Alya** (+ Dev). Sebelumnya hanya manager.
+- Izin Done dibuat **terpisah dari hak manager**: Dhea & Alya **tetap Member** (hanya lihat task sendiri, tak bisa task lintas divisi / Laporan / Fokus PIC) — mereka **hanya** dapat tambahan wewenang menutup task ke "Done".
+- Daftar approver bisa diubah lewat env baru **`DONE_APPROVERS`** (default `Nynda,Dhea,Alya`). Manager (`MANAGERS`) & Dev otomatis ikut boleh. Pesan penolakan menyebut nama approver secara otomatis.
+- **Sidebar dikelompokkan** jadi 5 grup berjudul: **Ringkasan** (Hari Ini, Dashboard, Dashboard Lain) · **Task** (Kanban, Task List, Timeline, Calendar) · **Kolaborasi** (Komunikasi) · **Ruang Saya** (Link Saya, Catatan Saya) · **Manajer** (Laporan, Riwayat Aktivitas, Dropdown Master).
+- Judul grup **otomatis ikut sembunyi** bila semua tab di dalamnya tak berlaku untuk peran itu (mis. grup "Manajer" tak muncul untuk Member, "Ruang Saya" tak muncul di mode lihat-saja).
+
 ## 1.30.0 — Mode Dev tersembunyi (trigger rahasia)
 - Opsi **"Dev"** kini **disembunyikan** dari halaman pilih identitas dan dropdown **Mode User** — supaya bisa dites sebagai user biasa. Tidak ada lagi tombol Dev yang terlihat.
 - Masuk Mode Dev lewat **trigger rahasia**: **tekan-tahan logo ProductTrack ~2 detik** (di sidebar) → muncul prompt **PIN Dev**. Jalan di desktop maupun HP (di HP: buka menu/sidebar dulu).

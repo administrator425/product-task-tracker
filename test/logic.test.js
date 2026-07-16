@@ -76,4 +76,28 @@ const def = taskToRow({ taskName: 'X' }, null);
 eq('status default Todo', def[3], 'Todo');
 eq('priority default Normal', def[4], 'Normal');
 
+console.log('\nIzin "Done" (Done approver terpisah dari hak manager):');
+const { canApproveDone, isManagerActor, isDoneStatus } = _internals;
+// Yang berwenang menutup task ke "Done".
+ok('Nynda (manager) boleh Done', canApproveDone('Nynda') === true);
+ok('Dhea boleh Done', canApproveDone('Dhea') === true);
+ok('Alya boleh Done', canApproveDone('Alya') === true);
+ok('Dev boleh Done', canApproveDone('Dev') === true);
+// Yang TIDAK berwenang.
+ok('Ali tidak boleh Done', canApproveDone('Ali') === false);
+ok('Andika tidak boleh Done', canApproveDone('Andika') === false);
+ok('Uma tidak boleh Done', canApproveDone('Uma') === false);
+ok('nama kosong tidak boleh Done', canApproveDone('') === false);
+// Toleran spasi/kapitalisasi.
+ok('"  dhea  " tetap boleh Done', canApproveDone('  dhea  ') === true);
+ok('"ALYA" tetap boleh Done', canApproveDone('ALYA') === true);
+// Kunci pemisahan: Dhea & Alya boleh Done TAPI bukan manager.
+ok('Dhea BUKAN manager', isManagerActor('Dhea') === false);
+ok('Alya BUKAN manager', isManagerActor('Alya') === false);
+ok('Nynda manager', isManagerActor('Nynda') === true);
+// Pengenalan status Done.
+ok('"Done" dikenali', isDoneStatus('Done') === true);
+ok('" done " dikenali', isDoneStatus(' done ') === true);
+ok('"Review PM" bukan Done', isDoneStatus('Review PM') === false);
+
 console.log(`\n✅ Semua ${passed} assertion lulus.`);
