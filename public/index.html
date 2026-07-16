@@ -593,6 +593,25 @@
           </div>
         </form>
 
+        <!-- Ceklis task: PM menyusun langkah/output yang diharapkan, PIC mencentang. -->
+        <div id="modalChecklistBox" class="mt-5 border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between gap-3">
+            <div class="font-semibold text-sm flex items-center gap-1.5 text-gray-900 dark:text-white"><span class="material-icons-round text-[18px] text-emerald-600">checklist</span> Ceklis Pengerjaan</div>
+            <div class="flex items-center gap-2 shrink-0">
+              <span id="checklistCount" class="text-[11px] font-semibold text-gray-500 dark:text-slate-400">0/0</span>
+              <div class="w-20 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden">
+                <div id="checklistBar" class="h-full bg-emerald-500 transition-all" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+          <div id="checklistHint" class="hide px-4 py-2 text-[11px] text-gray-500 dark:text-slate-400 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-900/40"></div>
+          <div id="checklistItems" class="p-2 bg-gray-50/60 dark:bg-slate-950/40 max-h-[220px] overflow-y-auto space-y-1 scrollbar-thin"></div>
+          <div id="checklistAddRow" class="p-3 flex gap-2 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+            <input id="checklistInput" onkeydown="checklistInputKey(event)" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-emerald-300" placeholder="Tambah langkah / output yang diharapkan…">
+            <button type="button" onclick="addChecklistFromInput()" class="px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm">Tambah</button>
+          </div>
+        </div>
+
         <div id="modalCommentsBox" class="hide mt-5 border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
           <div class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
             <div class="font-semibold text-sm flex items-center gap-1.5 text-gray-900 dark:text-white"><span class="material-icons-round text-[18px] text-indigo-600">chat</span> Komunikasi Task</div>
@@ -619,7 +638,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.31.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.32.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -680,7 +699,7 @@ function onGoogleCredential(resp){
       else { var e=document.getElementById('googleErr'); if(e){ e.textContent=(d&&d.message)||'Email tidak diizinkan.'; e.classList.remove('hide'); } }
     }).catch(function(){ var e=document.getElementById('googleErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','setChecklistDone','deleteChecklistItem','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -707,7 +726,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -739,6 +758,7 @@ function init() {
       state.links = data.links || [];
       state.dashboards = data.dashboards || [];
       state.notes = data.notes || [];
+      state.checklistSummary = data.checklistSummary || {};
       state.guestMode = !!data.viewOnly;                 // backend: tak ada PIN benar -> data terbatas
       if (state.guestMode) state.currentUser = VIEWONLY_USER;
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
@@ -1378,6 +1398,13 @@ function matchStatus(t,status,statuses){
   if(status==='Tanpa Status') return !t.status || !statuses.filter(s=>s!=='Tanpa Status').some(s=>same(s,t.status));
   return same(t.status,status);
 }
+// Chip progres ceklis di kartu (dari ringkasan bootstrap). Hijau bila semua tercentang.
+function checklistChip(t){
+  const s=(state.checklistSummary||{})[t&&t.id]; if(!s||!s.total) return '';
+  const full=s.done>=s.total;
+  const cls=full?'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-slate-300';
+  return `<span title="Ceklis pengerjaan" class="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold ${cls}"><span class="material-icons-round text-[12px]">${full?'task_alt':'checklist'}</span>${s.done}/${s.total}</span>`;
+}
 function taskCard(t){
   const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
   const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'');
@@ -1389,6 +1416,7 @@ function taskCard(t){
     <p class="text-[13px] font-medium leading-snug text-gray-800 dark:text-slate-100 mt-1.5 line-clamp-3">${escapeHtml(t.taskName||'-')}</p>
     <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
       ${priorityPill(t.priority)}
+      ${checklistChip(t)}
       ${isSupportOnly(t,state.currentUser)?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Support</span>`:''}
       ${isExternalTask(t)?`<span class="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[11px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[12px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}
       ${t.platform?`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform)}</span>`:''}
@@ -1647,6 +1675,10 @@ function openTaskModal(id=''){
   // Komentar tampil untuk task yang sudah ada (termasuk mode Lihat Saja yang boleh kirim chat).
   document.getElementById('modalCommentsBox').classList.toggle('hide',!t);
   if(t){loadModalComments(t.id);}
+  // Ceklis: task lama -> muat dari server; task baru -> mulai dari buffer kosong.
+  const ci=document.getElementById('checklistInput'); if(ci) ci.value='';
+  state._pendingChecklist=[]; state.checklist=[];
+  if(t && !isViewOnly()) loadChecklist(t.id); else renderChecklist();
   setModalReadonly(ro);
 }
 function setModalReadonly(ro){
@@ -1672,7 +1704,8 @@ function saveTaskFromModal(){
   if(isDoneStatus(task.status) && !canSetDone() && !(existing && isDoneStatus(existing.status))){ showToast(doneDeniedMsg(), false); return; }
   task.actor=state.currentUser;
   document.getElementById('loading').classList.remove('hide');
-  if(IS_GAS){GAS.withSuccessHandler(res=>{document.getElementById('loading').classList.add('hide'); if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();}).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).saveTask(task);}
+  // Item ceklis yang ditampung saat task baru dikirim setelah ID terbit dari server.
+  if(IS_GAS){GAS.withSuccessHandler(res=>{document.getElementById('loading').classList.add('hide'); if(!res.success){showToast(res.message,false);return;} state.tasks=res.tasks||state.tasks; const newId=(res.task&&res.task.id)||task.id; flushPendingChecklist(newId,()=>{showToast(res.message); closeTaskModal(); applyRoleUI(); renderAll();});}).withFailureHandler(err=>{document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false);}).saveTask(task);}
   else { if(!task.id) task.id='TSK-'+String(state.tasks.length+1).padStart(3,'0'); task.lastUpdate=todayStr()+' 10:00'; task.support=task.support.join(', '); const idx=state.tasks.findIndex(t=>t.id===task.id); if(idx>=0) state.tasks[idx]=task; else state.tasks.push(task); document.getElementById('loading').classList.add('hide'); showToast('Task tersimpan (preview).'); closeTaskModal(); applyRoleUI(); renderAll(); }
 }
 function deleteTaskFromModal(){
@@ -1689,6 +1722,111 @@ function loadModalComments(id){
   else renderComments('modalComments',[{timestamp:'2026-06-17 09:00',author:'Nynda',message:'Komentar contoh di mode preview.'}]);
 }
 function sendModalComment(){const id=getVal('fieldId'); const msg=document.getElementById('modalCommentInput').value.trim(); if(!id||!msg)return; sendComment(id,msg,()=>{document.getElementById('modalCommentInput').value=''; loadModalComments(id);});}
+
+/* ---------- Ceklis task (PM menyusun langkah/output, PIC mencentang) ----------
+   Hak akses (dicerminkan juga di server):
+   - Tambah item & centang : manager/Dev, atau PIC/Support task itu
+   - Hapus item            : manager/Dev SAJA (item dari PM tak bisa dihilangkan PIC)
+   Task BARU belum punya ID -> item ditampung di state._pendingChecklist dulu,
+   lalu dikirim setelah task tersimpan dan ID terbit. */
+function checklistTask(){ const id=getVal('fieldId'); return id?state.tasks.find(t=>t.id===id):null; }
+function canEditChecklist(){
+  if(isViewOnly()) return false;
+  const t=checklistTask();
+  if(!t) return true;                                   // task baru: penyusunnya sendiri
+  if(!canEditTask(t)) return false;                     // task lintas divisi: manager saja
+  return isManager(state.currentUser) || ownsTask(t,state.currentUser);
+}
+function canDeleteChecklist(){ return !isViewOnly() && isManager(state.currentUser); }
+function checklistProgress(list){ const total=list.length, done=list.filter(c=>c.done).length; return {done,total,pct: total?Math.round(done/total*100):0}; }
+function loadChecklist(id){
+  if(!id){ state.checklist=[]; renderChecklist(); return; }
+  GAS.withSuccessHandler(c=>{ state.checklist=c||[]; renderChecklist(); })
+     .withFailureHandler(err=>{ showToast('Gagal memuat ceklis: '+(err.message||err),false); state.checklist=[]; renderChecklist(); })
+     .getChecklist(id);
+}
+function renderChecklist(){
+  const box=document.getElementById('modalChecklistBox'); if(!box) return;
+  const isNew=!getVal('fieldId');
+  const list=isNew?(state._pendingChecklist||[]):(state.checklist||[]);
+  box.classList.toggle('hide', isViewOnly());          // mode lihat-saja: sembunyikan total
+  const p=checklistProgress(list);
+  const cnt=document.getElementById('checklistCount'); if(cnt) cnt.textContent=p.done+'/'+p.total;
+  const bar=document.getElementById('checklistBar'); if(bar) bar.style.width=p.pct+'%';
+  const hint=document.getElementById('checklistHint');
+  if(hint){
+    if(isNew){ hint.textContent='Item disimpan setelah task dibuat (klik Simpan).'; hint.classList.remove('hide'); }
+    else if(!canEditChecklist()){ hint.textContent='Hanya PM atau PIC/Support task ini yang bisa mengubah ceklis.'; hint.classList.remove('hide'); }
+    else hint.classList.add('hide');
+  }
+  const addRow=document.getElementById('checklistAddRow'); if(addRow) addRow.classList.toggle('hide', !canEditChecklist());
+  const target=document.getElementById('checklistItems'); if(!target) return;
+  if(!list.length){ target.innerHTML=`<div class="px-2 py-4 text-center text-xs text-gray-400">Belum ada item. PM bisa menuliskan langkah / output yang diharapkan.</div>`; return; }
+  const editable=canEditChecklist(), removable=canDeleteChecklist();
+  target.innerHTML=list.map((c,i)=>{
+    const key=isNew?String(i):String(c.row);
+    const meta=(c.done&&c.checkedBy)?`<span class="text-[10px] text-gray-400 shrink-0">${escapeHtml(c.checkedBy)}</span>`:'';
+    return `<div class="group flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
+      <input type="checkbox" ${c.done?'checked':''} ${editable?'':'disabled'} onchange="toggleChecklist('${escapeAttr(key)}',this.checked)" class="w-4 h-4 shrink-0 accent-emerald-600 cursor-pointer">
+      <span class="flex-1 text-sm ${c.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(c.item)}</span>
+      ${meta}
+      ${removable?`<button type="button" onclick="removeChecklist('${escapeAttr(key)}')" title="Hapus item" class="shrink-0 opacity-0 group-hover:opacity-100 transition text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[16px]">close</span></button>`:''}
+    </div>`;
+  }).join('');
+}
+function checklistInputKey(e){ if(e.key==='Enter'){ e.preventDefault(); addChecklistFromInput(); } }
+function addChecklistFromInput(){
+  const inp=document.getElementById('checklistInput'); const text=(inp&&inp.value||'').trim();
+  if(!text) return;
+  if(!canEditChecklist()){ showToast('Anda tak berhak mengubah ceklis task ini.', false); return; }
+  const id=getVal('fieldId');
+  if(!id){ // task baru -> tampung dulu, kirim setelah tersimpan
+    state._pendingChecklist=(state._pendingChecklist||[]).concat([{item:text,done:false}]);
+    inp.value=''; renderChecklist(); return;
+  }
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah item', false); return; }
+    state.checklist=res.checklist||[]; inp.value=''; syncChecklistSummary(id); renderChecklist(); renderAll();
+  }).withFailureHandler(err=>showToast(err.message||err,false)).addChecklistItem(id, text, state.currentUser);
+}
+function toggleChecklist(key, done){
+  const id=getVal('fieldId');
+  if(!id){ const i=parseInt(key,10); if(state._pendingChecklist&&state._pendingChecklist[i]) state._pendingChecklist[i].done=!!done; renderChecklist(); return; }
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal mengubah ceklis', false); renderChecklist(); return; }
+    state.checklist=res.checklist||[]; syncChecklistSummary(id); renderChecklist(); renderAll();
+  }).withFailureHandler(err=>{ showToast(err.message||err,false); renderChecklist(); }).setChecklistDone(id, parseInt(key,10), !!done, state.currentUser);
+}
+function removeChecklist(key){
+  const id=getVal('fieldId');
+  if(!id){ const i=parseInt(key,10); (state._pendingChecklist||[]).splice(i,1); renderChecklist(); return; }
+  if(!canDeleteChecklist()){ showToast('Hanya PM/Dev yang bisa menghapus item ceklis.', false); return; }
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus item', false); return; }
+    state.checklist=res.checklist||[]; syncChecklistSummary(id); renderChecklist(); renderAll();
+  }).withFailureHandler(err=>showToast(err.message||err,false)).deleteChecklistItem(id, parseInt(key,10), state.currentUser);
+}
+// Jaga ringkasan progres (dipakai badge di kartu) tetap sinkron tanpa reload penuh.
+function syncChecklistSummary(id){
+  const p=checklistProgress(state.checklist||[]);
+  state.checklistSummary=state.checklistSummary||{};
+  if(p.total) state.checklistSummary[id]={done:p.done,total:p.total};
+  else delete state.checklistSummary[id];
+}
+// Kirim item yang ditampung saat task baru, setelah ID terbit.
+function flushPendingChecklist(taskId, cb){
+  const pend=(state._pendingChecklist||[]).slice();
+  state._pendingChecklist=[];
+  if(!pend.length || !taskId){ if(cb)cb(); return; }
+  let i=0;
+  (function next(){
+    if(i>=pend.length){ syncChecklistSummary(taskId); if(cb)cb(); return; }
+    const it=pend[i++];
+    GAS.withSuccessHandler(res=>{ if(res&&res.success) state.checklist=res.checklist||[]; next(); })
+       .withFailureHandler(()=>next())
+       .addChecklistItem(taskId, it.item, state.currentUser);
+  })();
+}
 function sendComment(taskId,message,cb){
   if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} showToast(res.message); state.comments=res.comments||[]; state.commentsSummary=(state.commentsSummary||[]).concat([{timestamp:todayStr()+' '+new Date().toTimeString().slice(0,5),taskId:taskId,author:state.currentUser}]); updateCommNavBadge(); renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId,author:state.currentUser,message});}
   else {state.comments.push({timestamp:todayStr()+' 12:00',author:state.currentUser,message}); renderCommunicationPanel(); showToast('Komentar tersimpan (preview).'); if(cb)cb();}

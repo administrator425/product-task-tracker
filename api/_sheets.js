@@ -33,6 +33,7 @@ const CONFIG = {
   LINKS_SHEET: 'LINKS',
   DASHBOARDS_SHEET: 'DASHBOARDS',
   NOTES_SHEET: 'NOTES',
+  CHECKLIST_SHEET: 'CHECKLIST',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -671,6 +672,129 @@ async function addComment(payload) {
 }
 
 /* ------------------------------------------------------------------ */
+/* CHECKLIST (ceklis per task: PM menyusun, PIC mencentang)            */
+/* ------------------------------------------------------------------ */
+
+async function ensureChecklistSheet() {
+  await ensureSheetExists(CONFIG.CHECKLIST_SHEET);
+  const head = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A1:F1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!A1:F1`,
+      [['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At']]);
+  }
+}
+
+function isChecked(v) {
+  const s = String(v || '').trim().toLowerCase();
+  return s === 'true' || s === 'ya' || s === 'yes' || s === '1' || s === 'x';
+}
+
+// Actor adalah PIC atau Support dari task ini? (server-side, mencerminkan ownsTask di UI)
+function ownsTaskActor(task, actor) {
+  const a = baseName(actor);
+  if (!a || !task) return false;
+  if (baseName(task.pic) === a) return true;
+  return String(task.support || '').split(',').map(s => baseName(s)).filter(Boolean).includes(a);
+}
+
+async function getTaskById(taskId) {
+  const ids = await getTaskIdColumn();
+  const row = findRowByTaskId(ids, taskId);
+  if (row === -1) return null;
+  const cur = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${row}:${CONFIG.LAST_COL_LETTER}${row}`);
+  return rowToTask(cur[0] || [], row);
+}
+
+// Boleh menambah item & mencentang: manager/Dev, atau PIC/Support task itu.
+// Boleh menghapus item: manager/Dev SAJA (item dari PM tak boleh dihilangkan PIC).
+async function canEditChecklist(taskId, actor) {
+  if (isManagerActor(actor)) return true;
+  const task = await getTaskById(taskId);
+  return ownsTaskActor(task, actor);
+}
+
+async function getChecklist(taskId) {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:F`); } catch (e) { return []; }
+  return rows
+    .map((r, i) => ({
+      row: i + 2,
+      taskId: String((r && r[0]) || '').trim(),
+      item: String((r && r[1]) || '').trim(),
+      done: isChecked(r && r[2]),
+      createdBy: String((r && r[3]) || '').trim(),
+      checkedBy: String((r && r[4]) || '').trim(),
+      checkedAt: String((r && r[5]) || '').trim(),
+    }))
+    .filter(c => c.taskId === String(taskId || '').trim() && c.item);
+}
+
+async function addChecklistItem(taskId, item, actor) {
+  taskId = String(taskId || '').trim();
+  item = String(item || '').trim();
+  actor = String(actor || '').trim() || 'Unknown';
+  if (!taskId) return { success: false, message: 'Task ID tidak valid.' };
+  if (!item) return { success: false, message: 'Item ceklis tidak boleh kosong.' };
+  if (!(await canEditChecklist(taskId, actor))) {
+    return { success: false, message: 'Hanya PM atau PIC/Support task ini yang bisa menambah item ceklis.' };
+  }
+  await ensureChecklistSheet();
+  await valuesAppend(`${CONFIG.CHECKLIST_SHEET}!A:F`, [[taskId, item, 'FALSE', actor, '', '']]);
+  await logActivity(actor, 'Checklist Add', taskId, item.length > 120 ? item.slice(0, 117) + '...' : item);
+  return { success: true, message: 'Item ceklis ditambahkan.', checklist: await getChecklist(taskId) };
+}
+
+async function setChecklistDone(taskId, row, done, actor) {
+  taskId = String(taskId || '').trim();
+  row = parseInt(row, 10);
+  actor = String(actor || '').trim() || 'Unknown';
+  const val = !!done;
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (!(await canEditChecklist(taskId, actor))) {
+    return { success: false, message: 'Hanya PM atau PIC/Support task ini yang bisa mencentang ceklis.' };
+  }
+  // Pastikan baris ini benar milik task tsb (hindari salah-centang bila baris bergeser).
+  const cur = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A${row}:B${row}`);
+  const owner = String((cur[0] && cur[0][0]) || '').trim();
+  if (owner !== taskId) return { success: false, message: 'Item ceklis tidak cocok dengan task ini. Muat ulang.' };
+  await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!C${row}:F${row}`,
+    [[val ? 'TRUE' : 'FALSE', String((cur[0] && cur[0][1]) || ''), val ? actor : '', val ? nowStamp() : '']]);
+  return { success: true, message: val ? 'Item dicentang.' : 'Centang dibatalkan.', checklist: await getChecklist(taskId) };
+}
+
+async function deleteChecklistItem(taskId, row, actor) {
+  taskId = String(taskId || '').trim();
+  row = parseInt(row, 10);
+  actor = String(actor || '').trim() || 'Unknown';
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (!isManagerActor(actor)) return { success: false, message: 'Hanya PM/Dev yang bisa menghapus item ceklis.' };
+  const cur = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A${row}:B${row}`);
+  const owner = String((cur[0] && cur[0][0]) || '').trim();
+  if (owner !== taskId) return { success: false, message: 'Item ceklis tidak cocok dengan task ini. Muat ulang.' };
+  const meta = await getSheetMeta();
+  const sheetId = meta[CONFIG.CHECKLIST_SHEET] && meta[CONFIG.CHECKLIST_SHEET].sheetId;
+  if (sheetId == null) return { success: false, message: 'Sheet CHECKLIST tidak ditemukan.' };
+  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: row - 1, endIndex: row } } }]);
+  await logActivity(actor, 'Checklist Delete', taskId, String((cur[0] && cur[0][1]) || ''));
+  return { success: true, message: 'Item ceklis dihapus.', checklist: await getChecklist(taskId) };
+}
+
+// Ringkasan progres semua task (untuk bootstrap): { taskId: {done, total} }
+async function getChecklistSummary() {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:C`); } catch (e) { return {}; }
+  const out = {};
+  rows.forEach(r => {
+    const id = String((r && r[0]) || '').trim();
+    if (!id || !String((r && r[1]) || '').trim()) return;
+    if (!out[id]) out[id] = { done: 0, total: 0 };
+    out[id].total++;
+    if (isChecked(r && r[2])) out[id].done++;
+  });
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
 /* ACTIVITY                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -718,7 +842,7 @@ async function getAllCommentsLite() {
 
 async function getBootstrapData(opts) {
   const viewOnly = !!(opts && opts.viewOnly);
-  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes] = await Promise.all([
+  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes, checklistSummary] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
@@ -727,6 +851,7 @@ async function getBootstrapData(opts) {
     getAllLinks(),
     getAllDashboards(),
     getAllNotes(),
+    getChecklistSummary(),
   ]);
   if (viewOnly) {
     // Tamu tanpa PIN: hanya task yang di-set Lintas (punya Divisi Tujuan) atau di-mirror,
@@ -765,6 +890,7 @@ async function getBootstrapData(opts) {
     links,
     dashboards,
     notes,
+    checklistSummary,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
@@ -1225,6 +1351,7 @@ async function setupTaskTracker() {
   await ensureTaskHeaders();
   await ensureOptionsSheet();
   await ensureCommentsSheet();
+  await ensureChecklistSheet();
   await ensureActivitySheet();
   await ensureAuthSheet();
   await ensureLinksSheet();
@@ -1271,6 +1398,8 @@ module.exports = {
   // writes
   saveTask, deleteTask, quickUpdateField, quickUpdateDates,
   addComment, saveOption, deleteOption, editOption,
+  // ceklis per task (PM menyusun, PIC mencentang)
+  getChecklist, addChecklistItem, setChecklistDone, deleteChecklistItem,
   // setup
   setupTaskTracker, assignMissingTaskIds,
   // auth (PIN)
@@ -1286,5 +1415,6 @@ module.exports = {
   seedFormulaTemplate,
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp,
-    isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus },
+    isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus,
+    ownsTaskActor, isChecked },
 };

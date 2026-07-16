@@ -100,4 +100,26 @@ ok('"Done" dikenali', isDoneStatus('Done') === true);
 ok('" done " dikenali', isDoneStatus(' done ') === true);
 ok('"Review PM" bukan Done', isDoneStatus('Review PM') === false);
 
+console.log('\nCeklis task (kepemilikan & parsing centang):');
+const { ownsTaskActor, isChecked } = _internals;
+const tugasAli = { pic: 'Ali', support: 'Uma, Kiki' };
+// PIC & Support boleh menambah/mencentang ceklis task-nya.
+ok('PIC (Ali) memiliki task', ownsTaskActor(tugasAli, 'Ali') === true);
+ok('Support (Uma) memiliki task', ownsTaskActor(tugasAli, 'Uma') === true);
+ok('Support (Kiki) memiliki task', ownsTaskActor(tugasAli, 'Kiki') === true);
+ok('support case-insensitive', ownsTaskActor(tugasAli, 'kiki') === true);
+// Orang luar tidak.
+ok('Andika bukan pemilik task', ownsTaskActor(tugasAli, 'Andika') === false);
+ok('actor kosong bukan pemilik', ownsTaskActor(tugasAli, '') === false);
+ok('task null aman', ownsTaskActor(null, 'Ali') === false);
+// Support kosong tidak boleh cocok dengan nama kosong.
+ok('task tanpa support', ownsTaskActor({ pic: 'Ali', support: '' }, 'Uma') === false);
+// Parsing kolom Done dari sheet (bisa TRUE/ya/1/x).
+ok('"TRUE" tercentang', isChecked('TRUE') === true);
+ok('"true" tercentang', isChecked('true') === true);
+ok('"ya" tercentang', isChecked('ya') === true);
+ok('"1" tercentang', isChecked('1') === true);
+ok('"FALSE" tidak tercentang', isChecked('FALSE') === false);
+ok('kosong tidak tercentang', isChecked('') === false);
+
 console.log(`\n✅ Semua ${passed} assertion lulus.`);

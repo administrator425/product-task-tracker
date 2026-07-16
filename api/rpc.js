@@ -51,6 +51,10 @@ const HANDLERS = {
   quickUpdateDates: (taskId, startDate, dueDate, actor) => backend.quickUpdateDates(taskId, startDate, dueDate, actor),
 
   addComment: (payload) => backend.addComment(payload),
+  getChecklist: (taskId) => backend.getChecklist(taskId),
+  addChecklistItem: (taskId, item, actor) => backend.addChecklistItem(taskId, item, actor),
+  setChecklistDone: (taskId, row, done, actor) => backend.setChecklistDone(taskId, row, done, actor),
+  deleteChecklistItem: (taskId, row, actor) => backend.deleteChecklistItem(taskId, row, actor),
   saveOption: (type, value, parent) => backend.saveOption(type, value, parent),
   deleteOption: (type, value, parent) => backend.deleteOption(type, value, parent),
   editOption: (type, oldValue, newValue, parent) => backend.editOption(type, oldValue, newValue, parent),

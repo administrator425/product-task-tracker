@@ -10,6 +10,14 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.32.0 — Ceklis pengerjaan per task (PM menyusun, PIC mencentang)
+- Tiap task kini punya **Ceklis Pengerjaan** di modal task (di antara detail & chat): PM menuliskan **langkah / output yang diharapkan**, PIC **mencentangnya** sambil mengerjakan. Melengkapi fitur chat yang sudah ada.
+- **Hak akses**: PM/Dev **dan** PIC/Support task itu bisa **menambah** & **mencentang**; **hanya PM/Dev yang bisa menghapus** item (item dari PM tak bisa dihilangkan PIC). Ditegakkan di UI **dan** server.
+- **Indikator progres**: bar + hitungan `2/4` di modal, plus **chip progres di kartu Kanban** (berubah hijau bila semua tercentang).
+- Saat **membuat task baru** (belum ada ID), item ceklis ditampung dulu lalu otomatis dikirim setelah task tersimpan — jadi PM bisa langsung menyusun ceklis sambil membuat tugas.
+- Ceklis **tidak memblokir** perpindahan status (mis. ke "Review PM") — murni panduan & indikator.
+- Penyimpanan: sheet baru **`CHECKLIST`** (`Task ID | Item | Done | Created By | Checked By | Checked At`), dibuat otomatis. Mode lihat-saja (Lintas) tidak melihat ceklis.
+
 ## 1.31.0 — Done approver (Nynda, Dhea, Alya) + tab dikelompokkan
 - **Siapa yang boleh set "Done"** kini: **Nynda, Dhea, Alya** (+ Dev). Sebelumnya hanya manager.
 - Izin Done dibuat **terpisah dari hak manager**: Dhea & Alya **tetap Member** (hanya lihat task sendiri, tak bisa task lintas divisi / Laporan / Fokus PIC) — mereka **hanya** dapat tambahan wewenang menutup task ke "Done".
