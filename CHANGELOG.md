@@ -10,6 +10,13 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.33.0 — Duplikat task (pakai task lama sebagai template)
+- Tombol **Duplikat** untuk membuat task baru dari task yang mirip (mis. beda judul saja) tanpa mengisi ulang dari nol. Ada di **footer modal task** dan sebagai **ikon salin di kartu Kanban** (muncul saat hover di desktop, selalu tampil di HP).
+- Hasil duplikat adalah **task baru dengan Task ID sendiri** — dihitung terpisah, bukan menimpa/berbagi dengan task asal. Yang diambil hanya isian template-nya.
+- **Reset cerdas**: yang disalin = Stage, Kata Kerja, Objek, Jumlah, Detail, Platform, PIC, Support, Priority, Document, PM Notes. Yang di-reset = Status→Todo, Due Date & PIC Notes dikosongkan, Created Date→hari ini, Task ID baru.
+- **Ceklis ikut tersalin** (semua item, dalam keadaan belum tercentang) sehingga template langkah kerja terbawa; dikirim ke server setelah task duplikat disimpan.
+- Duplikat dari **modal** memakai nilai form saat itu (perubahan yang belum disimpan ikut tersalin, tidak hilang). Task **lintas divisi** hanya bisa diduplikat manager/Dev.
+
 ## 1.32.0 — Ceklis pengerjaan per task (PM menyusun, PIC mencentang)
 - Tiap task kini punya **Ceklis Pengerjaan** di modal task (di antara detail & chat): PM menuliskan **langkah / output yang diharapkan**, PIC **mencentangnya** sambil mengerjakan. Melengkapi fitur chat yang sudah ada.
 - **Hak akses**: PM/Dev **dan** PIC/Support task itu bisa **menambah** & **mencentang**; **hanya PM/Dev yang bisa menghapus** item (item dari PM tak bisa dihilangkan PIC). Ditegakkan di UI **dan** server.
