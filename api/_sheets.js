@@ -1067,19 +1067,29 @@ async function markNotificationsRead(user, refId) {
 }
 
 // Parse @Nama pada pesan komentar -> buat notifikasi untuk tiap user valid yang di-tag.
+// @everyone / @semua / @all -> tag SEMUA user (kecuali penulis & user lihat-saja).
+const MENTION_ALL = ['everyone', 'semua', 'all'];
 async function createMentionNotifications(refId, author, message) {
-  const raw = (String(message || '').match(/@([A-Za-z][\w.\-]*)/g) || []).map(s => s.slice(1));
+  const msg = String(message || '');
+  const raw = (msg.match(/@([A-Za-z][\w.\-]*)/g) || []).map(s => s.slice(1));
   if (!raw.length) return;
   let pics = [];
   try { pics = (await getOptions()).pic || []; } catch (e) { pics = []; }
+  const validPics = pics.filter(p => baseName(p) !== 'lintas divisi');   // hindari user lihat-saja
   const targets = new Set();
+  const tagAll = raw.some(n => MENTION_ALL.includes(baseName(n)));
+  if (tagAll) {
+    validPics.forEach(p => { if (baseName(p) !== baseName(author)) targets.add(p); });
+  }
   raw.forEach(n => {
     const nb = baseName(n);
-    const match = pics.find(p => baseName(p) === nb || baseName(p).split(' ')[0] === nb);
+    if (MENTION_ALL.includes(nb)) return;
+    const match = validPics.find(p => baseName(p) === nb || baseName(p).split(' ')[0] === nb);
     if (match && baseName(match) !== baseName(author)) targets.add(match);
   });
+  const text = tagAll ? `${author} men-tag semua: "${msg.slice(0, 90)}"` : `${author} men-tag Anda: "${msg.slice(0, 90)}"`;
   for (const t of targets) {
-    await addNotification(t, 'mention', refId, author, `${author} men-tag Anda: "${String(message).slice(0, 90)}"`);
+    await addNotification(t, 'mention', refId, author, text);
   }
 }
 

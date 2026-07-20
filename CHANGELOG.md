@@ -10,6 +10,11 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.36.0 — Tag @everyone + log aktivitas khusus manager
+- **`@everyone`** (alias `@semua` / `@all`) di komentar Task Kolaborasi → menotifikasi **semua user** sekaligus (kecuali penulis & mode lihat-saja). Muncul di autocomplete (ikon grup) & tersorot di feed.
+- **Log aktivitas** (centang proses, buat/ubah, handoff) kini **hanya tampil untuk manager/Dev**; user biasa cukup melihat **komentar** saja. Judul panel ikut menyesuaikan ("Komentar" vs "Komentar & Aktivitas").
+- Baris **"Comment: …"** di log dibuang (duplikat dengan kartu komentar) — feed jadi lebih bersih.
+
 ## 1.35.0 — Task Kolaborasi: notes proses, tag @user, sub-ceklis, auto-refresh, deadline project
 - **Layout modal 2 kolom**: alur proses + sub-ceklis di kiri, **Komentar & Aktivitas di panel kanan** (seperti referensi), bukan lagi di bawah.
 - **Catatan per proses (PIC note)**: tiap proses punya field catatan — mis. minta tambahan deadline. Diisi oleh PIC proses itu atau manager.
