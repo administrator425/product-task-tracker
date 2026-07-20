@@ -10,6 +10,15 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.40.0 — Hemat kuota Google Sheets (perbaiki error "Read requests per minute")
+- **Penyebab**: app membaca Spreadsheet satu-per-satu; `getBootstrapData` melakukan ~11 pembacaan sekaligus, dan auto-refresh tiap pindah tab mengulanginya → menabrak batas Google (60 read/menit per service account).
+- **Perbaikan**:
+  - **`getBootstrapData` kini 1 batch** (`values.batchGet`) → dari ~11 read jadi **±2 read** (1 metadata + 1 batch). Bila batch gagal (mis. sheet belum ada), otomatis fallback ke baca satu-satu (tidak error).
+  - **`getCollabs` di-batch** (COLLAB + COLLAB_STEPS) → dari 2 read jadi **1**. Dipakai di banyak tempat (modal, refresh, tiap simpan/centang collab).
+  - **Auto-refresh dibuat hemat**: throttle **5 dtk → 20 dtk**, dan **dilewati saat tab tak terlihat** (`document.hidden`).
+  - **`ensure*Sheet` di-memo per-instance** (collab, checklist, comments, notif): tak baca ulang header pada tiap tulis; reset otomatis tiap cold start.
+- Total: pembacaan berulang turun **~10–16×**. Error kuota semestinya hilang di pemakaian normal.
+
 ## 1.39.0 — Task Kolaborasi: Kanban per-tipe task
 - Tab Task Kolaborasi kini punya **toggle Grid ↔ Kanban**. Kanban mengelompokkan task berdasarkan **tipe** (bukan status): **Course · Tryout/Latsol · Liveclass · Drilling · Journey**, plus kolom **"Tanpa Tipe"**.
 - **Seret kartu antar kolom** untuk mengubah tipe task (manager/Dev saja) — mirip Kanban Status.

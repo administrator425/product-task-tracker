@@ -90,6 +90,9 @@ const VALIDATION_MAP = {
 /* ------------------------------------------------------------------ */
 
 let _sheetsClient = null;
+// Memo per-instance (warm): sheet yang sudah dipastikan ada+header benar tak perlu dibaca ulang.
+// Reset otomatis tiap cold start. Menghemat read pada jalur tulis yang sering dipanggil.
+const _ensured = new Set();
 
 function getSpreadsheetId() {
   const id = process.env.SPREADSHEET_ID;
@@ -176,6 +179,22 @@ async function valuesGet(range, opts = {}) {
     dateTimeRenderOption: opts.dateTimeRenderOption || 'SERIAL_NUMBER',
   });
   return res.data.values || [];
+}
+
+// Ambil BANYAK range dalam SATU request (hemat kuota: 1 read utk semua range).
+// Mengembalikan map { range: values[][] }.
+async function valuesBatchGet(ranges, opts = {}) {
+  const sheets = await getSheets();
+  const res = await sheets.spreadsheets.values.batchGet({
+    spreadsheetId: getSpreadsheetId(),
+    ranges,
+    valueRenderOption: opts.valueRenderOption || 'UNFORMATTED_VALUE',
+    dateTimeRenderOption: opts.dateTimeRenderOption || 'SERIAL_NUMBER',
+  });
+  const vr = res.data.valueRanges || [];
+  const out = {};
+  ranges.forEach((r, i) => { out[r] = (vr[i] && vr[i].values) || []; });
+  return out;
 }
 
 async function valuesUpdate(range, values) {
@@ -352,8 +371,8 @@ function taskToRow(task, existingTask) {
 const MAIN_DATA_RANGE = () =>
   `${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${CONFIG.FIRST_DATA_ROW}:${CONFIG.LAST_COL_LETTER}`;
 
-async function getTasks() {
-  const rows = await valuesGet(MAIN_DATA_RANGE());
+async function getTasks(pre) {
+  const rows = pre !== undefined ? pre : await valuesGet(MAIN_DATA_RANGE());
   return rows
     .map((row, idx) => rowToTask(row, CONFIG.FIRST_DATA_ROW + idx))
     .filter(t => t.id || t.taskName);
@@ -520,8 +539,8 @@ async function quickUpdateDates(taskId, startDate, dueDate, actor) {
 /* OPTIONS                                                             */
 /* ------------------------------------------------------------------ */
 
-async function readOptionsRaw() {
-  const rows = await valuesGet(`${CONFIG.OPTIONS_SHEET}!A2:D`, { valueRenderOption: 'UNFORMATTED_VALUE' });
+async function readOptionsRaw(pre) {
+  const rows = pre !== undefined ? pre : await valuesGet(`${CONFIG.OPTIONS_SHEET}!A2:D`, { valueRenderOption: 'UNFORMATTED_VALUE' });
   return rows
     .map((r, i) => ({
       row: i + 2,
@@ -533,10 +552,10 @@ async function readOptionsRaw() {
     .filter(r => r.type && r.value);
 }
 
-async function getOptions() {
+async function getOptions(pre) {
   let raw = [];
   try {
-    raw = (await readOptionsRaw()).filter(r => r.active);
+    raw = (await readOptionsRaw(pre)).filter(r => r.active);
   } catch (e) {
     raw = [];
   }
@@ -680,12 +699,14 @@ async function addComment(payload) {
 /* ------------------------------------------------------------------ */
 
 async function ensureChecklistSheet() {
+  if (_ensured.has('checklist')) return;
   await ensureSheetExists(CONFIG.CHECKLIST_SHEET);
   const head = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A1:F1`);
   if (!head.length || !head[0] || !head[0][0]) {
     await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!A1:F1`,
       [['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At']]);
   }
+  _ensured.add('checklist');
 }
 
 function isChecked(v) {
@@ -796,9 +817,10 @@ async function deleteChecklistItem(taskId, row, actor) {
 }
 
 // Ringkasan progres semua task (untuk bootstrap): { taskId: {done, total} }
-async function getChecklistSummary() {
+async function getChecklistSummary(pre) {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:C`); } catch (e) { return {}; }
+  if (pre !== undefined) rows = pre;
+  else { try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:C`); } catch (e) { return {}; } }
   const out = {};
   rows.forEach(r => {
     const id = String((r && r[0]) || '').trim();
@@ -817,6 +839,7 @@ async function getChecklistSummary() {
 /* ------------------------------------------------------------------ */
 
 async function ensureCollabSheets() {
+  if (_ensured.has('collab')) return;
   await ensureSheetExists(CONFIG.COLLAB_SHEET);
   let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:H1`);
   let h0 = head[0] || [];
@@ -830,6 +853,7 @@ async function ensureCollabSheets() {
   h0 = head[0] || [];
   if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note']]);
   else if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I1`, [['Note']]);   // catatan per proses (PIC note)
+  _ensured.add('collab');
 }
 function parseCollabStep(taskId) { const m = String(taskId || '').match(/^(COL-\d+)#(\d+)$/); return m ? { collabId: m[1], order: Number(m[2]) } : null; }
 async function collabStepPic(collabId, order) { const c = (await getCollabs()).find(x => x.id === collabId); if (!c) return null; const s = c.steps.find(x => x.order === order); return s ? s.pic : null; }
@@ -847,10 +871,16 @@ function canCheckStep(stepPic, actor) {
   return !!p && p === baseName(actor);
 }
 
-async function getCollabs() {
+async function getCollabs(preC, preS) {
   let crows = [], srows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:H`); } catch (e) { return []; }
-  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:I`); } catch (e) { srows = []; }
+  if (preC !== undefined) { crows = preC || []; srows = preS || []; }
+  else {
+    try {
+      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:H`, `${CONFIG.COLLAB_STEP_SHEET}!A2:I`]);
+      crows = b[`${CONFIG.COLLAB_SHEET}!A2:H`] || [];
+      srows = b[`${CONFIG.COLLAB_STEP_SHEET}!A2:I`] || [];
+    } catch (e) { return []; }
+  }
   const steps = {};
   srows.forEach((r, i) => {
     const cid = String((r && r[0]) || '').trim(); if (!cid) return;
@@ -1038,11 +1068,13 @@ async function deleteCollab(id, actor) {
 /* ------------------------------------------------------------------ */
 
 async function ensureNotificationsSheet() {
+  if (_ensured.has('notif')) return;
   await ensureSheetExists(CONFIG.NOTIF_SHEET);
   const head = await valuesGet(`${CONFIG.NOTIF_SHEET}!A1:H1`);
   if (!head.length || !head[0] || !head[0][0]) {
     await valuesUpdate(`${CONFIG.NOTIF_SHEET}!A1:H1`, [['ID', 'For User', 'Type', 'Ref ID', 'From', 'Text', 'Created At', 'Read']]);
   }
+  _ensured.add('notif');
 }
 
 async function addNotification(forUser, type, refId, from, text) {
@@ -1126,12 +1158,12 @@ async function logActivity(user, action, taskId, detail) {
   }
 }
 
-async function getActivityLog(limit) {
+async function getActivityLog(limit, pre) {
   let rows = [];
-  try {
-    rows = await valuesGet(`${CONFIG.ACTIVITY_SHEET}!A2:E`);
-  } catch (e) {
-    return [];
+  if (pre !== undefined) rows = pre;
+  else {
+    try { rows = await valuesGet(`${CONFIG.ACTIVITY_SHEET}!A2:E`); }
+    catch (e) { return []; }
   }
   const out = rows
     .map(r => ({
@@ -1151,9 +1183,10 @@ async function getActivityLog(limit) {
 /* BOOTSTRAP                                                           */
 /* ------------------------------------------------------------------ */
 
-async function getAllCommentsLite() {
+async function getAllCommentsLite(pre) {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.COMMENTS_SHEET}!A2:D`); } catch (e) { return []; }
+  if (pre !== undefined) rows = pre;
+  else { try { rows = await valuesGet(`${CONFIG.COMMENTS_SHEET}!A2:D`); } catch (e) { return []; } }
   return rows
     .map(r => ({ timestamp: formatDate(r && r[0], true), taskId: String((r && r[1]) || ''), author: String((r && r[2]) || '') }))
     .filter(c => c.taskId);
@@ -1161,17 +1194,37 @@ async function getAllCommentsLite() {
 
 async function getBootstrapData(opts) {
   const viewOnly = !!(opts && opts.viewOnly);
+  // Satu batchGet untuk SEMUA range -> hemat kuota (±2 read, bukan ±11).
+  const meta = await getSheetMeta().catch(() => ({}));            // 1 read: tahu sheet mana yang ada
+  const sheetOf = {
+    tasks: CONFIG.TASK_SHEET, options: CONFIG.OPTIONS_SHEET, activity: CONFIG.ACTIVITY_SHEET,
+    comments: CONFIG.COMMENTS_SHEET, auth: CONFIG.AUTH_SHEET, links: CONFIG.LINKS_SHEET,
+    dashboards: CONFIG.DASHBOARDS_SHEET, notes: CONFIG.NOTES_SHEET, checklist: CONFIG.CHECKLIST_SHEET,
+    collab: CONFIG.COLLAB_SHEET, collabSteps: CONFIG.COLLAB_STEP_SHEET,
+  };
+  const R = {
+    tasks: MAIN_DATA_RANGE(), options: `${CONFIG.OPTIONS_SHEET}!A2:D`, activity: `${CONFIG.ACTIVITY_SHEET}!A2:E`,
+    comments: `${CONFIG.COMMENTS_SHEET}!A2:D`, auth: `${CONFIG.AUTH_SHEET}!A2:B`, links: `${CONFIG.LINKS_SHEET}!A2:D`,
+    dashboards: `${CONFIG.DASHBOARDS_SHEET}!A2:D`, notes: `${CONFIG.NOTES_SHEET}!A2:E`, checklist: `${CONFIG.CHECKLIST_SHEET}!A2:C`,
+    collab: `${CONFIG.COLLAB_SHEET}!A2:H`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:I`,
+  };
+  const present = Object.keys(R).filter(k => meta[sheetOf[k]]);
+  let batch = null;
+  if (present.length) { try { batch = await valuesBatchGet(present.map(k => R[k])); } catch (e) { batch = null; } }  // 1 read
+  // pre(k): array (dari batch) bila sukses; [] bila sheet tak ada; undefined bila batch gagal -> fungsi baca sendiri.
+  const pre = (k) => (batch === null ? undefined : (meta[sheetOf[k]] ? (batch[R[k]] || []) : []));
+
   const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes, checklistSummary, collabs] = await Promise.all([
-    getTasks(),
-    getOptions(),
-    getActivityLog(200),
-    getAllCommentsLite(),
-    listPinUsers(),
-    getAllLinks(),
-    getAllDashboards(),
-    getAllNotes(),
-    getChecklistSummary(),
-    getCollabs().catch(() => []),
+    getTasks(pre('tasks')),
+    getOptions(pre('options')),
+    getActivityLog(200, pre('activity')),
+    getAllCommentsLite(pre('comments')),
+    listPinUsers(pre('auth')),
+    getAllLinks(pre('links')),
+    getAllDashboards(pre('dashboards')),
+    getAllNotes(pre('notes')),
+    getChecklistSummary(pre('checklist')),
+    getCollabs(pre('collab'), pre('collabSteps')).catch(() => []),
   ]);
   if (viewOnly) {
     // Tamu tanpa PIN: hanya task yang di-set Lintas (punya Divisi Tujuan) atau di-mirror,
@@ -1283,11 +1336,13 @@ async function seedFormulaTemplate() {
 }
 
 async function ensureCommentsSheet() {
+  if (_ensured.has('comments')) return;
   await ensureSheetExists(CONFIG.COMMENTS_SHEET);
   const head = await valuesGet(`${CONFIG.COMMENTS_SHEET}!A1:D1`);
   if (!head.length || !head[0] || !head[0][0]) {
     await valuesUpdate(`${CONFIG.COMMENTS_SHEET}!A1:D1`, [['Timestamp', 'Task ID', 'Author', 'Message']]);
   }
+  _ensured.add('comments');
 }
 
 async function ensureActivitySheet() {
@@ -1366,9 +1421,9 @@ async function ensureAuthSheet() {
   } catch (e) { /* abaikan bila gagal menyembunyikan */ }
 }
 
-async function readAuthRaw() {
+async function readAuthRaw(pre) {
   try {
-    const rows = await valuesGet(`${CONFIG.AUTH_SHEET}!A2:B`);
+    const rows = pre !== undefined ? pre : await valuesGet(`${CONFIG.AUTH_SHEET}!A2:B`);
     return rows
       .map(r => ({ user: String((r && r[0]) || '').trim(), hash: String((r && r[1]) || '').trim() }))
       .filter(r => r.user);
@@ -1419,8 +1474,8 @@ async function deleteUserPin(user) {
 }
 
 // Daftar user yang sudah punya PIN khusus (hash TIDAK dikirim).
-async function listPinUsers() {
-  const rows = await readAuthRaw();
+async function listPinUsers(pre) {
+  const rows = await readAuthRaw(pre);
   return rows.map(r => r.user);
 }
 
@@ -1436,9 +1491,10 @@ async function ensureLinksSheet() {
   else if (!h0[3]) await valuesUpdate(`${CONFIG.LINKS_SHEET}!D1`, [['Folder']]);
 }
 
-async function getAllLinks() {
+async function getAllLinks(pre) {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.LINKS_SHEET}!A2:D`); } catch (e) { return []; }
+  if (pre !== undefined) rows = pre;
+  else { try { rows = await valuesGet(`${CONFIG.LINKS_SHEET}!A2:D`); } catch (e) { return []; } }
   return rows
     .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), url: String((r && r[2]) || '').trim(), folder: String((r && r[3]) || '').trim() }))
     .filter(l => l.user && l.url);
@@ -1537,9 +1593,10 @@ async function ensureDashboardsSheet() {
     if (DEFAULT_DASHBOARDS.length) await valuesAppend(`${CONFIG.DASHBOARDS_SHEET}!A:D`, DEFAULT_DASHBOARDS); // seed agar dashboard awal tak hilang
   }
 }
-async function getAllDashboards() {
+async function getAllDashboards(pre) {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.DASHBOARDS_SHEET}!A2:D`); } catch (e) { return []; }
+  if (pre !== undefined) rows = pre;
+  else { try { rows = await valuesGet(`${CONFIG.DASHBOARDS_SHEET}!A2:D`); } catch (e) { return []; } }
   return rows
     .map((r, i) => ({ row: i + 2, title: String((r && r[0]) || '').trim(), desc: String((r && r[1]) || '').trim(), icon: String((r && r[2]) || '').trim(), url: String((r && r[3]) || '').trim() }))
     .filter(d => d.title || d.url);
@@ -1588,9 +1645,10 @@ async function ensureNotesSheet() {
   if (!h0[0]) await valuesUpdate(`${CONFIG.NOTES_SHEET}!A1:E1`, [['User', 'Title', 'Body', 'UpdatedAt', 'Folder']]);
   else if (!h0[4]) await valuesUpdate(`${CONFIG.NOTES_SHEET}!E1`, [['Folder']]);
 }
-async function getAllNotes() {
+async function getAllNotes(pre) {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:E`); } catch (e) { return []; }
+  if (pre !== undefined) rows = pre;
+  else { try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:E`); } catch (e) { return []; } }
   return rows
     .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), body: String((r && r[2]) || '').trim(), updatedAt: String((r && r[3]) || '').trim(), folder: String((r && r[4]) || '').trim() }))
     .filter(n => n.user && (n.title || n.body));

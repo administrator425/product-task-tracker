@@ -735,7 +735,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.39.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.40.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -2370,8 +2370,9 @@ function markAllNotifsRead(){
 function anyModalOpen(){ return ['taskModal','collabModal','pinGate','identityGate','loginGate'].some(id=>{ const e=document.getElementById(id); return e && !e.classList.contains('hide'); }); }
 function refreshData(force){
   if(!IS_GAS || state.guestMode) return;
+  if(typeof document!=='undefined' && document.hidden) return;   // tab tak terlihat -> jangan boros kuota
   const now=Date.now();
-  if(!force && now-(state._lastRefresh||0) < 5000) return;
+  if(!force && now-(state._lastRefresh||0) < 20000) return;      // throttle 20 dtk (hemat kuota Google Sheets)
   if(anyModalOpen()) return;
   state._lastRefresh=now;
   GAS.withSuccessHandler(data=>{
