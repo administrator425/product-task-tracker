@@ -10,6 +10,15 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.35.0 — Task Kolaborasi: notes proses, tag @user, sub-ceklis, auto-refresh, deadline project
+- **Layout modal 2 kolom**: alur proses + sub-ceklis di kiri, **Komentar & Aktivitas di panel kanan** (seperti referensi), bukan lagi di bawah.
+- **Catatan per proses (PIC note)**: tiap proses punya field catatan — mis. minta tambahan deadline. Diisi oleh PIC proses itu atau manager.
+- **Tag @user di komentar**: ketik `@` → autocomplete nama; user yang di-tag dapat **notifikasi lonceng** di header (badge angka + daftar; klik → buka collab & tandai terbaca). Mention disorot di feed.
+- **Sub-ceklis per proses** (2 tingkat: daftar proses = ceklis utama, tiap proses punya sub-ceklis pengerjaan). Yang bisa menambah/mencentang/menghapus sub-item: **PIC proses itu + manager/Dev**. Disimpan via sheet CHECKLIST (id `COL-xxx#N`).
+- **Deadline project keseluruhan** — selain deadline tiap proses, ada 1 deadline untuk seluruh task (flag telat).
+- **Auto-refresh** dari Spreadsheet **saat pindah tab** (throttle 5 detik, dilewati saat ada modal terbuka) — progres & notifikasi tag terbaru langsung terlihat.
+- Sheet baru **`NOTIFICATIONS`**; kolom baru: `Deadline` (COLLAB), `Note` (COLLAB_STEPS) — dibuat/ditambah otomatis.
+
 ## 1.34.0 — Task Kolaborasi (alur proses beruntun antar-PIC)
 - Tab baru **"Task Kolaborasi"** (grup Kolaborasi): task dengan **rangkaian proses berurutan**, tiap proses punya **PIC & deadline sendiri** (mis. *"5 Paket TO dan Latsol"* → Alya: kurikulum → Dhika: soal → Uma: QC).
 - **Dibuat manager/Dev saja**, ringkas — cukup **platform + judul + daftar proses**; tidak terikat rumus stage/verb/objek task normal, dan **tidak dihitung** di Dashboard/Kanban task biasa.

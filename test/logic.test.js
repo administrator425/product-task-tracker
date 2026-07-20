@@ -134,5 +134,11 @@ ok('nama ber-suffix tetap cocok', canCheckStep('Alya (Konten)', 'Alya') === true
 // Penomoran Collab ID.
 eq('genCollabId kosong -> COL-001', genCollabId([]), 'COL-001');
 eq('genCollabId lanjut dari max', genCollabId(['COL-002', 'COL-010', 'COL-003']), 'COL-011');
+// Parse id sub-ceklis proses (dipakai untuk izin sub-ceklis).
+const { parseCollabStep } = _internals;
+eq('parseCollabStep COL-001#2 -> collab', parseCollabStep('COL-001#2').collabId, 'COL-001');
+eq('parseCollabStep COL-001#2 -> order', parseCollabStep('COL-001#2').order, 2);
+ok('parseCollabStep task biasa -> null', parseCollabStep('TSK-007') === null);
+ok('parseCollabStep collab tanpa step -> null', parseCollabStep('COL-001') === null);
 
 console.log(`\n✅ Semua ${passed} assertion lulus.`);

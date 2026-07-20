@@ -36,6 +36,7 @@ const CONFIG = {
   CHECKLIST_SHEET: 'CHECKLIST',
   COLLAB_SHEET: 'COLLAB',
   COLLAB_STEP_SHEET: 'COLLAB_STEPS',
+  NOTIF_SHEET: 'NOTIFICATIONS',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -670,6 +671,7 @@ async function addComment(payload) {
   await ensureCommentsSheet();
   await valuesAppend(`${CONFIG.COMMENTS_SHEET}!A:D`, [[nowStamp(), taskId, author, message]]);
   await logActivity(author, 'Comment', taskId, message.length > 120 ? message.slice(0, 117) + '...' : message);
+  await createMentionNotifications(taskId, author, message).catch(() => {});   // tag @user -> notifikasi
   return { success: true, message: 'Komentar berhasil ditambahkan.', comments: await getComments(taskId) };
 }
 
@@ -707,12 +709,24 @@ async function getTaskById(taskId) {
   return rowToTask(cur[0] || [], row);
 }
 
-// Boleh menambah item & mencentang: manager/Dev, atau PIC/Support task itu.
-// Boleh menghapus item: manager/Dev SAJA (item dari PM tak boleh dihilangkan PIC).
+// Boleh menambah item & mencentang.
+//  - Sub-ceklis proses kolaborasi (id "COL-xxx#N"): manager/Dev atau PIC proses itu.
+//  - Ceklis task biasa: manager/Dev, atau PIC/Support task itu.
 async function canEditChecklist(taskId, actor) {
   if (isManagerActor(actor)) return true;
+  const cs = parseCollabStep(taskId);
+  if (cs) { const pic = await collabStepPic(cs.collabId, cs.order); return canCheckStep(pic, actor); }
   const task = await getTaskById(taskId);
   return ownsTaskActor(task, actor);
+}
+// Boleh menghapus item.
+//  - Sub-ceklis proses kolaborasi: manager/Dev atau PIC proses itu (per keputusan).
+//  - Ceklis task biasa: manager/Dev SAJA (item dari PM tak boleh dihilangkan PIC).
+async function canDeleteChecklist(taskId, actor) {
+  if (isManagerActor(actor)) return true;
+  const cs = parseCollabStep(taskId);
+  if (cs) { const pic = await collabStepPic(cs.collabId, cs.order); return canCheckStep(pic, actor); }
+  return false;
 }
 
 async function getChecklist(taskId) {
@@ -769,7 +783,7 @@ async function deleteChecklistItem(taskId, row, actor) {
   row = parseInt(row, 10);
   actor = String(actor || '').trim() || 'Unknown';
   if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
-  if (!isManagerActor(actor)) return { success: false, message: 'Hanya PM/Dev yang bisa menghapus item ceklis.' };
+  if (!(await canDeleteChecklist(taskId, actor))) return { success: false, message: 'Anda tak berhak menghapus item ceklis ini.' };
   const cur = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A${row}:B${row}`);
   const owner = String((cur[0] && cur[0][0]) || '').trim();
   if (owner !== taskId) return { success: false, message: 'Item ceklis tidak cocok dengan task ini. Muat ulang.' };
@@ -804,16 +818,18 @@ async function getChecklistSummary() {
 
 async function ensureCollabSheets() {
   await ensureSheetExists(CONFIG.COLLAB_SHEET);
-  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:F1`);
-  if (!head.length || !head[0] || !head[0][0]) {
-    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:F1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At']]);
-  }
+  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:G1`);
+  let h0 = head[0] || [];
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:G1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline']]);
+  else if (!h0[6]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!G1`, [['Deadline']]);   // deadline project keseluruhan
   await ensureSheetExists(CONFIG.COLLAB_STEP_SHEET);
-  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:H1`);
-  if (!head.length || !head[0] || !head[0][0]) {
-    await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:H1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At']]);
-  }
+  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`);
+  h0 = head[0] || [];
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note']]);
+  else if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I1`, [['Note']]);   // catatan per proses (PIC note)
 }
+function parseCollabStep(taskId) { const m = String(taskId || '').match(/^(COL-\d+)#(\d+)$/); return m ? { collabId: m[1], order: Number(m[2]) } : null; }
+async function collabStepPic(collabId, order) { const c = (await getCollabs()).find(x => x.id === collabId); if (!c) return null; const s = c.steps.find(x => x.order === order); return s ? s.pic : null; }
 
 function genCollabId(ids) {
   let max = 0;
@@ -830,8 +846,8 @@ function canCheckStep(stepPic, actor) {
 
 async function getCollabs() {
   let crows = [], srows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:F`); } catch (e) { return []; }
-  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:H`); } catch (e) { srows = []; }
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:G`); } catch (e) { return []; }
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:I`); } catch (e) { srows = []; }
   const steps = {};
   srows.forEach((r, i) => {
     const cid = String((r && r[0]) || '').trim(); if (!cid) return;
@@ -844,6 +860,7 @@ async function getCollabs() {
       done: isChecked(r && r[5]),
       doneBy: String((r && r[6]) || '').trim(),
       doneAt: String((r && r[7]) || '').trim(),
+      note: String((r && r[8]) || '').trim(),
     });
   });
   Object.values(steps).forEach(list => list.sort((a, b) => a.order - b.order));
@@ -858,6 +875,7 @@ async function getCollabs() {
       description: String((r && r[3]) || '').trim(),
       createdBy: String((r && r[4]) || '').trim(),
       createdAt: String((r && r[5]) || '').trim(),
+      deadline: (r && r[6] != null && r[6] !== '') ? formatDate(r[6], false) : '',
       steps: list, done, total: list.length,
       status: (list.length && done >= list.length) ? 'Selesai' : 'Aktif',
     };
@@ -885,6 +903,7 @@ async function saveCollab(payload, actor) {
   const platform = String((payload && payload.platform) || '').trim();
   const title = String((payload && payload.title) || '').trim();
   const description = String((payload && payload.description) || '').trim();
+  const deadline = String((payload && payload.deadline) || '').trim();   // deadline project keseluruhan
   const steps = Array.isArray(payload && payload.steps) ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
   const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim() }))
@@ -893,38 +912,62 @@ async function saveCollab(payload, actor) {
 
   await ensureCollabSheets();
   let crows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:F`); } catch (e) { crows = []; }
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:G`); } catch (e) { crows = []; }
   const ids = crows.map(r => String((r && r[0]) || '').trim());
   let id = String((payload && payload.id) || '').trim();
   const isUpdate = id && ids.includes(id);
 
-  // Simpan status "done" proses lama agar tidak hilang saat manager mengedit struktur.
-  let prevDone = {};
+  // Pertahankan status "done" & catatan proses lama saat manager mengedit struktur.
+  let prevStep = {};
   if (isUpdate) {
     const existing = (await getCollabs()).find(c => c.id === id);
-    if (existing) existing.steps.forEach(s => { prevDone[s.order] = { done: s.done, doneBy: s.doneBy, doneAt: s.doneAt }; });
+    if (existing) existing.steps.forEach(s => { prevStep[s.order] = { done: s.done, doneBy: s.doneBy, doneAt: s.doneAt, note: s.note }; });
   }
 
+  const dl = deadline ? toSheetDate(deadline) : '';
   if (isUpdate) {
     const rn = ids.indexOf(id) + 2;
     const keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
     const keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp());
-    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:F${rn}`, [[id, platform, title, description, keepBy, keepAt]]);
+    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:G${rn}`, [[id, platform, title, description, keepBy, keepAt, dl]]);
     await deleteStepRowsForCollab(id);
   } else {
     id = genCollabId(ids);
-    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:F`, [[id, platform, title, description, actor, nowStamp()]]);
+    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:G`, [[id, platform, title, description, actor, nowStamp(), dl]]);
   }
 
   const stepRows = clean.map((s, i) => {
     const order = i + 1;
-    const pd = prevDone[order] || {};
-    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || ''];
+    const pd = prevStep[order] || {};
+    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || ''];
   });
-  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:H`, stepRows);
+  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:I`, stepRows);
 
   await logActivity(actor, isUpdate ? 'Collab Update' : 'Collab Create', id, `${title} • ${clean.length} proses`);
   return { success: true, message: isUpdate ? 'Task kolaborasi diperbarui.' : 'Task kolaborasi dibuat.', collabs: await getCollabs() };
+}
+
+// PIC proses (atau manager/Dev) mengisi catatan proses — mis. minta tambahan deadline.
+async function setCollabStepNote(collabId, order, note, actor) {
+  collabId = String(collabId || '').trim();
+  order = Number(order);
+  actor = String(actor || '').trim() || 'Unknown';
+  await ensureCollabSheets();
+  let srows = [];
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:I`); } catch (e) { srows = []; }
+  let idx = -1;
+  for (let i = 0; i < srows.length; i++) {
+    const r = srows[i];
+    if (String((r && r[0]) || '').trim() === collabId && Number((r && r[1]) || 0) === order) { idx = i; break; }
+  }
+  if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
+  const pic = String((srows[idx] && srows[idx][3]) || '').trim();
+  if (!isManagerActor(actor) && !canCheckStep(pic, actor)) {
+    return { success: false, message: `Hanya ${pic || 'PIC proses ini'} atau manager yang bisa mengisi catatan.` };
+  }
+  await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I${idx + 2}`, [[String(note || '').trim()]]);
+  await logActivity(actor, 'Collab Step Note', collabId, `Proses ${order}: catatan diperbarui`);
+  return { success: true, message: 'Catatan proses disimpan.', collabs: await getCollabs() };
 }
 
 async function setCollabStepDone(collabId, order, done, actor) {
@@ -968,6 +1011,76 @@ async function deleteCollab(id, actor) {
   }
   await logActivity(actor, 'Collab Delete', id, '');
   return { success: true, message: 'Task kolaborasi dihapus.', collabs: await getCollabs() };
+}
+
+/* ------------------------------------------------------------------ */
+/* NOTIFIKASI (tag @user di komentar -> lonceng in-app)               */
+/* ------------------------------------------------------------------ */
+
+async function ensureNotificationsSheet() {
+  await ensureSheetExists(CONFIG.NOTIF_SHEET);
+  const head = await valuesGet(`${CONFIG.NOTIF_SHEET}!A1:H1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.NOTIF_SHEET}!A1:H1`, [['ID', 'For User', 'Type', 'Ref ID', 'From', 'Text', 'Created At', 'Read']]);
+  }
+}
+
+async function addNotification(forUser, type, refId, from, text) {
+  if (!String(forUser || '').trim()) return;
+  await ensureNotificationsSheet();
+  const id = 'N' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+  await valuesAppend(`${CONFIG.NOTIF_SHEET}!A:H`,
+    [[id, String(forUser), String(type || ''), String(refId || ''), String(from || ''), String(text || ''), nowStamp(), 'FALSE']]);
+}
+
+async function getNotifications(user) {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.NOTIF_SHEET}!A2:H`); } catch (e) { return []; }
+  const u = baseName(user);
+  if (!u) return [];
+  return rows
+    .map((r, i) => ({
+      row: i + 2, id: String((r && r[0]) || ''), forUser: String((r && r[1]) || ''),
+      type: String((r && r[2]) || ''), refId: String((r && r[3]) || ''), from: String((r && r[4]) || ''),
+      text: String((r && r[5]) || ''), createdAt: String((r && r[6]) || ''), read: isChecked(r && r[7]),
+    }))
+    .filter(n => baseName(n.forUser) === u)
+    .reverse(); // terbaru dulu
+}
+
+// Tandai terbaca: semua notif user (opsional difilter refId), mis. saat membuka collab terkait.
+async function markNotificationsRead(user, refId) {
+  await ensureNotificationsSheet();
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.NOTIF_SHEET}!A2:H`); } catch (e) { return { success: true, notifications: [] }; }
+  const u = baseName(user), ref = String(refId || '').trim();
+  const data = [];
+  rows.forEach((r, i) => {
+    const fu = baseName((r && r[1]) || ''), rf = String((r && r[3]) || '').trim(), read = isChecked(r && r[7]);
+    if (fu === u && !read && (!ref || rf === ref)) data.push({ range: `${CONFIG.NOTIF_SHEET}!H${i + 2}`, values: [['TRUE']] });
+  });
+  if (data.length) {
+    const sheets = await getSheets();
+    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: getSpreadsheetId(), requestBody: { valueInputOption: 'RAW', data } });
+  }
+  return { success: true, notifications: await getNotifications(user) };
+}
+
+// Parse @Nama pada pesan komentar -> buat notifikasi untuk tiap user valid yang di-tag.
+async function createMentionNotifications(refId, author, message) {
+  const raw = (String(message || '').match(/@([A-Za-z][\w.\-]*)/g) || []).map(s => s.slice(1));
+  if (!raw.length) return;
+  let pics = [];
+  try { pics = (await getOptions()).pic || []; } catch (e) { pics = []; }
+  const targets = new Set();
+  raw.forEach(n => {
+    const nb = baseName(n);
+    const match = pics.find(p => baseName(p) === nb || baseName(p).split(' ')[0] === nb);
+    if (match && baseName(match) !== baseName(author)) targets.add(match);
+  });
+  for (const t of targets) {
+    await addNotification(t, 'mention', refId, author, `${author} men-tag Anda: "${String(message).slice(0, 90)}"`);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1531,6 +1644,7 @@ async function setupTaskTracker() {
   await ensureCommentsSheet();
   await ensureChecklistSheet();
   await ensureCollabSheets();
+  await ensureNotificationsSheet();
   await ensureActivitySheet();
   await ensureAuthSheet();
   await ensureLinksSheet();
@@ -1580,7 +1694,9 @@ module.exports = {
   // ceklis per task (PM menyusun, PIC mencentang)
   getChecklist, addChecklistItem, setChecklistDone, deleteChecklistItem,
   // task kolaborasi (alur beruntun antar-PIC)
-  getCollabs, saveCollab, setCollabStepDone, deleteCollab,
+  getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, deleteCollab,
+  // notifikasi (tag @user)
+  getNotifications, markNotificationsRead,
   // setup
   setupTaskTracker, assignMissingTaskIds,
   // auth (PIN)
@@ -1597,5 +1713,5 @@ module.exports = {
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp,
     isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus,
-    ownsTaskActor, isChecked, canCheckStep, genCollabId },
+    ownsTaskActor, isChecked, canCheckStep, genCollabId, parseCollabStep },
 };
