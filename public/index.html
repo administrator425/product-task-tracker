@@ -410,6 +410,18 @@
               <button id="collabAddBtn" onclick="openCollabModal()" class="hide shrink-0 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center gap-1.5"><span class="material-icons-round text-[18px]">add</span>Task Kolaborasi</button>
             </div>
           </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="relative flex-1 min-w-[180px] max-w-sm">
+              <span class="material-icons-round absolute left-2.5 top-2 text-gray-400 text-[18px]">search</span>
+              <input id="collabSearch" oninput="setCollabFilter('q',this.value)" placeholder="Cari judul, PIC, proses…" class="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 border-0 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
+            </div>
+            <select id="collabFilterType" onchange="setCollabFilter('type',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua Tipe</option></select>
+            <select id="collabFilterPic" onchange="setCollabFilter('pic',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua PIC</option></select>
+            <select id="collabFilterStatus" onchange="setCollabFilter('status',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua Status</option><option value="Aktif">Aktif</option><option value="Selesai">Selesai</option></select>
+            <button id="collabFilterMine" onclick="setCollabFilter('mine',null)" class="px-2.5 py-2 rounded-lg text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 flex items-center gap-1"><span class="material-icons-round text-[14px]">person</span>Giliran Saya</button>
+            <button id="collabFilterReset" onclick="resetCollabFilter()" class="hide px-2 py-2 rounded-lg text-xs text-gray-400 hover:text-rose-500">Reset</button>
+            <span id="collabFilterCount" class="text-[11px] text-gray-400 ml-auto"></span>
+          </div>
           <div id="collabList" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
           <div id="collabBoard" class="hide flex gap-3 overflow-x-auto pb-2"></div>
         </div>
@@ -735,7 +747,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.40.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.41.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -823,7 +835,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabViz: 'grid', notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabViz: 'grid', _collabFilter: {q:'',type:'',pic:'',status:'',mine:false}, notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -2010,6 +2022,25 @@ function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+(
 const COLLAB_TYPES=['Course','Tryout/Latsol','Liveclass','Drilling','Journey'];
 function collabTypeOf(c){ const t=String((c&&c.type)||'').trim(); return t||'Tanpa Tipe'; }
 function setCollabViz(v){ state._collabViz=v; renderCollab(); }
+/* ---- Filter tab Task Kolaborasi ---- */
+function collabFilter(){ return state._collabFilter||(state._collabFilter={q:'',type:'',pic:'',status:'',mine:false}); }
+function setCollabFilter(k,v){ const f=collabFilter(); if(k==='mine') f.mine=!f.mine; else f[k]=v; renderCollab(); }
+function resetCollabFilter(){ state._collabFilter={q:'',type:'',pic:'',status:'',mine:false}; const s=document.getElementById('collabSearch'); if(s) s.value=''; ['collabFilterType','collabFilterPic','collabFilterStatus'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';}); renderCollab(); }
+function collabFilterActive(){ const f=collabFilter(); return !!(f.q||f.type||f.pic||f.status||f.mine); }
+function filteredCollabs(){
+  const f=collabFilter(); let arr=(state.collabs||[]).slice();
+  const q=String(f.q||'').toLowerCase().trim();
+  if(q) arr=arr.filter(c=>[c.id,c.title,c.platform,c.type,c.description].concat((c.steps||[]).map(s=>s.name+' '+s.pic)).join(' ').toLowerCase().includes(q));
+  if(f.type) arr=arr.filter(c=>collabTypeOf(c)===f.type);
+  if(f.pic) arr=arr.filter(c=>(c.steps||[]).some(s=>same(s.pic,f.pic)));
+  if(f.status) arr=arr.filter(c=>c.status===f.status);
+  if(f.mine) arr=arr.filter(c=>(c.steps||[]).some(s=>isMyTurnStep(c,s)));
+  return arr;
+}
+function populateCollabFilters(){
+  const t=document.getElementById('collabFilterType'); if(t){ const v=t.value; t.innerHTML='<option value="">Semua Tipe</option>'+COLLAB_TYPES.concat(['Tanpa Tipe']).map(x=>`<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join(''); t.value=v; }
+  const p=document.getElementById('collabFilterPic'); if(p){ const v=p.value; p.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).filter(x=>baseName(x)!==baseName(VIEWONLY_USER)).map(x=>`<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join(''); p.value=v; }
+}
 function renderCollab(){
   const add=document.getElementById('collabAddBtn'); if(add) add.classList.toggle('hide', !canManageCollab());
   const banner=document.getElementById('collabTurnBanner');
@@ -2017,8 +2048,15 @@ function renderCollab(){
   if(banner) banner.innerHTML = (mine.length && !isViewOnly())
     ? `<div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 flex items-center gap-2 text-sm text-rose-700 dark:text-rose-200"><span class="material-icons-round text-[18px]">notifications_active</span><span class="flex-1"><b>Giliran Anda:</b> ${mine.length} proses siap dikerjakan/dicentang${mine[0]?` — mis. "${escapeHtml(mine[0].step.name)}" di ${escapeHtml(mine[0].collab.title)}`:''}.</span></div>`
     : '';
+  populateCollabFilters();
   const viz=state._collabViz||'grid';
   ['grid','kanban'].forEach(v=>{ const b=document.getElementById('collabViz'+(v==='grid'?'Grid':'Kanban')); if(!b) return; const on=viz===v; b.classList.toggle('bg-white', on); b.classList.toggle('dark:bg-slate-900', on); b.classList.toggle('shadow-sm', on); b.classList.toggle('text-indigo-600', on); });
+  // status tombol "Giliran Saya" + reset + hitungan
+  const f=collabFilter();
+  const mb=document.getElementById('collabFilterMine'); if(mb){ mb.classList.toggle('bg-rose-50', f.mine); mb.classList.toggle('border-rose-300', f.mine); mb.classList.toggle('text-rose-600', f.mine); }
+  const rb=document.getElementById('collabFilterReset'); if(rb) rb.classList.toggle('hide', !collabFilterActive());
+  const shown=filteredCollabs().length, total=(state.collabs||[]).length;
+  const cnt=document.getElementById('collabFilterCount'); if(cnt) cnt.textContent=collabFilterActive()?`${shown} dari ${total}`:'';
   const list=document.getElementById('collabList'), board=document.getElementById('collabBoard');
   if(list) list.classList.toggle('hide', viz!=='grid');
   if(board) board.classList.toggle('hide', viz!=='kanban');
@@ -2027,14 +2065,14 @@ function renderCollab(){
 }
 function renderCollabGrid(){
   const list=document.getElementById('collabList'); if(!list) return;
-  const collabs=state.collabs||[];
-  if(!collabs.length){ list.innerHTML=`<div class="md:col-span-2 xl:col-span-3">${emptyState(canManageCollab()?'Belum ada task kolaborasi. Klik tombol "Task Kolaborasi" untuk membuat alur pertama.':'Belum ada task kolaborasi.')}</div>`; return; }
+  const collabs=filteredCollabs();
+  if(!collabs.length){ list.innerHTML=`<div class="md:col-span-2 xl:col-span-3">${emptyState((state.collabs||[]).length?'Tak ada task yang cocok dengan filter.':(canManageCollab()?'Belum ada task kolaborasi. Klik tombol "Task Kolaborasi" untuk membuat alur pertama.':'Belum ada task kolaborasi.'))}</div>`; return; }
   list.innerHTML=collabs.map(collabCard).join('');
 }
 function renderCollabKanban(){
   const board=document.getElementById('collabBoard'); if(!board) return;
   (state._collabSortables||[]).forEach(s=>{try{s.destroy();}catch(e){}}); state._collabSortables=[];
-  const collabs=state.collabs||[];
+  const collabs=filteredCollabs();
   board.innerHTML=COLLAB_TYPES.concat(['Tanpa Tipe']).map(col=>{
     const items=collabs.filter(c=>collabTypeOf(c)===col);
     const val=(col==='Tanpa Tipe')?'':col;
@@ -2083,7 +2121,8 @@ function collabCard(c){
       <div class="flex-1 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden"><div class="h-full ${p.done>=p.total&&p.total?'bg-emerald-500':'bg-indigo-500'}" style="width:${p.pct}%"></div></div>
       <span class="text-[11px] font-semibold text-gray-500 dark:text-slate-400 shrink-0">${p.done}/${p.total}</span>
     </div>
-    ${mineTurn?`<div class="mt-2 text-[11px] font-semibold text-rose-600 flex items-center gap-1"><span class="material-icons-round text-[13px]">notifications_active</span>Giliran Anda</div>`:''}
+    ${c.deadline?(function(){const od=c.status!=='Selesai'&&c.deadline<todayStr();return `<div class="mt-1.5 flex items-center gap-1 text-[11px] ${od?'text-rose-600 font-semibold':'text-gray-500 dark:text-slate-400'}"><span class="material-icons-round text-[13px]">event</span>Deadline ${escapeHtml(c.deadline)}${od?' • telat':''}</div>`;})():''}
+    ${mineTurn?`<div class="mt-1.5 text-[11px] font-semibold text-rose-600 flex items-center gap-1"><span class="material-icons-round text-[13px]">notifications_active</span>Giliran Anda</div>`:''}
     <div class="mt-2 space-y-1">${rows}</div>
   </div>`;
 }
@@ -2118,7 +2157,7 @@ function openCollabModal(id=''){
   if(c) loadCollabFeed(c.id); else document.getElementById('collabComments').innerHTML=emptyState('Komentar tersedia setelah task disimpan.');
   renderCollabSteps(c);
 }
-function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); const mm=document.getElementById('collabMentionMenu'); if(mm) mm.classList.add('hide'); state._collabId=null; state._collabEdit=false; }
+function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); const mm=document.getElementById('collabMentionMenu'); if(mm) mm.classList.add('hide'); state._collabId=null; state._collabEdit=false; if(state.activeView==='collab') renderCollab(); }
 function notifOutsideClose(e){ const bell=document.getElementById('notifBell'), menu=document.getElementById('notifMenu'); if(!menu||menu.classList.contains('hide')) return; if(bell&&bell.contains(e.target)) return; if(menu.contains(e.target)) return; menu.classList.add('hide'); }
 function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline})):[{name:'',pic:'',deadline:''}]); renderCollabSteps(c); }
 function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value })); }
@@ -2232,6 +2271,7 @@ function toggleCollabStep(order, done){
     if(!res||!res.success){ showToast((res&&res.message)||'Gagal mencentang', false); renderCollabSteps(currentCollab()); return; }
     state.collabs=res.collabs||state.collabs; showToast(res.message);
     renderCollabSteps(currentCollab()); updateCollabTurnBadge(); loadCollabFeed(id);
+    if(state.activeView==='collab') renderCollab();   // segarkan kartu (progres) di grid/kanban
   }).withFailureHandler(err=>{ showToast(err.message||err,false); renderCollabSteps(currentCollab()); })
     .setCollabStepDone(id, order, !!done, state.currentUser);
 }

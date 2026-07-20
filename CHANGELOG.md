@@ -10,6 +10,11 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.41.0 — Task Kolaborasi: fix progres kartu, deadline di kartu, filter
+- **Fix**: progres di kartu (mis. 0/9) tak ikut ter-update setelah mencentang proses di modal — kini kartu grid/kanban **segera menyegarkan** progres saat proses dicentang & saat modal ditutup.
+- **Deadline di kartu**: deadline project kini tampil di kartu (grid & kanban), dengan flag **"telat"** merah bila lewat.
+- **Filter tab Task Kolaborasi**: kotak **cari** (judul/PIC/proses/tipe), plus filter **Tipe**, **PIC**, **Status** (Aktif/Selesai), dan toggle **"Giliran Saya"**. Berlaku di tampilan Grid & Kanban; ada penghitung "X dari Y" + tombol Reset.
+
 ## 1.40.0 — Hemat kuota Google Sheets (perbaiki error "Read requests per minute")
 - **Penyebab**: app membaca Spreadsheet satu-per-satu; `getBootstrapData` melakukan ~11 pembacaan sekaligus, dan auto-refresh tiap pindah tab mengulanginya → menabrak batas Google (60 read/menit per service account).
 - **Perbaikan**:
