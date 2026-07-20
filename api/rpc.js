@@ -60,6 +60,7 @@ const HANDLERS = {
   saveCollab: (payload, actor) => backend.saveCollab(payload, actor),
   setCollabStepDone: (collabId, order, done, actor) => backend.setCollabStepDone(collabId, order, done, actor),
   setCollabStepNote: (collabId, order, note, actor) => backend.setCollabStepNote(collabId, order, note, actor),
+  setCollabType: (collabId, type, actor) => backend.setCollabType(collabId, type, actor),
   deleteCollab: (id, actor) => backend.deleteCollab(id, actor),
   getNotifications: (user) => backend.getNotifications(user),
   markNotificationsRead: (user, refId) => backend.markNotificationsRead(user, refId),

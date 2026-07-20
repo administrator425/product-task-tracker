@@ -818,10 +818,13 @@ async function getChecklistSummary() {
 
 async function ensureCollabSheets() {
   await ensureSheetExists(CONFIG.COLLAB_SHEET);
-  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:G1`);
+  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:H1`);
   let h0 = head[0] || [];
-  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:G1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline']]);
-  else if (!h0[6]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!G1`, [['Deadline']]);   // deadline project keseluruhan
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:H1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type']]);
+  else {
+    if (!h0[6]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!G1`, [['Deadline']]);   // deadline project keseluruhan
+    if (!h0[7]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!H1`, [['Type']]);        // tipe task (untuk Kanban per-tipe)
+  }
   await ensureSheetExists(CONFIG.COLLAB_STEP_SHEET);
   head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`);
   h0 = head[0] || [];
@@ -846,7 +849,7 @@ function canCheckStep(stepPic, actor) {
 
 async function getCollabs() {
   let crows = [], srows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:G`); } catch (e) { return []; }
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:H`); } catch (e) { return []; }
   try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:I`); } catch (e) { srows = []; }
   const steps = {};
   srows.forEach((r, i) => {
@@ -876,6 +879,7 @@ async function getCollabs() {
       createdBy: String((r && r[4]) || '').trim(),
       createdAt: String((r && r[5]) || '').trim(),
       deadline: (r && r[6] != null && r[6] !== '') ? formatDate(r[6], false) : '',
+      type: String((r && r[7]) || '').trim(),
       steps: list, done, total: list.length,
       status: (list.length && done >= list.length) ? 'Selesai' : 'Aktif',
     };
@@ -904,6 +908,7 @@ async function saveCollab(payload, actor) {
   const title = String((payload && payload.title) || '').trim();
   const description = String((payload && payload.description) || '').trim();
   const deadline = String((payload && payload.deadline) || '').trim();   // deadline project keseluruhan
+  const type = String((payload && payload.type) || '').trim();           // tipe task (Kanban per-tipe)
   const steps = Array.isArray(payload && payload.steps) ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
   const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim() }))
@@ -912,7 +917,7 @@ async function saveCollab(payload, actor) {
 
   await ensureCollabSheets();
   let crows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:G`); } catch (e) { crows = []; }
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:H`); } catch (e) { crows = []; }
   const ids = crows.map(r => String((r && r[0]) || '').trim());
   let id = String((payload && payload.id) || '').trim();
   const isUpdate = id && ids.includes(id);
@@ -929,11 +934,11 @@ async function saveCollab(payload, actor) {
     const rn = ids.indexOf(id) + 2;
     const keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
     const keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp());
-    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:G${rn}`, [[id, platform, title, description, keepBy, keepAt, dl]]);
+    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:H${rn}`, [[id, platform, title, description, keepBy, keepAt, dl, type]]);
     await deleteStepRowsForCollab(id);
   } else {
     id = genCollabId(ids);
-    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:G`, [[id, platform, title, description, actor, nowStamp(), dl]]);
+    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:H`, [[id, platform, title, description, actor, nowStamp(), dl, type]]);
   }
 
   const stepRows = clean.map((s, i) => {
@@ -968,6 +973,21 @@ async function setCollabStepNote(collabId, order, note, actor) {
   await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I${idx + 2}`, [[String(note || '').trim()]]);
   await logActivity(actor, 'Collab Step Note', collabId, `Proses ${order}: catatan diperbarui`);
   return { success: true, message: 'Catatan proses disimpan.', collabs: await getCollabs() };
+}
+
+// Ubah tipe task (dipakai drag antar kolom Kanban per-tipe). Manager/Dev saja.
+async function setCollabType(collabId, type, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  if (!isManagerActor(actor)) return { success: false, message: 'Hanya manager/Dev yang bisa mengubah tipe task.' };
+  collabId = String(collabId || '').trim();
+  await ensureCollabSheets();
+  let crows = [];
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:H`); } catch (e) { crows = []; }
+  const ci = crows.findIndex(r => String((r && r[0]) || '').trim() === collabId);
+  if (ci < 0) return { success: false, message: 'Task kolaborasi tidak ditemukan.' };
+  await valuesUpdate(`${CONFIG.COLLAB_SHEET}!H${ci + 2}`, [[String(type || '').trim()]]);
+  await logActivity(actor, 'Collab Type', collabId, `Tipe → ${type || '(kosong)'}`);
+  return { success: true, message: 'Tipe task diperbarui.', collabs: await getCollabs() };
 }
 
 async function setCollabStepDone(collabId, order, done, actor) {
@@ -1704,7 +1724,7 @@ module.exports = {
   // ceklis per task (PM menyusun, PIC mencentang)
   getChecklist, addChecklistItem, setChecklistDone, deleteChecklistItem,
   // task kolaborasi (alur beruntun antar-PIC)
-  getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, deleteCollab,
+  getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, setCollabType, deleteCollab,
   // notifikasi (tag @user)
   getNotifications, markNotificationsRead,
   // setup

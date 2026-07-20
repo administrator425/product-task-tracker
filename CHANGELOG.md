@@ -10,6 +10,16 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.39.0 — Task Kolaborasi: Kanban per-tipe task
+- Tab Task Kolaborasi kini punya **toggle Grid ↔ Kanban**. Kanban mengelompokkan task berdasarkan **tipe** (bukan status): **Course · Tryout/Latsol · Liveclass · Drilling · Journey**, plus kolom **"Tanpa Tipe"**.
+- **Seret kartu antar kolom** untuk mengubah tipe task (manager/Dev saja) — mirip Kanban Status.
+- Field **Tipe Task** baru di modal (opsional); ditampilkan sebagai chip ungu di kartu.
+- Kolom baru **`Type`** di sheet COLLAB (dibuat/ditambah otomatis).
+
+## 1.38.0 — Task Kolaborasi: perbaikan modal panjang + tombol Simpan manager
+- **Modal tak lagi "jebol" saat proses banyak**: kartu modal kini dibatasi tinggi layar; kolom kiri (proses) & kanan (komentar) scroll di dalam, footer (Tutup/Simpan/Hapus) tetap menempel di bawah. Sebelumnya proses yang panjang meluber ke bawah footer.
+- **Tombol Simpan selalu tersedia untuk manager** — bisa langsung ganti judul/platform/deskripsi/deadline lalu Simpan tanpa harus masuk mode "Edit" dulu. Menyimpan di mode baca mempertahankan proses & progres yang ada (hanya field kepala yang diperbarui).
+
 ## 1.37.0 — Task Kolaborasi: platform bisa lebih dari 1
 - Pilihan **Platform** di Task Kolaborasi kini **multi-select** (Ctrl/Cmd untuk pilih beberapa) — sama seperti task biasa. Disimpan dipisah koma; di kartu tampil sebagai beberapa chip terpisah.
 
