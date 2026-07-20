@@ -10,6 +10,10 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.42.0 — Sub-ceklis collab jadi fleksibel (siapa pun bisa menambah)
+- **Sub-ceklis per proses** kini bisa **ditambah/dicentang/dihapus oleh siapa pun** (bukan hanya PIC proses/manager) — untuk gotong-royong antar-PIC. Mode lihat-saja tetap tak bisa.
+- Tidak mengubah: **centang proses utama** tetap hanya oleh PIC proses tsb, dan **ceklis task biasa** tetap dengan aturan lamanya (PIC/Support tambah/centang, hapus manager).
+
 ## 1.41.0 — Task Kolaborasi: fix progres kartu, deadline di kartu, filter
 - **Fix**: progres di kartu (mis. 0/9) tak ikut ter-update setelah mencentang proses di modal — kini kartu grid/kanban **segera menyegarkan** progres saat proses dicentang & saat modal ditutup.
 - **Deadline di kartu**: deadline project kini tampil di kartu (grid & kanban), dengan flag **"telat"** merah bila lewat.

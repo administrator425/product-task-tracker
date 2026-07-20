@@ -747,7 +747,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.41.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.42.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -2233,7 +2233,8 @@ function saveCollabStepNote(order){
      .withFailureHandler(err=>showToast(err.message||err,false)).setCollabStepNote(id, order, ta.value.trim(), state.currentUser);
 }
 // ---- Sub-ceklis per proses (reuse backend CHECKLIST via id "COL-xxx#N") ----
-function stepChecklistEditable(order){ const c=currentCollab(); const s=c&&c.steps.find(x=>x.order===order); return !isViewOnly() && (isManager(state.currentUser) || isDev() || (s && same(s.pic, state.currentUser))); }
+// Sub-ceklis collab FLEKSIBEL: siapa pun (kecuali mode lihat-saja) boleh tambah/centang/hapus.
+function stepChecklistEditable(order){ return !isViewOnly(); }
 function loadStepChecklist(order){
   const box=document.getElementById('collab-subck-'+order); if(box) box.innerHTML='<div class="text-[11px] text-gray-400 px-1">Memuat…</div>';
   GAS.withSuccessHandler(items=>renderStepChecklist(order, items||[])).withFailureHandler(()=>renderStepChecklist(order, [])).getChecklist(collabStepTaskId(order));

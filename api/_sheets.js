@@ -731,22 +731,21 @@ async function getTaskById(taskId) {
 }
 
 // Boleh menambah item & mencentang.
-//  - Sub-ceklis proses kolaborasi (id "COL-xxx#N"): manager/Dev atau PIC proses itu.
+//  - Sub-ceklis proses kolaborasi (id "COL-xxx#N"): FLEKSIBEL — siapa pun boleh
+//    (mode lihat-saja sudah diblokir di gerbang RPC).
 //  - Ceklis task biasa: manager/Dev, atau PIC/Support task itu.
 async function canEditChecklist(taskId, actor) {
+  if (parseCollabStep(taskId)) return !!baseName(actor);
   if (isManagerActor(actor)) return true;
-  const cs = parseCollabStep(taskId);
-  if (cs) { const pic = await collabStepPic(cs.collabId, cs.order); return canCheckStep(pic, actor); }
   const task = await getTaskById(taskId);
   return ownsTaskActor(task, actor);
 }
 // Boleh menghapus item.
-//  - Sub-ceklis proses kolaborasi: manager/Dev atau PIC proses itu (per keputusan).
+//  - Sub-ceklis proses kolaborasi: FLEKSIBEL — siapa pun boleh.
 //  - Ceklis task biasa: manager/Dev SAJA (item dari PM tak boleh dihilangkan PIC).
 async function canDeleteChecklist(taskId, actor) {
+  if (parseCollabStep(taskId)) return !!baseName(actor);
   if (isManagerActor(actor)) return true;
-  const cs = parseCollabStep(taskId);
-  if (cs) { const pic = await collabStepPic(cs.collabId, cs.order); return canCheckStep(pic, actor); }
   return false;
 }
 
