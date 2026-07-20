@@ -53,7 +53,7 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 ## 1.30.0 — Mode Dev tersembunyi (trigger rahasia)
 - Opsi **"Dev"** kini **disembunyikan** dari halaman pilih identitas dan dropdown **Mode User** — supaya bisa dites sebagai user biasa. Tidak ada lagi tombol Dev yang terlihat.
 - Masuk Mode Dev lewat **trigger rahasia**: **tekan-tahan logo ProductTrack ~2 detik** (di sidebar) → muncul prompt **PIN Dev**. Jalan di desktop maupun HP (di HP: buka menu/sidebar dulu).
-- **Tetap butuh kredensial**: PIN Dev = env `DEV_PIN` (default `3108`), diverifikasi di server — berlaku walau PIN per-user sudah di-set. Login **email dev** (Google) tetap langsung jadi Dev tanpa PIN.
+- **Tetap butuh kredensial**: PIN Dev diatur via env `DEV_PIN` (nilai tak ditulis di sini), diverifikasi di server — berlaku walau PIN per-user sudah di-set. Login **email dev** (Google) tetap langsung jadi Dev tanpa PIN.
 - **Selalu tersembunyi**: setelah pindah dari Dev ke user biasa, harus ulangi trigger + PIN untuk kembali ke Dev. Saat sedang aktif sebagai Dev, mode-nya tetap tampil di switcher agar jelas.
 - Dev = super-user testing: melihat semua task & bisa semua aksi (termasuk menetapkan "Done").
 
@@ -67,13 +67,13 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 - Fix: di halaman "Masuk sebagai siapa?", memilih identitas yang **kebetulan sama dengan default** (mis. Nynda saat baru reset) tak lagi melewati PIN per-user. Sekarang PIN identitas **selalu** diminta bila di-set (Nynda, Dev, dll.), apa pun default-nya.
 
 ## 1.28.0 — Halaman pilih identitas (login PIN)
-- Setelah masuk pakai **PIN penuh (676767)**, muncul halaman **"Masuk sebagai siapa?"** dulu — tidak langsung jatuh ke mode Manager. Pilih identitas (PIC / Dev), baru masuk dashboard. Pilihan diingat; ada tombol **"Ganti identitas"** di kotak Mode User untuk memilih ulang.
-- Menghormati PIN per-user yang sudah ada (kalau identitas terkunci PIN, tetap diminta). **Admin (login Google)** dan **mode lihat-saja (098098)** tidak menampilkan halaman ini — mereka sudah teridentifikasi.
+- Setelah masuk pakai **PIN akses penuh** (env `ACCESS_PIN`), muncul halaman **"Masuk sebagai siapa?"** dulu — tidak langsung jatuh ke mode Manager. Pilih identitas (PIC / Dev), baru masuk dashboard. Pilihan diingat; ada tombol **"Ganti identitas"** di kotak Mode User untuk memilih ulang.
+- Menghormati PIN per-user yang sudah ada (kalau identitas terkunci PIN, tetap diminta). **Admin (login Google)** dan **mode lihat-saja** (env `VIEW_PIN`) tidak menampilkan halaman ini — mereka sudah teridentifikasi.
 
 ## 1.27.0 — Login Google (OAuth) untuk admin
 - Ganti kotak "email admin" (yang bisa dipalsukan) dengan tombol **Masuk dengan Google**. Google memverifikasi email ASLI; backend cek tanda tangan token + daftar email admin, lalu menerbitkan **sesi ber-tanda-tangan (HMAC)** 30 hari. Email admin kini **tidak lagi dipercaya dari header mentah** — hanya dari sesi terverifikasi.
 - Nynda & administrator: klik Masuk dengan Google → **langsung akses penuh tanpa PIN**, dan **bisa ganti mode user** (bug "terkunci" saat login email diperbaiki — admin diperlakukan bebas seperti Dev).
-- PIN tetap: **676767** penuh, **098098** lihat-saja untuk yang bukan admin.
+- PIN diatur via env: **`ACCESS_PIN`** (akses penuh) & **`VIEW_PIN`** (lihat-saja) untuk yang bukan admin.
 - Env baru di Vercel: `GOOGLE_CLIENT_ID` (dari Google Cloud) + `SESSION_SECRET` (teks acak). Bila keduanya kosong, tombol Google tak muncul (app tetap jalan dengan PIN).
 
 ## 1.26.0 — Gerbang PIN ganda + auto-login admin
