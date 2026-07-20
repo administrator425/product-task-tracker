@@ -10,6 +10,15 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.34.0 — Task Kolaborasi (alur proses beruntun antar-PIC)
+- Tab baru **"Task Kolaborasi"** (grup Kolaborasi): task dengan **rangkaian proses berurutan**, tiap proses punya **PIC & deadline sendiri** (mis. *"5 Paket TO dan Latsol"* → Alya: kurikulum → Dhika: soal → Uma: QC).
+- **Dibuat manager/Dev saja**, ringkas — cukup **platform + judul + daftar proses**; tidak terikat rumus stage/verb/objek task normal, dan **tidak dihitung** di Dashboard/Kanban task biasa.
+- **Hanya PIC proses** (atau Dev) yang bisa mencentang prosesnya — ditegakkan di UI **dan** server. Urutan fleksibel (tak dikunci), tapi dipakai untuk logika giliran.
+- **Notifikasi dalam-app**: badge angka di tab + banner "Giliran Anda" + highlight kartu. Giliran = proses milik Anda yang belum selesai & proses sebelumnya sudah selesai (handoff sampai ke Anda).
+- **Progres X/N + bar**, flag **overdue per proses**, dan panel **Komentar & Aktivitas** (komentar via sheet COMMENTS + log handoff dari ACTIVITY).
+- Manager bisa **edit struktur** (tambah/hapus/ubah proses & PIC & deadline) lewat tombol "Edit"; status centang proses lama dipertahankan saat struktur diedit.
+- Penyimpanan: sheet baru **`COLLAB`** + **`COLLAB_STEPS`**, dibuat otomatis. Mode lihat-saja tidak melihat tab ini.
+
 ## 1.33.0 — Duplikat task (pakai task lama sebagai template)
 - Tombol **Duplikat** untuk membuat task baru dari task yang mirip (mis. beda judul saja) tanpa mengisi ulang dari nol. Ada di **footer modal task** dan sebagai **ikon salin di kartu Kanban** (muncul saat hover di desktop, selalu tampil di HP).
 - Hasil duplikat adalah **task baru dengan Task ID sendiri** — dihitung terpisah, bukan menimpa/berbagi dengan task asal. Yang diambil hanya isian template-nya.

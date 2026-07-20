@@ -200,6 +200,10 @@
           <button onclick="switchView('communication')" id="nav-communication" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
             <span class="material-icons-round text-[20px]">forum</span> Komunikasi
           </button>
+          <button onclick="switchView('collab')" id="nav-collab" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">account_tree</span> <span class="flex-1">Task Kolaborasi</span>
+            <span id="collabTurnBadge" class="hide inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">0</span>
+          </button>
         </div>
 
         <div id="navgrp-ruangsaya" class="nav-group space-y-1 mt-4 first:mt-0">
@@ -384,6 +388,16 @@
               <button onclick="sendCommunicationComment()" class="px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"><span class="material-icons-round text-[20px]">send</span></button>
             </div>
           </div>
+        </div>
+
+        <!-- TASK KOLABORASI (alur proses beruntun antar-PIC) -->
+        <div id="collabView" class="view hide max-w-[1300px] mx-auto space-y-4">
+          <div id="collabTurnBanner"></div>
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-sm text-gray-500 dark:text-slate-400">Task dengan proses beruntun: tiap proses punya PIC & deadline sendiri. Hanya PIC proses yang bisa mencentang.</div>
+            <button id="collabAddBtn" onclick="openCollabModal()" class="hide shrink-0 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm flex items-center gap-1.5"><span class="material-icons-round text-[18px]">add</span>Task Kolaborasi</button>
+          </div>
+          <div id="collabList" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
         </div>
 
         <!-- SETTINGS -->
@@ -637,11 +651,67 @@
     </div>
   </div>
 
+  <!-- ===== Modal Task Kolaborasi (detail + centang proses; manager: edit/susun) ===== -->
+  <div id="collabModal" class="hide fixed inset-0 z-[90] bg-gray-900/50 flex items-start justify-center overflow-y-auto p-4">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-3xl my-6 shadow-2xl" onclick="event.stopPropagation()">
+      <div class="px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h3 id="collabModalTitle" class="text-lg font-bold text-gray-900 dark:text-white">Task Kolaborasi</h3>
+          <p id="collabModalSub" class="text-xs text-gray-500 dark:text-slate-400 mt-0.5"></p>
+        </div>
+        <button onclick="closeCollabModal()" class="shrink-0 w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-400"><span class="material-icons-round text-[20px]">close</span></button>
+      </div>
+
+      <div class="px-5 py-4 max-h-[calc(100vh-200px)] overflow-y-auto space-y-4 scrollbar-thin">
+        <!-- Form kepala (manager saja bisa edit) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="md:col-span-1"><label class="form-label">Platform</label><select id="collabPlatform" class="form-control"></select></div>
+          <div class="md:col-span-2"><label class="form-label">Judul Task</label><input id="collabTitle" class="form-control" placeholder="mis. 5 Paket TO dan Latsol"></div>
+        </div>
+        <div><label class="form-label">Isi / Deskripsi (opsional)</label><textarea id="collabDesc" rows="2" class="form-control" placeholder="Ringkasan isi task…"></textarea></div>
+
+        <!-- Progres + daftar proses -->
+        <div class="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between gap-3">
+            <div class="font-semibold text-sm flex items-center gap-1.5 text-gray-900 dark:text-white"><span class="material-icons-round text-[18px] text-indigo-600">account_tree</span> Proses Beruntun</div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button id="collabEditToggle" type="button" onclick="collabToggleEdit()" class="hide text-[11px] font-semibold text-indigo-600 hover:underline flex items-center gap-0.5"><span class="material-icons-round text-[13px]">edit</span><span id="collabEditToggleLbl">Edit</span></button>
+              <span id="collabProgCount" class="text-[11px] font-semibold text-gray-500 dark:text-slate-400">0/0</span>
+              <div class="w-24 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden"><div id="collabProgBar" class="h-full bg-indigo-500 transition-all" style="width:0%"></div></div>
+            </div>
+          </div>
+          <div id="collabSteps" class="p-2 bg-gray-50/60 dark:bg-slate-950/40 space-y-1.5"></div>
+          <div id="collabAddStepRow" class="hide p-3 border-t border-gray-100 dark:border-slate-800">
+            <button type="button" onclick="collabAddStepRow()" class="w-full py-2 rounded-lg border border-dashed border-gray-300 dark:border-slate-600 text-gray-500 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600 text-sm font-semibold flex items-center justify-center gap-1"><span class="material-icons-round text-[16px]">add</span>Tambah proses</button>
+          </div>
+        </div>
+
+        <!-- Komentar & aktivitas -->
+        <div class="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <div class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 font-semibold text-sm flex items-center gap-1.5 text-gray-900 dark:text-white"><span class="material-icons-round text-[18px] text-indigo-600">forum</span> Komentar & Aktivitas</div>
+          <div id="collabComments" class="p-4 bg-gray-50/60 dark:bg-slate-950/40 max-h-[240px] overflow-y-auto space-y-2.5 scrollbar-thin"></div>
+          <div id="collabCommentRow" class="hide p-3 flex gap-2 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+            <input id="collabCommentInput" onkeydown="if(event.key==='Enter'){event.preventDefault();sendCollabComment();}" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-indigo-300" placeholder="Tulis komentar…">
+            <button type="button" onclick="sendCollabComment()" class="px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Kirim</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-gray-100 dark:border-slate-800 flex items-center justify-between">
+        <button id="collabDeleteBtn" onclick="deleteCollabFromModal()" class="hide px-3 py-2 rounded-lg border border-rose-200 text-rose-600 dark:border-rose-900/50 dark:text-rose-400 font-semibold text-sm hover:bg-rose-50">Hapus</button>
+        <div class="ml-auto flex gap-2">
+          <button onclick="closeCollabModal()" class="px-4 py-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold text-sm hover:bg-gray-50">Tutup</button>
+          <button id="collabSaveBtn" onclick="saveCollabFromModal()" class="hide px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm">Simpan</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script>
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.33.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.34.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -702,7 +772,7 @@ function onGoogleCredential(resp){
       else { var e=document.getElementById('googleErr'); if(e){ e.textContent=(d&&d.message)||'Email tidak diizinkan.'; e.classList.remove('hide'); } }
     }).catch(function(){ var e=document.getElementById('googleErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','setChecklistDone','deleteChecklistItem','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','deleteCollab','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -729,7 +799,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -762,6 +832,7 @@ function init() {
       state.dashboards = data.dashboards || [];
       state.notes = data.notes || [];
       state.checklistSummary = data.checklistSummary || {};
+      state.collabs = data.collabs || [];
       state.guestMode = !!data.viewOnly;                 // backend: tak ada PIN benar -> data terbatas
       if (state.guestMode) state.currentUser = VIEWONLY_USER;
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
@@ -861,7 +932,7 @@ function applyRoleUI(){
   const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
   const navReport=document.getElementById('nav-report'); if(navReport) navReport.classList.toggle('hide',!mgr || vo); // Laporan: manager/dev
   // Mode lihat-saja: sembunyikan tab pribadi & manajemen. Komunikasi TETAP tampil (bisa kirim chat).
-  ['nav-extdash','nav-mylinks','nav-hariini','nav-mynotes'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
+  ['nav-extdash','nav-mylinks','nav-hariini','nav-mynotes','nav-collab'].forEach(id=>{const e=document.getElementById(id); if(e) e.classList.toggle('hide',vo);});
   const navComm=document.getElementById('nav-communication'); if(navComm) navComm.classList.remove('hide');
   const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
   // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas) ATAU tamu tanpa PIN.
@@ -869,7 +940,7 @@ function applyRoleUI(){
   const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView||guest);
   const guestBox=document.getElementById('guestUnlockBox'); if(guestBox) guestBox.classList.toggle('hide',!guest);
   // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
-  const hiddenForVo=['activity','settings','report','extdash','mylinks','hariini','mynotes'];
+  const hiddenForVo=['activity','settings','report','extdash','mylinks','hariini','mynotes','collab'];
   if(vo && hiddenForVo.includes(state.activeView)) switchView('dashboard');
   else if(!mgr && (state.activeView==='activity'||state.activeView==='settings'||state.activeView==='report')) switchView('dashboard');
   if(!mgr) state.managerFocus='';
@@ -877,6 +948,7 @@ function applyRoleUI(){
   const mineActive=mine.filter(t=>!isDone(t));
   const el=document.getElementById('myTasksBadge');
   if(el) el.textContent = vo ? `Mode lihat saja • semua task (${state.tasks.length})` : (mgr ? `Melihat semua task (${state.tasks.length})` : `${mineActive.length} task aktif Anda • ${mine.length} total`);
+  updateCollabTurnBadge();
   syncNavGroups();
 }
 // Judul grup nav ikut sembunyi bila SEMUA tab di dalamnya tersembunyi untuk peran ini
@@ -1135,6 +1207,7 @@ function switchView(view){
     timeline:['Timeline','Lihat jadwal task sebagai Gantt. Tarik untuk ubah jadwal.','view_timeline'],
     calendar:['Calendar','Lihat task pada kalender berdasarkan Start → Due.','calendar_month'],
     communication:['Komunikasi','Diskusi dan update per task tersimpan di sheet COMMENTS.','forum'],
+    collab:['Task Kolaborasi','Alur proses beruntun antar-PIC dengan handoff & notifikasi giliran.','account_tree'],
     settings:['Dropdown Master','Kelola pilihan dropdown untuk UI dan Spreadsheet.','tune'],
     activity:['Riwayat Aktivitas','Audit log perubahan task untuk pemantauan manager.','history_edu']
   };
@@ -1153,6 +1226,7 @@ function renderActiveView(){
   else if(v==='timeline') renderTimeline();
   else if(v==='calendar') renderCalendar();
   else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
+  else if(v==='collab') renderCollab();
   else if(v==='settings'){ renderSettings(); renderPinAdmin(); renderCatSubManager(); }
   else if(v==='activity') renderActivity();
   else if(v==='extdash') renderExternalDashboards();
@@ -1891,6 +1965,179 @@ function flushPendingChecklist(taskId, cb){
        .addChecklistItem(taskId, it.item, state.currentUser);
   })();
 }
+/* ---------- Task Kolaborasi (alur proses beruntun antar-PIC) ---------- */
+// Buat/edit/hapus struktur: manager/Dev. Centang proses: hanya PIC proses itu (atau Dev).
+function canManageCollab(){ return !isViewOnly() && isManager(state.currentUser); }
+function canCheckStepClient(s){ if(isViewOnly()) return false; if(isDev()) return true; return !!s && same(s.pic, state.currentUser); }
+function collabProgress(c){ const list=(c&&c.steps)||[]; const total=list.length, done=list.filter(s=>s.done).length; return {done,total,pct: total?Math.round(done/total*100):0}; }
+// "Giliran saya": proses milik saya yang belum selesai & proses sebelumnya sudah selesai (handoff sampai ke saya).
+function isMyTurnStep(c,s){
+  if(s.done || isViewOnly()) return false;
+  if(!same(s.pic,state.currentUser)) return false;
+  const prev=(c.steps||[]).find(x=>x.order===s.order-1);
+  return !prev || prev.done;
+}
+function myTurnSteps(){ const out=[]; (state.collabs||[]).forEach(c=>(c.steps||[]).forEach(s=>{ if(isMyTurnStep(c,s)) out.push({collab:c,step:s}); })); return out; }
+function updateCollabTurnBadge(){ const n=myTurnSteps().length; const b=document.getElementById('collabTurnBadge'); if(b){ b.textContent=n; b.classList.toggle('hide', n===0); } }
+function currentCollab(){ return (state.collabs||[]).find(c=>c.id===state._collabId)||null; }
+function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeAttr(p)}" ${same(p,sel)?'selected':''}>${escapeHtml(p)}</option>`).join(''); }
+
+function renderCollab(){
+  const add=document.getElementById('collabAddBtn'); if(add) add.classList.toggle('hide', !canManageCollab());
+  const banner=document.getElementById('collabTurnBanner');
+  const mine=myTurnSteps();
+  if(banner) banner.innerHTML = (mine.length && !isViewOnly())
+    ? `<div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-900/40 flex items-center gap-2 text-sm text-rose-700 dark:text-rose-200"><span class="material-icons-round text-[18px]">notifications_active</span><span class="flex-1"><b>Giliran Anda:</b> ${mine.length} proses siap dikerjakan/dicentang${mine[0]?` — mis. "${escapeHtml(mine[0].step.name)}" di ${escapeHtml(mine[0].collab.title)}`:''}.</span></div>`
+    : '';
+  const list=document.getElementById('collabList'); if(!list) return;
+  const collabs=state.collabs||[];
+  if(!collabs.length){ list.innerHTML=`<div class="md:col-span-2">${emptyState(canManageCollab()?'Belum ada task kolaborasi. Klik tombol "Task Kolaborasi" untuk membuat alur pertama.':'Belum ada task kolaborasi.')}</div>`; updateCollabTurnBadge(); return; }
+  list.innerHTML=collabs.map(collabCard).join('');
+  updateCollabTurnBadge();
+}
+function collabCard(c){
+  const p=collabProgress(c);
+  const mineTurn=(c.steps||[]).some(s=>isMyTurnStep(c,s));
+  const rows=(c.steps||[]).map(s=>{
+    const mine=same(s.pic,state.currentUser);
+    const turn=isMyTurnStep(c,s);
+    const icon=s.done?'check_circle':(turn?'radio_button_checked':'radio_button_unchecked');
+    const ic=s.done?'text-emerald-500':(turn?'text-rose-500':'text-gray-300 dark:text-slate-600');
+    return `<div class="flex items-center gap-1.5 text-[12px] ${s.done?'text-gray-400':'text-gray-600 dark:text-slate-300'}"><span class="material-icons-round text-[14px] ${ic}">${icon}</span><span class="flex-1 min-w-0 truncate ${s.done?'line-through':''}">${escapeHtml(s.name)}</span><span class="text-[10px] ${mine?'font-bold text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span></div>`;
+  }).join('');
+  return `<div onclick="openCollabModal('${escapeAttr(c.id)}')" class="bg-white dark:bg-slate-800 rounded-xl border ${mineTurn?'border-rose-300 dark:border-rose-800':'border-gray-200 dark:border-slate-700'} p-4 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition">
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0">
+        <div class="flex items-center gap-1.5"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${c.platform?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(c.platform)}</span>`:''}</div>
+        <div class="font-semibold text-sm text-gray-900 dark:text-white mt-0.5 line-clamp-2">${escapeHtml(c.title)}</div>
+      </div>
+      <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.status==='Selesai'?'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'}">${escapeHtml(c.status)}</span>
+    </div>
+    <div class="mt-2 flex items-center gap-2">
+      <div class="flex-1 h-1.5 rounded-full bg-gray-200 dark:bg-slate-700 overflow-hidden"><div class="h-full ${p.done>=p.total&&p.total?'bg-emerald-500':'bg-indigo-500'}" style="width:${p.pct}%"></div></div>
+      <span class="text-[11px] font-semibold text-gray-500 dark:text-slate-400 shrink-0">${p.done}/${p.total}</span>
+    </div>
+    ${mineTurn?`<div class="mt-2 text-[11px] font-semibold text-rose-600 flex items-center gap-1"><span class="material-icons-round text-[13px]">notifications_active</span>Giliran Anda</div>`:''}
+    <div class="mt-2 space-y-1">${rows}</div>
+  </div>`;
+}
+
+function openCollabModal(id=''){
+  const manage=canManageCollab();
+  const c=id?(state.collabs||[]).find(x=>x.id===id):null;
+  const isNew=!c;
+  if(isNew && !manage){ showToast('Hanya manager/Dev yang bisa membuat task kolaborasi.', false); return; }
+  state._collabId=c?c.id:null;
+  state._collabEdit=isNew;                         // task baru langsung mode edit
+  state._collabDraft=isNew?[{name:'',pic:'',deadline:''}]:[];
+  document.getElementById('collabModal').classList.remove('hide');
+  document.getElementById('collabModalTitle').textContent=isNew?'Task Kolaborasi Baru':(manage?'Kelola Task Kolaborasi':'Detail Task Kolaborasi');
+  document.getElementById('collabModalSub').textContent=c?(c.id+' • dibuat oleh '+(c.createdBy||'—')):'Cukup platform + judul + daftar proses (tiap proses punya PIC & deadline).';
+  const plat=document.getElementById('collabPlatform');
+  plat.innerHTML='<option value="">(Tanpa platform)</option>'+(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  plat.value=c?c.platform:''; setVal('collabTitle', c?c.title:''); setVal('collabDesc', c?c.description:'');
+  const roHead=!manage;
+  plat.disabled=roHead; document.getElementById('collabTitle').disabled=roHead; document.getElementById('collabDesc').disabled=roHead;
+  document.getElementById('collabDeleteBtn').classList.toggle('hide', !manage || isNew);
+  document.getElementById('collabCommentRow').classList.toggle('hide', isNew || isViewOnly());
+  if(c) loadCollabFeed(c.id); else document.getElementById('collabComments').innerHTML=emptyState('Komentar tersedia setelah task disimpan.');
+  renderCollabSteps(c);
+}
+function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); state._collabId=null; state._collabEdit=false; }
+function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline})):[{name:'',pic:'',deadline:''}]); renderCollabSteps(c); }
+function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value })); }
+function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:''}); renderCollabSteps(currentCollab()); }
+function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:''}); renderCollabSteps(currentCollab()); }
+
+function renderCollabSteps(c){
+  const box=document.getElementById('collabSteps'); if(!box) return;
+  const manage=canManageCollab(), editing=!!state._collabEdit;
+  document.getElementById('collabAddStepRow').classList.toggle('hide', !(manage && editing));
+  document.getElementById('collabSaveBtn').classList.toggle('hide', !(manage && editing));
+  const et=document.getElementById('collabEditToggle'); if(et) et.classList.toggle('hide', !manage || !c);   // toggle hanya utk collab tersimpan
+  const etl=document.getElementById('collabEditToggleLbl'); if(etl) etl.textContent=editing?'Selesai edit':'Edit';
+  if(editing){
+    const draft=state._collabDraft||[];
+    box.innerHTML=draft.map((s,i)=>`<div class="collab-step-edit flex items-center gap-1.5 p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
+      <span class="text-[10px] font-mono text-gray-400 w-5 text-center shrink-0">${i+1}</span>
+      <input class="cs-name flex-1 min-w-0 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-sm outline-none" placeholder="Nama proses (mis. Membuat kurikulum)" value="${escapeAttr(s.name||'')}">
+      <select class="cs-pic shrink-0 w-28 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none">${collabPicOptions(s.pic)}</select>
+      <input type="date" class="cs-deadline shrink-0 w-[130px] rounded bg-gray-100 dark:bg-slate-800 px-1.5 py-1 text-sm outline-none" value="${escapeAttr(s.deadline||'')}">
+      <button type="button" onclick="collabRemoveStep(${i})" title="Hapus proses" class="shrink-0 text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[16px]">close</span></button>
+    </div>`).join('');
+    const total=draft.length; document.getElementById('collabProgCount').textContent='0/'+total; document.getElementById('collabProgBar').style.width='0%';
+    return;
+  }
+  const steps=(c&&c.steps)||[];
+  if(!steps.length){ box.innerHTML=`<div class="px-2 py-4 text-center text-xs text-gray-400">Belum ada proses.${manage?' Klik "Edit" untuk menambah.':''}</div>`; }
+  else box.innerHTML=steps.map(s=>{
+    const turn=isMyTurnStep(c,s), mine=same(s.pic,state.currentUser), canChk=canCheckStepClient(s);
+    const overdue=s.deadline && !s.done && s.deadline < todayStr();
+    return `<div class="flex items-center gap-2 p-2 rounded-lg bg-white dark:bg-slate-900 border ${turn?'border-rose-200 dark:border-rose-900/50':'border-gray-100 dark:border-slate-800'}">
+      <input type="checkbox" ${s.done?'checked':''} ${canChk?'':'disabled'} onchange="toggleCollabStep(${s.order},this.checked)" class="w-4 h-4 shrink-0 accent-indigo-600 ${canChk?'cursor-pointer':'opacity-50'}">
+      <span class="w-5 text-center text-[10px] font-mono text-gray-400 shrink-0">${s.order}</span>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm ${s.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(s.name)}</div>
+        <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}</div>
+      </div>
+      ${turn?'<span class="shrink-0 text-[10px] font-bold text-rose-600">GILIRAN</span>':(s.done?'<span class="material-icons-round text-emerald-500 text-[18px] shrink-0">check_circle</span>':'')}
+    </div>`;
+  }).join('');
+  const p=collabProgress(c); document.getElementById('collabProgCount').textContent=p.done+'/'+p.total; document.getElementById('collabProgBar').style.width=p.pct+'%';
+}
+function toggleCollabStep(order, done){
+  const id=state._collabId; if(!id) return;
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal mencentang', false); renderCollabSteps(currentCollab()); return; }
+    state.collabs=res.collabs||state.collabs; showToast(res.message);
+    renderCollabSteps(currentCollab()); updateCollabTurnBadge(); loadCollabFeed(id);
+  }).withFailureHandler(err=>{ showToast(err.message||err,false); renderCollabSteps(currentCollab()); })
+    .setCollabStepDone(id, order, !!done, state.currentUser);
+}
+function saveCollabFromModal(){
+  if(!canManageCollab()) return;
+  const steps=collabReadStepInputs().filter(s=>s.name);
+  const title=getVal('collabTitle').trim();
+  if(!title){ showToast('Judul task wajib diisi.', false); return; }
+  if(!steps.length){ showToast('Minimal 1 proses (isi nama proses).', false); return; }
+  const payload={ id: state._collabId||'', platform:getVal('collabPlatform'), title, description:getVal('collabDesc').trim(), steps };
+  document.getElementById('loading').classList.remove('hide');
+  GAS.withSuccessHandler(res=>{
+    document.getElementById('loading').classList.add('hide');
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan', false); return; }
+    state.collabs=res.collabs||state.collabs; showToast(res.message);
+    closeCollabModal(); updateCollabTurnBadge(); if(state.activeView==='collab') renderCollab();
+  }).withFailureHandler(err=>{ document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false); }).saveCollab(payload, state.currentUser);
+}
+function deleteCollabFromModal(){
+  const id=state._collabId; if(!id||!canManageCollab()) return;
+  if(!confirm('Hapus task kolaborasi '+id+' beserta semua prosesnya?')) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus', false); return; } state.collabs=res.collabs||state.collabs; showToast(res.message); closeCollabModal(); updateCollabTurnBadge(); if(state.activeView==='collab') renderCollab(); })
+     .withFailureHandler(err=>showToast(err.message||err,false)).deleteCollab(id, state.currentUser);
+}
+function loadCollabFeed(id){
+  // Segarkan activity (agar handoff/centang terbaru muncul), lalu muat komentar, lalu render gabungan.
+  const loadComments=()=>GAS.withSuccessHandler(c=>renderCollabFeed(id, c||[])).withFailureHandler(()=>renderCollabFeed(id, [])).getComments(id);
+  GAS.withSuccessHandler(acts=>{ if(Array.isArray(acts)) state.activity=acts; loadComments(); }).withFailureHandler(loadComments).getActivityLog(200);
+}
+function renderCollabFeed(id, comments){
+  const box=document.getElementById('collabComments'); if(!box) return;
+  const acts=(state.activity||[]).filter(a=>String(a.taskId||'')===id).map(a=>({ts:String(a.timestamp||''), who:a.user, text:((a.action?a.action+': ':'')+(a.detail||'')).trim(), kind:'act'}));
+  const cms=(comments||[]).map(c=>({ts:String(c.timestamp||''), who:c.author, text:c.message, kind:'comment'}));
+  const all=cms.concat(acts).sort((a,b)=>a.ts.localeCompare(b.ts));
+  if(!all.length){ box.innerHTML=emptyState('Belum ada komentar atau aktivitas.'); return; }
+  box.innerHTML=all.map(x=> x.kind==='comment'
+    ? `<div class="flex gap-2"><span class="w-7 h-7 rounded-full shrink-0 inline-flex items-center justify-center text-[10px] font-semibold" style="background:${avatarBg(x.who)};color:${avatarFg(x.who)}">${initials(x.who)}</span><div class="min-w-0"><div class="text-[11px] text-gray-400">${escapeHtml(x.who||'—')} • ${escapeHtml(x.ts)}</div><div class="text-sm text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 mt-0.5 inline-block">${escapeHtml(x.text)}</div></div></div>`
+    : `<div class="flex items-center gap-1.5 text-[11px] text-gray-400 pl-1"><span class="material-icons-round text-[14px]">bolt</span><span>${escapeHtml(x.text)} • ${escapeHtml(x.ts)}</span></div>`
+  ).join('');
+}
+function sendCollabComment(){
+  const id=state._collabId; const inp=document.getElementById('collabCommentInput'); const msg=(inp&&inp.value||'').trim();
+  if(!id||!msg) return;
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal kirim komentar', false); return; } if(inp) inp.value=''; loadCollabFeed(id); })
+     .withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId:id, author:state.currentUser, message:msg});
+}
+
 function sendComment(taskId,message,cb){
   if(IS_GAS){GAS.withSuccessHandler(res=>{if(!res.success){showToast(res.message,false);return;} showToast(res.message); state.comments=res.comments||[]; state.commentsSummary=(state.commentsSummary||[]).concat([{timestamp:todayStr()+' '+new Date().toTimeString().slice(0,5),taskId:taskId,author:state.currentUser}]); updateCommNavBadge(); renderCommunicationPanel(); if(cb)cb();}).withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId,author:state.currentUser,message});}
   else {state.comments.push({timestamp:todayStr()+' 12:00',author:state.currentUser,message}); renderCommunicationPanel(); showToast('Komentar tersimpan (preview).'); if(cb)cb();}

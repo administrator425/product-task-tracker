@@ -34,6 +34,8 @@ const CONFIG = {
   DASHBOARDS_SHEET: 'DASHBOARDS',
   NOTES_SHEET: 'NOTES',
   CHECKLIST_SHEET: 'CHECKLIST',
+  COLLAB_SHEET: 'COLLAB',
+  COLLAB_STEP_SHEET: 'COLLAB_STEPS',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -795,6 +797,180 @@ async function getChecklistSummary() {
 }
 
 /* ------------------------------------------------------------------ */
+/* COLLAB (task kolaborasi: alur proses beruntun antar-PIC)            */
+/* Manager menyusun proses (nama + PIC + deadline); tiap proses hanya  */
+/* bisa dicentang oleh PIC-nya. Urutan dipakai untuk handoff/notif.    */
+/* ------------------------------------------------------------------ */
+
+async function ensureCollabSheets() {
+  await ensureSheetExists(CONFIG.COLLAB_SHEET);
+  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:F1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:F1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At']]);
+  }
+  await ensureSheetExists(CONFIG.COLLAB_STEP_SHEET);
+  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:H1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:H1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At']]);
+  }
+}
+
+function genCollabId(ids) {
+  let max = 0;
+  (ids || []).forEach(v => { const m = String(v || '').match(/(\d+)\s*$/); if (m) max = Math.max(max, Number(m[1])); });
+  return 'COL-' + String(max + 1).padStart(3, '0');
+}
+
+// Boleh mencentang proses ini? Hanya PIC proses tsb, atau Dev (super-user).
+function canCheckStep(stepPic, actor) {
+  if (baseName(actor) === 'dev') return true;
+  const p = baseName(stepPic);
+  return !!p && p === baseName(actor);
+}
+
+async function getCollabs() {
+  let crows = [], srows = [];
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:F`); } catch (e) { return []; }
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:H`); } catch (e) { srows = []; }
+  const steps = {};
+  srows.forEach((r, i) => {
+    const cid = String((r && r[0]) || '').trim(); if (!cid) return;
+    (steps[cid] = steps[cid] || []).push({
+      row: i + 2,
+      order: Number((r && r[1]) || 0),
+      name: String((r && r[2]) || '').trim(),
+      pic: String((r && r[3]) || '').trim(),
+      deadline: (r && r[4] != null && r[4] !== '') ? formatDate(r[4], false) : '',
+      done: isChecked(r && r[5]),
+      doneBy: String((r && r[6]) || '').trim(),
+      doneAt: String((r && r[7]) || '').trim(),
+    });
+  });
+  Object.values(steps).forEach(list => list.sort((a, b) => a.order - b.order));
+  return crows.map((r, i) => {
+    const id = String((r && r[0]) || '').trim();
+    const list = steps[id] || [];
+    const done = list.filter(s => s.done).length;
+    return {
+      row: i + 2, id,
+      platform: String((r && r[1]) || '').trim(),
+      title: String((r && r[2]) || '').trim(),
+      description: String((r && r[3]) || '').trim(),
+      createdBy: String((r && r[4]) || '').trim(),
+      createdAt: String((r && r[5]) || '').trim(),
+      steps: list, done, total: list.length,
+      status: (list.length && done >= list.length) ? 'Selesai' : 'Aktif',
+    };
+  }).filter(c => c.id);
+}
+
+// Hapus semua baris step milik satu collab (descending agar index tak bergeser).
+async function deleteStepRowsForCollab(collabId) {
+  let srows = [];
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:A`); } catch (e) { return; }
+  const rowsToDelete = [];
+  srows.forEach((r, i) => { if (String((r && r[0]) || '').trim() === collabId) rowsToDelete.push(i + 2); });
+  if (!rowsToDelete.length) return;
+  const meta = await getSheetMeta();
+  const sid = meta[CONFIG.COLLAB_STEP_SHEET] && meta[CONFIG.COLLAB_STEP_SHEET].sheetId;
+  if (sid == null) return;
+  const reqs = rowsToDelete.sort((a, b) => b - a)
+    .map(rn => ({ deleteDimension: { range: { sheetId: sid, dimension: 'ROWS', startIndex: rn - 1, endIndex: rn } } }));
+  await batchUpdate(reqs);
+}
+
+async function saveCollab(payload, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  if (!isManagerActor(actor)) return { success: false, message: 'Hanya manager/Dev yang bisa membuat/mengubah task kolaborasi.' };
+  const platform = String((payload && payload.platform) || '').trim();
+  const title = String((payload && payload.title) || '').trim();
+  const description = String((payload && payload.description) || '').trim();
+  const steps = Array.isArray(payload && payload.steps) ? payload.steps : [];
+  if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
+  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim() }))
+    .filter(s => s.name);
+  if (!clean.length) return { success: false, message: 'Minimal 1 proses (nama proses wajib diisi).' };
+
+  await ensureCollabSheets();
+  let crows = [];
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:F`); } catch (e) { crows = []; }
+  const ids = crows.map(r => String((r && r[0]) || '').trim());
+  let id = String((payload && payload.id) || '').trim();
+  const isUpdate = id && ids.includes(id);
+
+  // Simpan status "done" proses lama agar tidak hilang saat manager mengedit struktur.
+  let prevDone = {};
+  if (isUpdate) {
+    const existing = (await getCollabs()).find(c => c.id === id);
+    if (existing) existing.steps.forEach(s => { prevDone[s.order] = { done: s.done, doneBy: s.doneBy, doneAt: s.doneAt }; });
+  }
+
+  if (isUpdate) {
+    const rn = ids.indexOf(id) + 2;
+    const keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
+    const keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp());
+    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:F${rn}`, [[id, platform, title, description, keepBy, keepAt]]);
+    await deleteStepRowsForCollab(id);
+  } else {
+    id = genCollabId(ids);
+    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:F`, [[id, platform, title, description, actor, nowStamp()]]);
+  }
+
+  const stepRows = clean.map((s, i) => {
+    const order = i + 1;
+    const pd = prevDone[order] || {};
+    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || ''];
+  });
+  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:H`, stepRows);
+
+  await logActivity(actor, isUpdate ? 'Collab Update' : 'Collab Create', id, `${title} • ${clean.length} proses`);
+  return { success: true, message: isUpdate ? 'Task kolaborasi diperbarui.' : 'Task kolaborasi dibuat.', collabs: await getCollabs() };
+}
+
+async function setCollabStepDone(collabId, order, done, actor) {
+  collabId = String(collabId || '').trim();
+  order = Number(order);
+  actor = String(actor || '').trim() || 'Unknown';
+  const val = !!done;
+  await ensureCollabSheets();
+  let srows = [];
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:H`); } catch (e) { srows = []; }
+  let idx = -1;
+  for (let i = 0; i < srows.length; i++) {
+    const r = srows[i];
+    if (String((r && r[0]) || '').trim() === collabId && Number((r && r[1]) || 0) === order) { idx = i; break; }
+  }
+  if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
+  const r = srows[idx];
+  const pic = String((r && r[3]) || '').trim();
+  if (!canCheckStep(pic, actor)) {
+    return { success: false, message: `Hanya ${pic || 'PIC proses ini'} yang bisa mencentang proses ini.` };
+  }
+  const rn = idx + 2;
+  await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!F${rn}:H${rn}`, [[val ? 'TRUE' : 'FALSE', val ? actor : '', val ? nowStamp() : '']]);
+  await logActivity(actor, val ? 'Collab Step Done' : 'Collab Step Undone', collabId, `Proses ${order}: ${String((r && r[2]) || '')}`);
+  return { success: true, message: val ? 'Proses dicentang.' : 'Centang dibatalkan.', collabs: await getCollabs() };
+}
+
+async function deleteCollab(id, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  if (!isManagerActor(actor)) return { success: false, message: 'Hanya manager/Dev yang bisa menghapus task kolaborasi.' };
+  id = String(id || '').trim();
+  await ensureCollabSheets();
+  await deleteStepRowsForCollab(id);
+  let crows = [];
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:F`); } catch (e) { crows = []; }
+  const ci = crows.findIndex(r => String((r && r[0]) || '').trim() === id);
+  if (ci >= 0) {
+    const meta = await getSheetMeta();
+    const sid = meta[CONFIG.COLLAB_SHEET] && meta[CONFIG.COLLAB_SHEET].sheetId;
+    if (sid != null) await batchUpdate([{ deleteDimension: { range: { sheetId: sid, dimension: 'ROWS', startIndex: (ci + 2) - 1, endIndex: (ci + 2) } } }]);
+  }
+  await logActivity(actor, 'Collab Delete', id, '');
+  return { success: true, message: 'Task kolaborasi dihapus.', collabs: await getCollabs() };
+}
+
+/* ------------------------------------------------------------------ */
 /* ACTIVITY                                                            */
 /* ------------------------------------------------------------------ */
 
@@ -842,7 +1018,7 @@ async function getAllCommentsLite() {
 
 async function getBootstrapData(opts) {
   const viewOnly = !!(opts && opts.viewOnly);
-  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes, checklistSummary] = await Promise.all([
+  const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes, checklistSummary, collabs] = await Promise.all([
     getTasks(),
     getOptions(),
     getActivityLog(200),
@@ -852,6 +1028,7 @@ async function getBootstrapData(opts) {
     getAllDashboards(),
     getAllNotes(),
     getChecklistSummary(),
+    getCollabs().catch(() => []),
   ]);
   if (viewOnly) {
     // Tamu tanpa PIN: hanya task yang di-set Lintas (punya Divisi Tujuan) atau di-mirror,
@@ -891,6 +1068,7 @@ async function getBootstrapData(opts) {
     dashboards,
     notes,
     checklistSummary,
+    collabs,
     meta: {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
@@ -1352,6 +1530,7 @@ async function setupTaskTracker() {
   await ensureOptionsSheet();
   await ensureCommentsSheet();
   await ensureChecklistSheet();
+  await ensureCollabSheets();
   await ensureActivitySheet();
   await ensureAuthSheet();
   await ensureLinksSheet();
@@ -1400,6 +1579,8 @@ module.exports = {
   addComment, saveOption, deleteOption, editOption,
   // ceklis per task (PM menyusun, PIC mencentang)
   getChecklist, addChecklistItem, setChecklistDone, deleteChecklistItem,
+  // task kolaborasi (alur beruntun antar-PIC)
+  getCollabs, saveCollab, setCollabStepDone, deleteCollab,
   // setup
   setupTaskTracker, assignMissingTaskIds,
   // auth (PIN)
@@ -1416,5 +1597,5 @@ module.exports = {
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp,
     isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus,
-    ownsTaskActor, isChecked },
+    ownsTaskActor, isChecked, canCheckStep, genCollabId },
 };

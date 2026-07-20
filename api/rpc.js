@@ -55,6 +55,11 @@ const HANDLERS = {
   addChecklistItem: (taskId, item, actor) => backend.addChecklistItem(taskId, item, actor),
   setChecklistDone: (taskId, row, done, actor) => backend.setChecklistDone(taskId, row, done, actor),
   deleteChecklistItem: (taskId, row, actor) => backend.deleteChecklistItem(taskId, row, actor),
+
+  getCollabs: () => backend.getCollabs(),
+  saveCollab: (payload, actor) => backend.saveCollab(payload, actor),
+  setCollabStepDone: (collabId, order, done, actor) => backend.setCollabStepDone(collabId, order, done, actor),
+  deleteCollab: (id, actor) => backend.deleteCollab(id, actor),
   saveOption: (type, value, parent) => backend.saveOption(type, value, parent),
   deleteOption: (type, value, parent) => backend.deleteOption(type, value, parent),
   editOption: (type, oldValue, newValue, parent) => backend.editOption(type, oldValue, newValue, parent),

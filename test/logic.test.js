@@ -122,4 +122,17 @@ ok('"1" tercentang', isChecked('1') === true);
 ok('"FALSE" tidak tercentang', isChecked('FALSE') === false);
 ok('kosong tidak tercentang', isChecked('') === false);
 
+console.log('\nTask kolaborasi (izin centang proses & ID):');
+const { canCheckStep, genCollabId } = _internals;
+// Hanya PIC proses (atau Dev) yang boleh mencentang.
+ok('PIC (Alya) boleh centang prosesnya', canCheckStep('Alya', 'Alya') === true);
+ok('PIC case-insensitive', canCheckStep('Alya', 'alya') === true);
+ok('non-PIC (Dhika) tidak boleh', canCheckStep('Alya', 'Dhika') === false);
+ok('Dev boleh centang proses siapa pun', canCheckStep('Alya', 'Dev') === true);
+ok('proses tanpa PIC tak bisa dicentang siapa pun', canCheckStep('', 'Alya') === false);
+ok('nama ber-suffix tetap cocok', canCheckStep('Alya (Konten)', 'Alya') === true);
+// Penomoran Collab ID.
+eq('genCollabId kosong -> COL-001', genCollabId([]), 'COL-001');
+eq('genCollabId lanjut dari max', genCollabId(['COL-002', 'COL-010', 'COL-003']), 'COL-011');
+
 console.log(`\n✅ Semua ${passed} assertion lulus.`);
