@@ -673,7 +673,7 @@
         <!-- KIRI: form + proses + sub-ceklis -->
         <div class="lg:col-span-3 px-5 py-4 overflow-y-auto space-y-4 scrollbar-thin lg:border-r border-gray-100 dark:border-slate-800">
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div class="md:col-span-1"><label class="form-label">Platform</label><select id="collabPlatform" class="form-control"></select></div>
+            <div class="md:col-span-1"><label class="form-label">Platform</label><select id="collabPlatform" class="form-control" multiple size="4"></select><p class="text-[11px] text-gray-400 mt-1">Ctrl/Cmd untuk pilih lebih dari satu.</p></div>
             <div class="md:col-span-2"><label class="form-label">Judul Task</label><input id="collabTitle" class="form-control" placeholder="mis. 5 Paket TO dan Latsol"></div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -727,7 +727,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.36.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.37.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -2025,7 +2025,7 @@ function collabCard(c){
   return `<div onclick="openCollabModal('${escapeAttr(c.id)}')" class="bg-white dark:bg-slate-800 rounded-xl border ${mineTurn?'border-rose-300 dark:border-rose-800':'border-gray-200 dark:border-slate-700'} p-4 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition">
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
-        <div class="flex items-center gap-1.5"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${c.platform?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(c.platform)}</span>`:''}</div>
+        <div class="flex items-center flex-wrap gap-1"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${String(c.platform||'').split(',').map(x=>x.trim()).filter(Boolean).map(pf=>`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(pf)}</span>`).join('')}</div>
         <div class="font-semibold text-sm text-gray-900 dark:text-white mt-0.5 line-clamp-2">${escapeHtml(c.title)}</div>
       </div>
       <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.status==='Selesai'?'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'}">${escapeHtml(c.status)}</span>
@@ -2051,8 +2051,10 @@ function openCollabModal(id=''){
   document.getElementById('collabModalTitle').textContent=isNew?'Task Kolaborasi Baru':(manage?'Kelola Task Kolaborasi':'Detail Task Kolaborasi');
   document.getElementById('collabModalSub').textContent=c?(c.id+' • dibuat oleh '+(c.createdBy||'—')):'Cukup platform + judul + daftar proses (tiap proses punya PIC & deadline).';
   const plat=document.getElementById('collabPlatform');
-  plat.innerHTML='<option value="">(Tanpa platform)</option>'+(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-  plat.value=c?c.platform:''; setVal('collabTitle', c?c.title:''); setVal('collabDesc', c?c.description:''); setVal('collabDeadline', c?c.deadline:'');
+  plat.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  const selPlat=String((c&&c.platform)||'').split(',').map(x=>x.trim()).filter(Boolean);   // platform bisa >1 (dipisah koma)
+  [...plat.options].forEach(o=>o.selected=selPlat.includes(o.value));
+  setVal('collabTitle', c?c.title:''); setVal('collabDesc', c?c.description:''); setVal('collabDeadline', c?c.deadline:'');
   const roHead=!manage;
   plat.disabled=roHead; document.getElementById('collabTitle').disabled=roHead; document.getElementById('collabDesc').disabled=roHead; document.getElementById('collabDeadline').disabled=roHead;
   // Deadline project: tampilkan versi teks (dengan flag telat) untuk non-manager.
@@ -2186,7 +2188,8 @@ function saveCollabFromModal(){
   const title=getVal('collabTitle').trim();
   if(!title){ showToast('Judul task wajib diisi.', false); return; }
   if(!steps.length){ showToast('Minimal 1 proses (isi nama proses).', false); return; }
-  const payload={ id: state._collabId||'', platform:getVal('collabPlatform'), title, description:getVal('collabDesc').trim(), deadline:getVal('collabDeadline'), steps };
+  const platform=[...document.getElementById('collabPlatform').selectedOptions].map(o=>o.value).join(', ');
+  const payload={ id: state._collabId||'', platform, title, description:getVal('collabDesc').trim(), deadline:getVal('collabDeadline'), steps };
   document.getElementById('loading').classList.remove('hide');
   GAS.withSuccessHandler(res=>{
     document.getElementById('loading').classList.add('hide');

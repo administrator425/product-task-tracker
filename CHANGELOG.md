@@ -10,6 +10,9 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.37.0 — Task Kolaborasi: platform bisa lebih dari 1
+- Pilihan **Platform** di Task Kolaborasi kini **multi-select** (Ctrl/Cmd untuk pilih beberapa) — sama seperti task biasa. Disimpan dipisah koma; di kartu tampil sebagai beberapa chip terpisah.
+
 ## 1.36.0 — Tag @everyone + log aktivitas khusus manager
 - **`@everyone`** (alias `@semua` / `@all`) di komentar Task Kolaborasi → menotifikasi **semua user** sekaligus (kecuali penulis & mode lihat-saja). Muncul di autocomplete (ikon grup) & tersorot di feed.
 - **Log aktivitas** (centang proses, buat/ubah, handoff) kini **hanya tampil untuk manager/Dev**; user biasa cukup melihat **komentar** saja. Judul panel ikut menyesuaikan ("Komentar" vs "Komentar & Aktivitas").
