@@ -749,7 +749,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.44.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.45.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -1377,6 +1377,68 @@ function viewTasks(){
   if(state.deadlineFocus) arr=arr.filter(t=>isLate(t) || (isDeadlineActive(t)&&daysToDue(t)===0));
   return arr;
 }
+// Task kolaborasi tempat user (default currentUser) jadi PIC -> "pseudo-task" bertanda collab
+// untuk disisipkan ke view task biasa. Status Kanban dipetakan dari state step user.
+function myCollabTasks(forUser){
+  if(isViewOnly()) return [];
+  const me=forUser||state.currentUser;
+  const out=[];
+  (state.collabs||[]).forEach(c=>{
+    const mySteps=(c.steps||[]).filter(s=>same(s.pic,me)); if(!mySteps.length) return;
+    const isTurn=(s)=>{ if(s.done) return false; const prev=(c.steps||[]).find(x=>x.order===s.order-1); return !prev||prev.done; };
+    const undone=mySteps.filter(s=>!s.done).sort((a,b)=>a.order-b.order);
+    const myStep=undone[0]||mySteps[mySteps.length-1];
+    const status = mySteps.every(s=>s.done) ? 'Done' : (mySteps.some(isTurn) ? 'In progress' : 'Todo');
+    out.push({ _collab:true, id:c.id, collabId:c.id, taskName:c.title, status, priority:'Normal',
+      pic:me, platform:c.platform||'', stage:'', dueDate:(myStep&&myStep.deadline)||c.deadline||'', startDate:(myStep&&myStep.deadline)||c.deadline||'',
+      _projectDeadline:c.deadline||'', _myStepName:(myStep&&myStep.name)||'', _myStepDeadline:(myStep&&myStep.deadline)||'', _collabColor:c.color||'' });
+  });
+  return out;
+}
+// Collab pseudo-task setelah lewat filter yang sama seperti task biasa (untuk Kanban & List).
+function collabViewTasks(){
+  const forUser=(isManager(state.currentUser)&&state.managerFocus)?state.managerFocus:state.currentUser;
+  let arr=applyQuickFilter(myCollabTasks(forUser));
+  const q=globalSearchValue(); if(q) arr=arr.filter(t=>[t.taskName,t.platform,t.id,t.status].join(' ').toLowerCase().includes(q));
+  arr=applyFieldFilters(arr);
+  if(state.deadlineFocus) arr=arr.filter(t=>isLate(t)||(isDeadlineActive(t)&&daysToDue(t)===0));
+  return arr;
+}
+function viewTasksAll(){ return [...viewTasks(), ...collabViewTasks()]; }
+function collabInlineCard(t){
+  const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0; const col=safeColor(t._collabColor);
+  return `<div data-collab-id="${escapeAttr(t.collabId)}" onclick="openCollabModal('${escapeAttr(t.collabId)}')" style="${col?`border-left:4px solid ${col}`:''}" class="tt-card nodrag group bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ring-violet-300 dark:ring-violet-800 hover:ring-indigo-300 shadow-sm cursor-pointer">
+    <div class="flex items-start justify-between gap-2">
+      <span class="inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[12px]">account_tree</span>KOLABORASI</span>
+      ${overdue?'<span class="text-[10px] font-bold text-rose-600">TELAT</span>':(today?'<span class="text-[10px] font-bold text-pink-600">HARI INI</span>':'')}
+    </div>
+    <p class="text-[13px] font-medium leading-snug text-gray-800 dark:text-slate-100 mt-1.5 line-clamp-2">${escapeHtml(t.taskName||'-')}</p>
+    <div class="mt-1.5 text-[11px] text-gray-600 dark:text-slate-300">Proses Anda: <b>${escapeHtml(t._myStepName||'—')}</b>${t._myStepDeadline?` · <span class="${overdue?'text-rose-600 font-semibold':'text-gray-500'}">${escapeHtml(t._myStepDeadline)}</span>`:''}</div>
+    ${t._projectDeadline?`<div class="mt-0.5 text-[11px] text-gray-400 flex items-center gap-1"><span class="material-icons-round text-[12px]">flag</span>Deadline project · ${escapeHtml(t._projectDeadline)}</div>`:''}
+    ${t.platform?`<div class="mt-1.5 flex flex-wrap gap-1">${String(t.platform).split(',').map(x=>x.trim()).filter(Boolean).map(pf=>`<span class="inline-flex items-center h-5 px-1.5 rounded text-[11px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(pf)}</span>`).join('')}</div>`:''}
+  </div>`;
+}
+function collabTableRow(t){
+  const overdue=isLate(t);
+  return `<tr onclick="openCollabModal('${escapeAttr(t.collabId)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer border-l-[3px] border-violet-400">
+    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words">${escapeHtml(t.taskName||'-')} <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">account_tree</span>Kolaborasi</span></div><div class="text-[11px] text-gray-400 mt-0.5">Proses Anda: ${escapeHtml(t._myStepName||'—')}${t._projectDeadline?' • Deadline project: '+escapeHtml(t._projectDeadline):''}</div></td>
+    <td class="px-4 py-3"><span class="inline-flex items-center h-5 px-2 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">${escapeHtml(t.status)}</span></td>
+    <td class="px-4 py-3 text-gray-400">—</td>
+    <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}<span class="text-sm text-gray-600 dark:text-slate-300">${escapeHtml(t.pic||'—')}</span></div></td>
+    <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.platform||'-')}</td>
+    <td class="px-4 py-3 text-gray-400">—</td>
+    <td class="px-4 py-3 font-medium ${overdue?'text-rose-600':'text-gray-600 dark:text-slate-300'}">${t._myStepDeadline?formatDateHuman(t._myStepDeadline):'-'}</td>
+    <td class="px-4 py-3 text-right whitespace-nowrap"><span class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Buka collab</span></td>
+  </tr>`;
+}
+function collabMiniCard(t){
+  const overdue=isLate(t); const col=safeColor(t._collabColor);
+  return `<div onclick="openCollabModal('${escapeAttr(t.collabId)}')" style="${col?`border-left:3px solid ${col}`:''}" class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-violet-200 dark:border-violet-900/50 cursor-pointer hover:bg-gray-100">
+    <div class="flex justify-between gap-3 items-start"><div class="font-medium text-sm leading-snug line-clamp-2 text-gray-800 dark:text-slate-100">${escapeHtml(t.taskName||'-')}</div><span class="shrink-0 inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[10px] font-bold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">account_tree</span>Kolab</span></div>
+    <div class="mt-1 text-[11px] text-gray-600 dark:text-slate-300">Proses Anda: ${escapeHtml(t._myStepName||'—')}${t._myStepDeadline?` · <span class="${overdue?'text-rose-600 font-semibold':''}">${escapeHtml(t._myStepDeadline)}</span>`:''}</div>
+    ${t._projectDeadline?`<div class="text-[10px] text-gray-400">Deadline project: ${escapeHtml(t._projectDeadline)}</div>`:''}
+  </div>`;
+}
 
 /* ---------- Quick inline update (1 field, ringan) ---------- */
 function quickUpdate(ev, id, field, value){
@@ -1469,7 +1531,7 @@ function renderCharts(){
 /* ---------- Kanban (per Status) ---------- */
 function renderBoard(){
   state.sortables.forEach(s=>{try{s.destroy();}catch(e){}}); state.sortables=[];
-  const tasks=viewTasks();
+  const tasks=viewTasksAll();
   let statuses=[...(state.options.status||[])];
   if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status))) && !statuses.some(s=>same(s,'Tanpa Status'))) statuses.push('Tanpa Status');
   const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
@@ -1528,6 +1590,7 @@ function duplicateCardBtn(t){
   return `<button type="button" title="Duplikat task ini" onclick="duplicateTask('${escapeAttr(t.id)}',event)" class="nodrag shrink-0 text-gray-300 hover:text-indigo-600 transition md:opacity-0 md:group-hover:opacity-100"><span class="material-icons-round text-[15px]">content_copy</span></button>`;
 }
 function taskCard(t){
+  if(t._collab) return collabInlineCard(t);
   const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
   const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'');
   return `<div data-task-id="${escapeAttr(t.id)}" onclick="openTaskModal('${escapeAttr(t.id)}')" class="tt-card group ${canEditTask(t)?'':'nodrag'} bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ${isExternalTask(t)?'ring-violet-300 dark:ring-violet-800':'ring-gray-200 dark:ring-slate-700'} hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
@@ -1570,8 +1633,9 @@ function toggleMirror(ev, id){
 
 /* ---------- List ---------- */
 function renderTable(){
-  const tasks=viewTasks();
+  const tasks=viewTasksAll();
   const rows=tasks.map(t=>{
+    if(t._collab) return collabTableRow(t);
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
@@ -2540,7 +2604,7 @@ function renderViewOnlyNotice(){
 function renderHariIni(){
   const box=document.getElementById('hariiniContent'); if(!box) return;
   const me=state.currentUser;
-  const mine=state.tasks.filter(t=>ownsTask(t,me));
+  const mine=[...state.tasks.filter(t=>ownsTask(t,me)), ...myCollabTasks(me)];   // sisipkan task collab yang melibatkan Anda
   const overdue=mine.filter(t=>isLate(t)).sort(cardSort);
   const today=mine.filter(t=>!isLate(t)&&isDeadlineActive(t)&&daysToDue(t)===0).sort(cardSort);
   const inprog=mine.filter(t=>!isDone(t)&&same(t.status,'In progress')&&!isLate(t)&&!(isDeadlineActive(t)&&daysToDue(t)===0)).sort(cardSort);
@@ -2899,7 +2963,7 @@ function shadeColor(hex,percent){
 }
 function statusChip(status){const hex=statusHex(status); return `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-gray-50 dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-200 dark:border-slate-700"><span class="w-1.5 h-1.5 rounded-full" style="background:${hex}"></span>${escapeHtml(status||'No Status')}</span>`;}
 function priorityPill(text){if(!text)return''; const v=String(text).toLowerCase(); let cls='bg-gray-50 border-gray-200 text-gray-700 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-200'; if(v==='urgent')cls='bg-red-50 border-red-200 text-red-700'; else if(v==='high')cls='bg-orange-50 border-orange-200 text-orange-700'; else if(v==='normal')cls='bg-indigo-50 border-indigo-200 text-indigo-700'; return `<span class="inline-flex items-center h-5 px-1.5 rounded border text-[11px] font-semibold ${cls}">${escapeHtml(text)}</span>`;}
-function taskMiniCard(t,showDue){return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 cursor-pointer hover:bg-gray-100"><div class="flex justify-between gap-3 items-start"><div class="font-medium text-sm leading-snug line-clamp-2 text-gray-800 dark:text-slate-100">${escapeHtml(t.taskName||'-')}</div>${statusChip(t.status)}</div><div class="mt-1.5 text-[11px] text-gray-500 font-medium flex justify-between items-center"><span class="flex items-center gap-1.5 min-w-0 truncate">${avatar(t.pic)} ${escapeHtml(t.platform||'-')}${t.createdBy?' • dari '+escapeHtml(t.createdBy):''}</span><span class="shrink-0 ${isLate(t)?'text-rose-600':''}">${showDue?formatDateHuman(t.dueDate):escapeHtml(t.lastUpdate||'-')}</span></div></div>`;}
+function taskMiniCard(t,showDue){if(t._collab) return collabMiniCard(t); return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="p-2.5 rounded-lg bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 cursor-pointer hover:bg-gray-100"><div class="flex justify-between gap-3 items-start"><div class="font-medium text-sm leading-snug line-clamp-2 text-gray-800 dark:text-slate-100">${escapeHtml(t.taskName||'-')}</div>${statusChip(t.status)}</div><div class="mt-1.5 text-[11px] text-gray-500 font-medium flex justify-between items-center"><span class="flex items-center gap-1.5 min-w-0 truncate">${avatar(t.pic)} ${escapeHtml(t.platform||'-')}${t.createdBy?' • dari '+escapeHtml(t.createdBy):''}</span><span class="shrink-0 ${isLate(t)?'text-rose-600':''}">${showDue?formatDateHuman(t.dueDate):escapeHtml(t.lastUpdate||'-')}</span></div></div>`;}
 function emptyState(text){return `<div class="h-full min-h-[120px] flex items-center justify-center text-center text-gray-400 font-medium text-sm p-6">${escapeHtml(text)}</div>`;}
 
 const AV_PALETTE=[['#e0e7ff','#4338ca'],['#fee2e2','#b91c1c'],['#ffedd5','#c2410c'],['#fef9c3','#a16207'],['#dcfce7','#15803d'],['#cffafe','#0e7490'],['#f3e8ff','#7e22ce'],['#fce7f3','#be185d']];

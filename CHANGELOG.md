@@ -10,6 +10,14 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.45.0 — Task collab muncul di view task biasa (Hari Ini, List, Kanban)
+- Task kolaborasi tempat Anda jadi **PIC salah satu proses** kini **ikut muncul** di **Hari Ini**, **Task List**, dan **Kanban Status** — bukan cuma di tab Task Kolaborasi.
+- Ditandai jelas dengan **badge "Kolaborasi"** (ikon alur, aksen warna kartu) sehingga beda dari task biasa.
+- Menampilkan **proses Anda + deadline step Anda** dan **deadline project**.
+- **Diklik → langsung buka modal Task Kolaborasi** terkait.
+- Di **Kanban**, kolomnya dipetakan dari step Anda: belum giliran → Todo, giliran Anda → In progress, semua step Anda selesai → Done. Kartu collab tak bisa di-drag (statusnya dari proses, bukan manual).
+- Tidak mengubah Dashboard, Timeline, Calendar (tetap task biasa saja).
+
 ## 1.44.0 — Task Kolaborasi: atur ulang urutan proses (drag & tombol)
 - Di mode **Edit** proses beruntun, urutan proses kini bisa **diseret (drag pakai handle ⠿)** dan diatur lewat **tombol naik/turun**.
 - **Status "done" & catatan tiap proses ikut berpindah** bersama prosesnya saat urutan diubah (tidak mengikuti posisi) — dijaga lewat penanda urutan asal (`srcOrder`) sehingga progres tak tertukar.
