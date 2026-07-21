@@ -749,7 +749,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.43.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.43.2'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -2031,7 +2031,8 @@ function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+(
 const COLLAB_TYPES=['Course','Tryout/Latsol','Liveclass','Drilling','Journey'];
 const COLLAB_COLORS=[
   {n:'Merah',h:'#ef4444'},{n:'Oranye',h:'#f97316'},{n:'Kuning',h:'#f59e0b'},{n:'Hijau',h:'#10b981'},
-  {n:'Toska',h:'#14b8a6'},{n:'Biru',h:'#3b82f6'},{n:'Indigo',h:'#6366f1'},{n:'Ungu',h:'#8b5cf6'},{n:'Pink',h:'#ec4899'},{n:'Abu',h:'#6b7280'},
+  {n:'Toska',h:'#14b8a6'},{n:'Biru',h:'#3b82f6'},{n:'Navy',h:'#1e3a8a'},{n:'Indigo',h:'#6366f1'},
+  {n:'Ungu',h:'#8b5cf6'},{n:'Pink',h:'#ec4899'},{n:'Cokelat',h:'#92400e'},{n:'Abu',h:'#6b7280'},
 ];
 function safeColor(c){ return /^#[0-9a-fA-F]{3,8}$/.test(String(c||'')) ? String(c) : ''; }
 function collabTypeOf(c){ const t=String((c&&c.type)||'').trim(); return t||'Tanpa Tipe'; }

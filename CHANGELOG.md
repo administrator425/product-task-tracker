@@ -10,6 +10,10 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.43.2 — Warna kartu collab: tetap aksen samping + tambah Cokelat & Navy
+- Warna kartu Task Kolaborasi tetap berupa **aksen garis di sisi kiri** kartu (opsi seluruh-kartu dibatalkan sesuai preferensi).
+- Tambah 2 preset warna: **Navy** & **Cokelat** (total 12 warna + "tanpa warna").
+
 ## 1.43.0 — Task Kolaborasi: Alya & Dhea bisa setup, filter platform, warna kartu
 - **Alya & Dhea kini bisa membuat/mengubah Task Kolaborasi** (setup alur) tanpa jadi manager penuh — konsep terpisah lewat env baru **`COLLAB_MANAGERS`** (default `Nynda,Dhea,Alya`). Manager & Dev otomatis ikut.
 - **Filter Platform** ditambahkan di tab Task Kolaborasi (melengkapi filter Tipe/PIC/Status/Giliran Saya/cari).
