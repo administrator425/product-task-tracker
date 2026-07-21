@@ -10,6 +10,10 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.44.0 — Task Kolaborasi: atur ulang urutan proses (drag & tombol)
+- Di mode **Edit** proses beruntun, urutan proses kini bisa **diseret (drag pakai handle ⠿)** dan diatur lewat **tombol naik/turun**.
+- **Status "done" & catatan tiap proses ikut berpindah** bersama prosesnya saat urutan diubah (tidak mengikuti posisi) — dijaga lewat penanda urutan asal (`srcOrder`) sehingga progres tak tertukar.
+
 ## 1.43.2 — Warna kartu collab: tetap aksen samping + tambah Cokelat & Navy
 - Warna kartu Task Kolaborasi tetap berupa **aksen garis di sisi kiri** kartu (opsi seluruh-kartu dibatalkan sesuai preferensi).
 - Tambah 2 preset warna: **Navy** & **Cokelat** (total 12 warna + "tanpa warna").

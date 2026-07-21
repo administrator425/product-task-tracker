@@ -957,7 +957,9 @@ async function saveCollab(payload, actor) {
   const color = String((payload && payload.color) || '').trim();         // warna kartu (grid & kanban)
   const steps = Array.isArray(payload && payload.steps) ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
-  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim() }))
+  // srcOrder = urutan asli proses saat form dibuka; dipakai agar status done/catatan
+  // tetap ikut prosesnya saat urutan diubah (bukan mengikuti posisi). 0 = proses baru.
+  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim(), srcOrder: Number((s && s.srcOrder) || 0) }))
     .filter(s => s.name);
   if (!clean.length) return { success: false, message: 'Minimal 1 proses (nama proses wajib diisi).' };
 
@@ -989,7 +991,7 @@ async function saveCollab(payload, actor) {
 
   const stepRows = clean.map((s, i) => {
     const order = i + 1;
-    const pd = prevStep[order] || {};
+    const pd = prevStep[s.srcOrder] || {};   // bawa done/catatan dari proses asalnya (tahan reorder)
     return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || ''];
   });
   if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:I`, stepRows);

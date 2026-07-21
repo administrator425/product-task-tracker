@@ -749,7 +749,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.43.2'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.44.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -2160,7 +2160,7 @@ function openCollabModal(id=''){
   if(isNew && !manage){ showToast('Hanya manager/Dev yang bisa membuat task kolaborasi.', false); return; }
   state._collabId=c?c.id:null;
   state._collabEdit=isNew;                         // task baru langsung mode edit
-  state._collabDraft=isNew?[{name:'',pic:'',deadline:''}]:[];
+  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',srcOrder:0}]:[];
   document.getElementById('collabModal').classList.remove('hide');
   document.getElementById('collabModalTitle').textContent=isNew?'Task Kolaborasi Baru':(manage?'Kelola Task Kolaborasi':'Detail Task Kolaborasi');
   document.getElementById('collabModalSub').textContent=c?(c.id+' • dibuat oleh '+(c.createdBy||'—')):'Cukup platform + judul + daftar proses (tiap proses punya PIC & deadline).';
@@ -2186,10 +2186,12 @@ function openCollabModal(id=''){
 }
 function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); const mm=document.getElementById('collabMentionMenu'); if(mm) mm.classList.add('hide'); state._collabId=null; state._collabEdit=false; if(state.activeView==='collab') renderCollab(); }
 function notifOutsideClose(e){ const bell=document.getElementById('notifBell'), menu=document.getElementById('notifMenu'); if(!menu||menu.classList.contains('hide')) return; if(bell&&bell.contains(e.target)) return; if(menu.contains(e.target)) return; menu.classList.add('hide'); }
-function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline})):[{name:'',pic:'',deadline:''}]); renderCollabSteps(c); }
-function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value })); }
-function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:''}); renderCollabSteps(currentCollab()); }
-function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:''}); renderCollabSteps(currentCollab()); }
+function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,srcOrder:s.order})):[{name:'',pic:'',deadline:'',srcOrder:0}]); renderCollabSteps(c); }
+function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, srcOrder:Number(row.dataset.srcOrder||0) })); }
+function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
+function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
+// Atur urutan proses (tombol naik/turun). srcOrder ikut berpindah bersama prosesnya.
+function collabMoveStep(i, dir){ const d=collabReadStepInputs(); const j=i+dir; if(j<0||j>=d.length) return; const t=d[i]; d[i]=d[j]; d[j]=t; state._collabDraft=d; renderCollabSteps(currentCollab()); }
 
 function renderCollabSteps(c){
   const box=document.getElementById('collabSteps'); if(!box) return;
@@ -2201,16 +2203,25 @@ function renderCollabSteps(c){
   const etl=document.getElementById('collabEditToggleLbl'); if(etl) etl.textContent=editing?'Selesai edit':'Edit';
   if(editing){
     const draft=state._collabDraft||[];
-    box.innerHTML=draft.map((s,i)=>`<div class="collab-step-edit flex items-center gap-1.5 p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800">
-      <span class="text-[10px] font-mono text-gray-400 w-5 text-center shrink-0">${i+1}</span>
+    box.innerHTML=draft.map((s,i)=>`<div class="collab-step-edit flex items-center gap-1 p-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800" data-src-order="${s.srcOrder||0}">
+      <span class="cs-handle shrink-0 cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500" title="Seret untuk atur urutan"><span class="material-icons-round text-[16px]">drag_indicator</span></span>
+      <span class="text-[10px] font-mono text-gray-400 w-4 text-center shrink-0">${i+1}</span>
       <input class="cs-name flex-1 min-w-0 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-sm outline-none" placeholder="Nama proses (mis. Membuat kurikulum)" value="${escapeAttr(s.name||'')}">
-      <select class="cs-pic shrink-0 w-28 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none">${collabPicOptions(s.pic)}</select>
-      <input type="date" class="cs-deadline shrink-0 w-[130px] rounded bg-gray-100 dark:bg-slate-800 px-1.5 py-1 text-sm outline-none" value="${escapeAttr(s.deadline||'')}">
+      <select class="cs-pic shrink-0 w-24 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none">${collabPicOptions(s.pic)}</select>
+      <input type="date" class="cs-deadline shrink-0 w-[120px] rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" value="${escapeAttr(s.deadline||'')}">
+      <span class="shrink-0 flex flex-col -space-y-1">
+        <button type="button" onclick="collabMoveStep(${i},-1)" title="Naik" ${i===0?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===0?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_up</span></button>
+        <button type="button" onclick="collabMoveStep(${i},1)" title="Turun" ${i===draft.length-1?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===draft.length-1?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_down</span></button>
+      </span>
       <button type="button" onclick="collabRemoveStep(${i})" title="Hapus proses" class="shrink-0 text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[16px]">close</span></button>
     </div>`).join('');
     const total=draft.length; document.getElementById('collabProgCount').textContent='0/'+total; document.getElementById('collabProgBar').style.width='0%';
+    // Drag untuk atur urutan (pakai handle agar input tetap bisa diklik/edit).
+    if(state._collabStepSort){ try{state._collabStepSort.destroy();}catch(e){} state._collabStepSort=null; }
+    if(window.Sortable){ state._collabStepSort=Sortable.create(box,{handle:'.cs-handle',draggable:'.collab-step-edit',animation:150,ghostClass:'card-drag-ghost',chosenClass:'card-drag-chosen',onEnd:()=>{ state._collabDraft=collabReadStepInputs(); renderCollabSteps(currentCollab()); }}); }
     return;
   }
+  if(state._collabStepSort){ try{state._collabStepSort.destroy();}catch(e){} state._collabStepSort=null; }   // keluar mode edit
   const steps=(c&&c.steps)||[];
   if(!steps.length){ box.innerHTML=`<div class="px-2 py-4 text-center text-xs text-gray-400">Belum ada proses.${manage?' Klik "Edit" untuk menambah.':''}</div>`; }
   else box.innerHTML=steps.map(s=>{
@@ -2309,7 +2320,7 @@ function saveCollabFromModal(){
   const editing=!!state._collabEdit;
   const cur=currentCollab();
   const steps=editing ? collabReadStepInputs().filter(s=>s.name)
-                      : ((cur&&cur.steps)||[]).map(s=>({name:s.name, pic:s.pic, deadline:s.deadline}));
+                      : ((cur&&cur.steps)||[]).map(s=>({name:s.name, pic:s.pic, deadline:s.deadline, srcOrder:s.order}));
   const title=getVal('collabTitle').trim();
   if(!title){ showToast('Judul task wajib diisi.', false); return; }
   if(!steps.length){ showToast('Minimal 1 proses (isi nama proses).', false); return; }
