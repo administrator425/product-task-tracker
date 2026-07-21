@@ -416,6 +416,7 @@
               <input id="collabSearch" oninput="setCollabFilter('q',this.value)" placeholder="Cari judul, PIC, proses…" class="w-full pl-9 pr-3 py-2 rounded-lg bg-gray-100 dark:bg-slate-800 border-0 outline-none focus:ring-2 focus:ring-indigo-300 text-sm">
             </div>
             <select id="collabFilterType" onchange="setCollabFilter('type',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua Tipe</option></select>
+            <select id="collabFilterPlatform" onchange="setCollabFilter('platform',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua Platform</option></select>
             <select id="collabFilterPic" onchange="setCollabFilter('pic',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua PIC</option></select>
             <select id="collabFilterStatus" onchange="setCollabFilter('status',this.value)" class="px-2.5 py-2 rounded-lg text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 outline-none"><option value="">Semua Status</option><option value="Aktif">Aktif</option><option value="Selesai">Selesai</option></select>
             <button id="collabFilterMine" onclick="setCollabFilter('mine',null)" class="px-2.5 py-2 rounded-lg text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 flex items-center gap-1"><span class="material-icons-round text-[14px]">person</span>Giliran Saya</button>
@@ -700,6 +701,7 @@
             <div class="md:col-span-1"><label class="form-label">Tipe Task</label><select id="collabType" class="form-control"></select></div>
             <div class="md:col-span-1"><label class="form-label">Deadline Project</label><input type="date" id="collabDeadline" class="form-control"><div id="collabDeadlineView" class="hide text-xs mt-1"></div></div>
           </div>
+          <div id="collabColorRow"><label class="form-label">Warna Kartu</label><div id="collabColorPicker" class="flex flex-wrap items-center gap-1.5"></div></div>
 
           <div class="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
             <div class="px-4 py-3 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between gap-3">
@@ -747,7 +749,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.42.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.43.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -833,7 +835,7 @@ const IS_GAS = true; // selalu ada backend sekarang (GAS native ATAU Vercel API)
 const TODAY = new Date(); TODAY.setHours(0,0,0,0);
 let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
-  managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
+  managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], collabManagers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
   selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabViz: 'grid', _collabFilter: {q:'',type:'',pic:'',status:'',mine:false}, notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
@@ -873,6 +875,7 @@ function init() {
       if (state.guestMode) state.currentUser = VIEWONLY_USER;
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       if (data.meta && data.meta.doneApprovers && data.meta.doneApprovers.length) state.doneApprovers = data.meta.doneApprovers;
+      if (data.meta && data.meta.collabManagers && data.meta.collabManagers.length) state.collabManagers = data.meta.collabManagers;
       afterLoad();
     }).withFailureHandler(err => {
       var gate=document.getElementById('loginGate');
@@ -2004,7 +2007,13 @@ function flushPendingChecklist(taskId, cb){
 }
 /* ---------- Task Kolaborasi (alur proses beruntun antar-PIC) ---------- */
 // Buat/edit/hapus struktur: manager/Dev. Centang proses: hanya PIC proses itu (atau Dev).
-function canManageCollab(){ return !isViewOnly() && isManager(state.currentUser); }
+// Boleh setup/kelola Task Kolaborasi: manager/Dev, atau yang ada di daftar collabManagers (mis. Alya, Dhea).
+function canManageCollab(){
+  if(isViewOnly()) return false;
+  if(isManager(state.currentUser)) return true;
+  const u=baseName(state.currentUser);
+  return (state.collabManagers||[]).some(a=>baseName(a)===u);
+}
 function canCheckStepClient(s){ if(isViewOnly()) return false; if(isDev()) return true; return !!s && same(s.pic, state.currentUser); }
 function collabProgress(c){ const list=(c&&c.steps)||[]; const total=list.length, done=list.filter(s=>s.done).length; return {done,total,pct: total?Math.round(done/total*100):0}; }
 // "Giliran saya": proses milik saya yang belum selesai & proses sebelumnya sudah selesai (handoff sampai ke saya).
@@ -2020,18 +2029,32 @@ function currentCollab(){ return (state.collabs||[]).find(c=>c.id===state._colla
 function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeAttr(p)}" ${same(p,sel)?'selected':''}>${escapeHtml(p)}</option>`).join(''); }
 
 const COLLAB_TYPES=['Course','Tryout/Latsol','Liveclass','Drilling','Journey'];
+const COLLAB_COLORS=[
+  {n:'Merah',h:'#ef4444'},{n:'Oranye',h:'#f97316'},{n:'Kuning',h:'#f59e0b'},{n:'Hijau',h:'#10b981'},
+  {n:'Toska',h:'#14b8a6'},{n:'Biru',h:'#3b82f6'},{n:'Indigo',h:'#6366f1'},{n:'Ungu',h:'#8b5cf6'},{n:'Pink',h:'#ec4899'},{n:'Abu',h:'#6b7280'},
+];
+function safeColor(c){ return /^#[0-9a-fA-F]{3,8}$/.test(String(c||'')) ? String(c) : ''; }
 function collabTypeOf(c){ const t=String((c&&c.type)||'').trim(); return t||'Tanpa Tipe'; }
+function setCollabColor(hex){ if(!canManageCollab()) return; state._collabColor=safeColor(hex); renderCollabColorPicker(); }
+function renderCollabColorPicker(){
+  const box=document.getElementById('collabColorPicker'); if(!box) return;
+  const cur=safeColor(state._collabColor), manage=canManageCollab();
+  const dot=(hex,active,label,inner)=>`<button type="button" ${manage?`onclick="setCollabColor('${hex}')"`:'disabled'} title="${escapeAttr(label)}" class="w-6 h-6 rounded-full flex items-center justify-center ${active?'ring-2 ring-offset-1 ring-gray-500 dark:ring-offset-slate-900':''} ${manage?'':'opacity-60 cursor-default'}" style="background:${hex||'transparent'};${hex?'':'border:1px dashed #94a3b8'}">${inner||''}</button>`;
+  box.innerHTML=dot('', !cur, 'Tanpa warna', '<span class="material-icons-round text-[13px] text-gray-400">block</span>')
+    + COLLAB_COLORS.map(c=>dot(c.h, cur.toLowerCase()===c.h.toLowerCase(), c.n, '')).join('');
+}
 function setCollabViz(v){ state._collabViz=v; renderCollab(); }
 /* ---- Filter tab Task Kolaborasi ---- */
-function collabFilter(){ return state._collabFilter||(state._collabFilter={q:'',type:'',pic:'',status:'',mine:false}); }
+function collabFilter(){ return state._collabFilter||(state._collabFilter={q:'',type:'',platform:'',pic:'',status:'',mine:false}); }
 function setCollabFilter(k,v){ const f=collabFilter(); if(k==='mine') f.mine=!f.mine; else f[k]=v; renderCollab(); }
-function resetCollabFilter(){ state._collabFilter={q:'',type:'',pic:'',status:'',mine:false}; const s=document.getElementById('collabSearch'); if(s) s.value=''; ['collabFilterType','collabFilterPic','collabFilterStatus'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';}); renderCollab(); }
-function collabFilterActive(){ const f=collabFilter(); return !!(f.q||f.type||f.pic||f.status||f.mine); }
+function resetCollabFilter(){ state._collabFilter={q:'',type:'',platform:'',pic:'',status:'',mine:false}; const s=document.getElementById('collabSearch'); if(s) s.value=''; ['collabFilterType','collabFilterPlatform','collabFilterPic','collabFilterStatus'].forEach(id=>{const e=document.getElementById(id); if(e) e.value='';}); renderCollab(); }
+function collabFilterActive(){ const f=collabFilter(); return !!(f.q||f.type||f.platform||f.pic||f.status||f.mine); }
 function filteredCollabs(){
   const f=collabFilter(); let arr=(state.collabs||[]).slice();
   const q=String(f.q||'').toLowerCase().trim();
   if(q) arr=arr.filter(c=>[c.id,c.title,c.platform,c.type,c.description].concat((c.steps||[]).map(s=>s.name+' '+s.pic)).join(' ').toLowerCase().includes(q));
   if(f.type) arr=arr.filter(c=>collabTypeOf(c)===f.type);
+  if(f.platform) arr=arr.filter(c=>String(c.platform||'').split(',').map(x=>x.trim()).includes(f.platform));
   if(f.pic) arr=arr.filter(c=>(c.steps||[]).some(s=>same(s.pic,f.pic)));
   if(f.status) arr=arr.filter(c=>c.status===f.status);
   if(f.mine) arr=arr.filter(c=>(c.steps||[]).some(s=>isMyTurnStep(c,s)));
@@ -2039,6 +2062,7 @@ function filteredCollabs(){
 }
 function populateCollabFilters(){
   const t=document.getElementById('collabFilterType'); if(t){ const v=t.value; t.innerHTML='<option value="">Semua Tipe</option>'+COLLAB_TYPES.concat(['Tanpa Tipe']).map(x=>`<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join(''); t.value=v; }
+  const pf=document.getElementById('collabFilterPlatform'); if(pf){ const v=pf.value; pf.innerHTML='<option value="">Semua Platform</option>'+(state.options.platform||[]).map(x=>`<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join(''); pf.value=v; }
   const p=document.getElementById('collabFilterPic'); if(p){ const v=p.value; p.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).filter(x=>baseName(x)!==baseName(VIEWONLY_USER)).map(x=>`<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join(''); p.value=v; }
 }
 function renderCollab(){
@@ -2109,7 +2133,8 @@ function collabCard(c){
     const ic=s.done?'text-emerald-500':(turn?'text-rose-500':'text-gray-300 dark:text-slate-600');
     return `<div class="flex items-center gap-1.5 text-[12px] ${s.done?'text-gray-400':'text-gray-600 dark:text-slate-300'}"><span class="material-icons-round text-[14px] ${ic}">${icon}</span><span class="flex-1 min-w-0 truncate ${s.done?'line-through':''}">${escapeHtml(s.name)}</span><span class="text-[10px] ${mine?'font-bold text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span></div>`;
   }).join('');
-  return `<div data-collab-id="${escapeAttr(c.id)}" onclick="openCollabModal('${escapeAttr(c.id)}')" class="bg-white dark:bg-slate-800 rounded-xl border ${mineTurn?'border-rose-300 dark:border-rose-800':'border-gray-200 dark:border-slate-700'} p-4 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition">
+  const col=safeColor(c.color);
+  return `<div data-collab-id="${escapeAttr(c.id)}" onclick="openCollabModal('${escapeAttr(c.id)}')" style="${col?`border-left:4px solid ${col}`:''}" class="bg-white dark:bg-slate-800 rounded-xl border ${mineTurn?'border-rose-300 dark:border-rose-800':'border-gray-200 dark:border-slate-700'} p-4 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition">
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <div class="flex items-center flex-wrap gap-1"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${c.type?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">${escapeHtml(c.type)}</span>`:''}${String(c.platform||'').split(',').map(x=>x.trim()).filter(Boolean).map(pf=>`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(pf)}</span>`).join('')}</div>
@@ -2145,6 +2170,7 @@ function openCollabModal(id=''){
   const typeSel=document.getElementById('collabType');
   typeSel.innerHTML='<option value="">(Tanpa tipe)</option>'+COLLAB_TYPES.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   typeSel.value=c?(c.type||''):'';
+  state._collabColor=c?safeColor(c.color):''; renderCollabColorPicker();
   setVal('collabTitle', c?c.title:''); setVal('collabDesc', c?c.description:''); setVal('collabDeadline', c?c.deadline:'');
   const roHead=!manage;
   plat.disabled=roHead; typeSel.disabled=roHead; document.getElementById('collabTitle').disabled=roHead; document.getElementById('collabDesc').disabled=roHead; document.getElementById('collabDeadline').disabled=roHead;
@@ -2287,7 +2313,7 @@ function saveCollabFromModal(){
   if(!title){ showToast('Judul task wajib diisi.', false); return; }
   if(!steps.length){ showToast('Minimal 1 proses (isi nama proses).', false); return; }
   const platform=[...document.getElementById('collabPlatform').selectedOptions].map(o=>o.value).join(', ');
-  const payload={ id: state._collabId||'', platform, type:getVal('collabType'), title, description:getVal('collabDesc').trim(), deadline:getVal('collabDeadline'), steps };
+  const payload={ id: state._collabId||'', platform, type:getVal('collabType'), color:safeColor(state._collabColor), title, description:getVal('collabDesc').trim(), deadline:getVal('collabDeadline'), steps };
   document.getElementById('loading').classList.remove('hide');
   GAS.withSuccessHandler(res=>{
     document.getElementById('loading').classList.add('hide');
@@ -2423,6 +2449,7 @@ function refreshData(force){
     state.checklistSummary=data.checklistSummary||state.checklistSummary; state.collabs=data.collabs||state.collabs;
     if(data.meta&&data.meta.managers&&data.meta.managers.length) state.managers=data.meta.managers;
     if(data.meta&&data.meta.doneApprovers&&data.meta.doneApprovers.length) state.doneApprovers=data.meta.doneApprovers;
+    if(data.meta&&data.meta.collabManagers&&data.meta.collabManagers.length) state.collabManagers=data.meta.collabManagers;
     updateCollabTurnBadge();
     loadNotifications(()=>{ renderActiveView(); });
   }).withFailureHandler(()=>{}).getBootstrapData();

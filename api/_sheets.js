@@ -162,6 +162,20 @@ function canApproveDone(name) {
   const n = baseName(name);
   return getDoneApprovers().some(a => baseName(a) === n);
 }
+
+// Siapa yang boleh MEMBUAT/MENGUBAH Task Kolaborasi (setup alur). Terpisah dari hak
+// manager: Dhea & Alya bisa menyusun task kolaborasi tanpa jadi manager penuh.
+// Manager (MANAGERS) & Dev selalu ikut boleh.
+function getCollabManagers() {
+  const raw = process.env.COLLAB_MANAGERS || 'Nynda,Dhea,Alya';
+  return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+function canManageCollabActor(name) {
+  if (!baseName(name)) return false;
+  if (isManagerActor(name)) return true;
+  const n = baseName(name);
+  return getCollabManagers().some(a => baseName(a) === n);
+}
 function doneDeniedMessage() {
   return 'Hanya ' + getDoneApprovers().join(', ') + ' yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan.';
 }
@@ -840,12 +854,13 @@ async function getChecklistSummary(pre) {
 async function ensureCollabSheets() {
   if (_ensured.has('collab')) return;
   await ensureSheetExists(CONFIG.COLLAB_SHEET);
-  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:H1`);
+  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:I1`);
   let h0 = head[0] || [];
-  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:H1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type']]);
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:I1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color']]);
   else {
     if (!h0[6]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!G1`, [['Deadline']]);   // deadline project keseluruhan
     if (!h0[7]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!H1`, [['Type']]);        // tipe task (untuk Kanban per-tipe)
+    if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!I1`, [['Color']]);       // warna kartu (grid & kanban)
   }
   await ensureSheetExists(CONFIG.COLLAB_STEP_SHEET);
   head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`);
@@ -875,8 +890,8 @@ async function getCollabs(preC, preS) {
   if (preC !== undefined) { crows = preC || []; srows = preS || []; }
   else {
     try {
-      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:H`, `${CONFIG.COLLAB_STEP_SHEET}!A2:I`]);
-      crows = b[`${CONFIG.COLLAB_SHEET}!A2:H`] || [];
+      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:I`, `${CONFIG.COLLAB_STEP_SHEET}!A2:I`]);
+      crows = b[`${CONFIG.COLLAB_SHEET}!A2:I`] || [];
       srows = b[`${CONFIG.COLLAB_STEP_SHEET}!A2:I`] || [];
     } catch (e) { return []; }
   }
@@ -909,6 +924,7 @@ async function getCollabs(preC, preS) {
       createdAt: String((r && r[5]) || '').trim(),
       deadline: (r && r[6] != null && r[6] !== '') ? formatDate(r[6], false) : '',
       type: String((r && r[7]) || '').trim(),
+      color: String((r && r[8]) || '').trim(),
       steps: list, done, total: list.length,
       status: (list.length && done >= list.length) ? 'Selesai' : 'Aktif',
     };
@@ -932,12 +948,13 @@ async function deleteStepRowsForCollab(collabId) {
 
 async function saveCollab(payload, actor) {
   actor = String(actor || '').trim() || 'Unknown';
-  if (!isManagerActor(actor)) return { success: false, message: 'Hanya manager/Dev yang bisa membuat/mengubah task kolaborasi.' };
+  if (!canManageCollabActor(actor)) return { success: false, message: 'Anda tak berhak membuat/mengubah task kolaborasi.' };
   const platform = String((payload && payload.platform) || '').trim();
   const title = String((payload && payload.title) || '').trim();
   const description = String((payload && payload.description) || '').trim();
   const deadline = String((payload && payload.deadline) || '').trim();   // deadline project keseluruhan
   const type = String((payload && payload.type) || '').trim();           // tipe task (Kanban per-tipe)
+  const color = String((payload && payload.color) || '').trim();         // warna kartu (grid & kanban)
   const steps = Array.isArray(payload && payload.steps) ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
   const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim() }))
@@ -946,7 +963,7 @@ async function saveCollab(payload, actor) {
 
   await ensureCollabSheets();
   let crows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:H`); } catch (e) { crows = []; }
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:I`); } catch (e) { crows = []; }
   const ids = crows.map(r => String((r && r[0]) || '').trim());
   let id = String((payload && payload.id) || '').trim();
   const isUpdate = id && ids.includes(id);
@@ -963,11 +980,11 @@ async function saveCollab(payload, actor) {
     const rn = ids.indexOf(id) + 2;
     const keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
     const keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp());
-    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:H${rn}`, [[id, platform, title, description, keepBy, keepAt, dl, type]]);
+    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:I${rn}`, [[id, platform, title, description, keepBy, keepAt, dl, type, color]]);
     await deleteStepRowsForCollab(id);
   } else {
     id = genCollabId(ids);
-    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:H`, [[id, platform, title, description, actor, nowStamp(), dl, type]]);
+    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:I`, [[id, platform, title, description, actor, nowStamp(), dl, type, color]]);
   }
 
   const stepRows = clean.map((s, i) => {
@@ -1007,7 +1024,7 @@ async function setCollabStepNote(collabId, order, note, actor) {
 // Ubah tipe task (dipakai drag antar kolom Kanban per-tipe). Manager/Dev saja.
 async function setCollabType(collabId, type, actor) {
   actor = String(actor || '').trim() || 'Unknown';
-  if (!isManagerActor(actor)) return { success: false, message: 'Hanya manager/Dev yang bisa mengubah tipe task.' };
+  if (!canManageCollabActor(actor)) return { success: false, message: 'Anda tak berhak mengubah tipe task.' };
   collabId = String(collabId || '').trim();
   await ensureCollabSheets();
   let crows = [];
@@ -1046,7 +1063,7 @@ async function setCollabStepDone(collabId, order, done, actor) {
 
 async function deleteCollab(id, actor) {
   actor = String(actor || '').trim() || 'Unknown';
-  if (!isManagerActor(actor)) return { success: false, message: 'Hanya manager/Dev yang bisa menghapus task kolaborasi.' };
+  if (!canManageCollabActor(actor)) return { success: false, message: 'Anda tak berhak menghapus task kolaborasi.' };
   id = String(id || '').trim();
   await ensureCollabSheets();
   await deleteStepRowsForCollab(id);
@@ -1205,7 +1222,7 @@ async function getBootstrapData(opts) {
     tasks: MAIN_DATA_RANGE(), options: `${CONFIG.OPTIONS_SHEET}!A2:D`, activity: `${CONFIG.ACTIVITY_SHEET}!A2:E`,
     comments: `${CONFIG.COMMENTS_SHEET}!A2:D`, auth: `${CONFIG.AUTH_SHEET}!A2:B`, links: `${CONFIG.LINKS_SHEET}!A2:D`,
     dashboards: `${CONFIG.DASHBOARDS_SHEET}!A2:D`, notes: `${CONFIG.NOTES_SHEET}!A2:E`, checklist: `${CONFIG.CHECKLIST_SHEET}!A2:C`,
-    collab: `${CONFIG.COLLAB_SHEET}!A2:H`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:I`,
+    collab: `${CONFIG.COLLAB_SHEET}!A2:I`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:I`,
   };
   const present = Object.keys(R).filter(k => meta[sheetOf[k]]);
   let batch = null;
@@ -1249,6 +1266,7 @@ async function getBootstrapData(opts) {
         sheetName: CONFIG.TASK_SHEET,
         managers: getManagers(),
         doneApprovers: getDoneApprovers(),
+        collabManagers: getCollabManagers(),
         generatedAt: nowStamp(),
       },
     };
@@ -1268,6 +1286,7 @@ async function getBootstrapData(opts) {
       sheetName: CONFIG.TASK_SHEET,
       managers: getManagers(),
       doneApprovers: getDoneApprovers(),
+      collabManagers: getCollabManagers(),
       generatedAt: nowStamp(),
     },
   };
@@ -1800,5 +1819,6 @@ module.exports = {
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp,
     isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus,
-    ownsTaskActor, isChecked, canCheckStep, genCollabId, parseCollabStep },
+    ownsTaskActor, isChecked, canCheckStep, genCollabId, parseCollabStep,
+    canManageCollabActor, getCollabManagers },
 };

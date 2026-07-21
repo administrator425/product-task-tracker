@@ -140,5 +140,14 @@ eq('parseCollabStep COL-001#2 -> collab', parseCollabStep('COL-001#2').collabId,
 eq('parseCollabStep COL-001#2 -> order', parseCollabStep('COL-001#2').order, 2);
 ok('parseCollabStep task biasa -> null', parseCollabStep('TSK-007') === null);
 ok('parseCollabStep collab tanpa step -> null', parseCollabStep('COL-001') === null);
+// Siapa boleh setup Task Kolaborasi (Nynda, Dhea, Alya + Dev) — terpisah dari manager penuh.
+const { canManageCollabActor, isManagerActor: isMgr } = _internals;
+ok('Nynda boleh setup collab', canManageCollabActor('Nynda') === true);
+ok('Dhea boleh setup collab', canManageCollabActor('Dhea') === true);
+ok('Alya boleh setup collab', canManageCollabActor('Alya') === true);
+ok('Dev boleh setup collab', canManageCollabActor('Dev') === true);
+ok('Ali tidak boleh setup collab', canManageCollabActor('Ali') === false);
+ok('Andika tidak boleh setup collab', canManageCollabActor('Andika') === false);
+ok('Dhea setup collab TAPI bukan manager penuh', isMgr('Dhea') === false);
 
 console.log(`\n✅ Semua ${passed} assertion lulus.`);

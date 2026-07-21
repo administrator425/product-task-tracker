@@ -10,6 +10,11 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.43.0 — Task Kolaborasi: Alya & Dhea bisa setup, filter platform, warna kartu
+- **Alya & Dhea kini bisa membuat/mengubah Task Kolaborasi** (setup alur) tanpa jadi manager penuh — konsep terpisah lewat env baru **`COLLAB_MANAGERS`** (default `Nynda,Dhea,Alya`). Manager & Dev otomatis ikut.
+- **Filter Platform** ditambahkan di tab Task Kolaborasi (melengkapi filter Tipe/PIC/Status/Giliran Saya/cari).
+- **Warna kartu yang bisa diatur**: pemilih warna (10 preset + "tanpa warna") di modal; kartu di **Grid & Kanban** menampilkan aksen warna di sisi kiri. Kolom baru `Color` di sheet COLLAB (otomatis).
+
 ## 1.42.0 — Sub-ceklis collab jadi fleksibel (siapa pun bisa menambah)
 - **Sub-ceklis per proses** kini bisa **ditambah/dicentang/dihapus oleh siapa pun** (bukan hanya PIC proses/manager) — untuk gotong-royong antar-PIC. Mode lihat-saja tetap tak bisa.
 - Tidak mengubah: **centang proses utama** tetap hanya oleh PIC proses tsb, dan **ceklis task biasa** tetap dengan aturan lamanya (PIC/Support tambah/centang, hapus manager).
