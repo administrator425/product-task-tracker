@@ -10,6 +10,27 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.46.0 — Filter Dashboard & Laporan + drill-down per PIC
+### Dashboard — filter baru (tersedia untuk SEMUA user, manager maupun user biasa)
+- **Rentang tanggal**: pilih dasar tanggalnya lewat toggle **Deadline / Dibuat**, lalu preset **Semua · Hari ini · 7 hari · 30 hari · Bulan ini**, atau isi tanggal dari–sampai sendiri (otomatis jadi mode custom).
+  - Arah window ikut field: **Deadline** melihat ke **depan** (hari ini → +7/+30), **Dibuat** melihat ke **belakang** (−7/−30 → hari ini).
+- **Beban Kerja**: multi-select PIC. Opsinya diambil dari task yang memang terlihat user itu (bukan master list), jadi tetap relevan buat user biasa.
+- **Status** dan **Prioritas**: multi-select.
+- Semua filter menyetir **seluruh dashboard sekaligus** — KPI, chart Beban Kerja per PIC, Komposisi Status, Deadline Kritis, Update Terakhir, dan Stage Paling Padat.
+- Ada penghitung `X dari Y task • <rentang>` dan tombol **Reset** yang muncul saat ada filter aktif.
+
+### Laporan — filter + interaktif
+- **Filter rentang tanggal** (toggle Deadline/Dibuat + preset + custom), **filter PIC**, dan **filter Stage**.
+- **Klik baris PIC → panel detail** yang menampilkan **stage apa saja yang dikerjakan user itu**, lengkap dengan bar proporsi, hitungan **aktif / selesai / overdue** per stage, dan **daftar task**-nya (klik task → buka modal task). Klik baris yang sama lagi untuk menutup.
+- **Klik baris Stage** → langsung jadi filter stage (toggle), ditandai centang.
+- KPI berbasis waktu otomatis ganti label: **"mgg ini"** saat rentang = Semua (perilaku lama, 7 hari terakhir tetap dipertahankan) → **"rentang"** begitu rentang diisi.
+- **Export CSV** ikut membawa rentang yang dipakai, dan bila ada PIC yang sedang dibuka, ditambahkan sheet detail **stage + daftar task PIC tersebut**.
+
+### Perbaikan
+- `todayStr()` sekarang memakai **tanggal lokal**, bukan `toISOString()` — sebelumnya di UTC+7 tanggalnya mundur 1 hari kalau diakses sebelum jam 07.00 (memengaruhi penanda "telat" dan tanggal dibuat default).
+
+---
+
 ## 1.45.0 — Task collab muncul di view task biasa (Hari Ini, List, Kanban)
 - Task kolaborasi tempat Anda jadi **PIC salah satu proses** kini **ikut muncul** di **Hari Ini**, **Task List**, dan **Kanban Status** — bukan cuma di tab Task Kolaborasi.
 - Ditandai jelas dengan **badge "Kolaborasi"** (ikon alur, aksen warna kartu) sehingga beda dari task biasa.
