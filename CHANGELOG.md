@@ -10,6 +10,16 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.48.0 — Kanban pilih banyak: perbaikan scroll + "pilih semua per kolom"
+- **Perbaikan bug scroll**: memilih kartu setelah men-scroll ke bawah tidak lagi melompat balik ke atas. Toggle satu kartu kini memperbarui **hanya kartu itu** (tanpa membangun ulang board), dan semua render ulang lain (pilih semua, batal, pindah massal) **mempertahankan posisi scroll** tiap kolom.
+- **Pilih semua per kolom**: di header tiap kolom (saat mode Pilih Banyak aktif) ada tombol centang:
+  - Kosong → **pilih semua** kartu yang bisa dipilih di kolom itu.
+  - Terisi/`N/total` → menampilkan berapa yang terpilih; klik saat semua terpilih = **batalkan semua** di kolom itu.
+  - Ikon **indeterminate** saat hanya sebagian terpilih.
+- Alur yang jadi cepat: klik **pilih semua** di kolom (mis. Review PM), lalu **uncheck** beberapa yang ingin dipertahankan, lalu pindahkan sisanya sekaligus — tak perlu mencentang satu per satu saat yang dipindah jauh lebih banyak dari yang ditahan.
+
+---
+
 ## 1.47.0 — Kanban: pilih banyak kartu & pindah status sekaligus
 - Tombol **Pilih Banyak** di atas board Kanban. Saat aktif:
   - Tiap kartu (task biasa) muncul **checkbox** di pojok; klik kartu = pilih/batal (bukan buka detail).

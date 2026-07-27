@@ -750,7 +750,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.47.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.48.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -1640,9 +1640,63 @@ function renderCharts(){
 // Hanya task biasa yang bisa dipilih (kartu collab statusnya turunan, tidak bisa di-set manual).
 function isSelectable(t){ return t && !t._collab && canEditTask(t); }
 function isSelected(id){ return state.selected.indexOf(id)>=0; }
-function toggleCardSelect(id){ const i=state.selected.indexOf(id); if(i>=0) state.selected.splice(i,1); else state.selected.push(id); renderBoard(); }
-function clearSelection(){ state.selected=[]; renderBoard(); }
-function toggleKanbanSelect(){ state.kanbanSelect=!state.kanbanSelect; if(!state.kanbanSelect) state.selected=[]; renderBoard(); }
+// Jaga posisi scroll tiap kolom (dan scroll horizontal board) saat board dibangun ulang,
+// supaya memilih kartu setelah men-scroll tidak melompat balik ke atas.
+function withKanbanScroll(fn){
+  const board=document.getElementById('kanbanBoard');
+  const cols={}; let bl=0;
+  if(board){ bl=board.scrollLeft; board.querySelectorAll('.kanban-col').forEach(c=>{ cols[c.dataset.status]=c.scrollTop; }); }
+  const wy=window.scrollY||0;
+  fn();
+  const b2=document.getElementById('kanbanBoard');
+  if(b2){ b2.scrollLeft=bl; b2.querySelectorAll('.kanban-col').forEach(c=>{ if(cols[c.dataset.status]!=null) c.scrollTop=cols[c.dataset.status]; }); }
+  window.scrollTo(0,wy);
+}
+// Toggle satu kartu: perbarui HANYA kartu itu + toolbar, tanpa membangun ulang board (nol lompatan scroll).
+function toggleCardSelect(id){
+  const i=state.selected.indexOf(id); if(i>=0) state.selected.splice(i,1); else state.selected.push(id);
+  const el=document.querySelector('#kanbanBoard [data-task-id="'+String(id).replace(/"/g,'\\"')+'"]');
+  const t=state.tasks.find(x=>x.id===id);
+  if(el && t){ el.outerHTML=taskCard(t); } else { withKanbanScroll(renderBoard); }
+  syncColHeaderSelects(); renderKanbanToolbar();
+}
+function clearSelection(){ state.selected=[]; withKanbanScroll(renderBoard); }
+function toggleKanbanSelect(){ state.kanbanSelect=!state.kanbanSelect; if(!state.kanbanSelect) state.selected=[]; withKanbanScroll(renderBoard); }
+// Pilih semua / batal semua kartu (yang bisa dipilih) di satu kolom status.
+function toggleSelectAllStatus(status){
+  const statuses=kanbanStatuses();
+  const ids=viewTasksAll().filter(t=>isSelectable(t)&&matchStatus(t,status,statuses)).map(t=>t.id);
+  if(!ids.length) return;
+  const allChosen=ids.every(id=>isSelected(id));
+  if(allChosen) state.selected=state.selected.filter(id=>ids.indexOf(id)<0);
+  else ids.forEach(id=>{ if(!isSelected(id)) state.selected.push(id); });
+  withKanbanScroll(renderBoard);
+}
+// Segarkan tampilan tombol "pilih semua" tiap kolom tanpa render ulang board (dipakai saat toggle 1 kartu).
+function syncColHeaderSelects(){
+  const statuses=kanbanStatuses(); const tasks=viewTasksAll();
+  document.querySelectorAll('#kanbanBoard [data-selall]').forEach(btn=>{
+    const status=btn.dataset.selall;
+    const ids=tasks.filter(t=>isSelectable(t)&&matchStatus(t,status,statuses)).map(t=>t.id);
+    const chosen=ids.filter(id=>isSelected(id)).length;
+    btn.outerHTML=colSelectAllBtn(status, ids.length, chosen);
+  });
+}
+function colSelectAllBtn(status, total, chosen){
+  if(!total) return '';
+  const all=chosen===total, some=chosen>0&&!all;
+  const icon=all?'check_box':(some?'indeterminate_check_box':'check_box_outline_blank');
+  const cls=chosen?'text-indigo-600 dark:text-indigo-300':'text-gray-400 dark:text-slate-500 hover:text-gray-600';
+  return `<button data-selall="${escapeAttr(status)}" onclick="toggleSelectAllStatus('${escapeAttr(status)}')" title="${all?'Batalkan semua di kolom ini':'Pilih semua di kolom ini'}" class="nodrag inline-flex items-center gap-0.5 shrink-0 ${cls}"><span class="material-icons-round text-[18px]">${icon}</span>${chosen?`<span class="text-[10px] font-bold">${chosen}/${total}</span>`:''}</button>`;
+}
+function kanbanStatuses(tasks){
+  tasks=tasks||viewTasksAll();
+  let statuses=[...(state.options.status||[])];
+  if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status))) && !statuses.some(s=>same(s,'Tanpa Status'))) statuses.push('Tanpa Status');
+  const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
+  statuses.sort((a,b)=>{const ia=KANBAN_ORDER.findIndex(o=>same(o,a)),ib=KANBAN_ORDER.findIndex(o=>same(o,b));return (ia<0?99:ia)-(ib<0?99:ib);});
+  return statuses;
+}
 function onKanbanCardClick(ev, id){
   if(state.kanbanSelect){
     if(ev&&ev.stopPropagation) ev.stopPropagation();
@@ -1662,14 +1716,14 @@ function bulkMoveStatus(newStatus){
   const prevMap={}; const stamp=todayStr()+' '+new Date().toTimeString().slice(0,5);
   targets.forEach(t=>{ prevMap[t.id]=t.status; t.status=newStatus; t.lastUpdate=stamp; });
   state.selected=[];                         // kosongkan pilihan, mode pilih tetap aktif
-  renderBoard();
+  withKanbanScroll(renderBoard);
   if(!IS_GAS){ showToast(targets.length+' task → '+newStatus+' (preview)'); return; }
   let i=0, okCount=0; const failIds=[];
   (function next(){
     if(i>=targets.length){
       if(failIds.length) showToast(okCount+' berhasil, '+failIds.length+' gagal dipindahkan.', false);
       else showToast(okCount+' task dipindahkan ke '+newStatus+'.');
-      applyRoleUI(); renderBoard(); return;
+      applyRoleUI(); withKanbanScroll(renderBoard); return;
     }
     const t=targets[i++];
     GAS.withSuccessHandler(res=>{
@@ -1704,21 +1758,21 @@ function renderBoard(){
   renderKanbanToolbar();
   state.sortables.forEach(s=>{try{s.destroy();}catch(e){}}); state.sortables=[];
   const tasks=viewTasksAll();
-  let statuses=[...(state.options.status||[])];
-  if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status))) && !statuses.some(s=>same(s,'Tanpa Status'))) statuses.push('Tanpa Status');
-  const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
-  statuses.sort((a,b)=>{const ia=KANBAN_ORDER.findIndex(o=>same(o,a)),ib=KANBAN_ORDER.findIndex(o=>same(o,b));return (ia<0?99:ia)-(ib<0?99:ib);});
+  const statuses=kanbanStatuses(tasks);
   const board=document.getElementById('kanbanBoard');
   board.innerHTML=statuses.map(status=>{
     const col=tasks.filter(t=>matchStatus(t,status,statuses)).sort(cardSort);
     const m=statusMeta(status);
+    const selIds=col.filter(isSelectable).map(t=>t.id);
+    const selAll=(state.kanbanSelect && !isViewOnly())?colSelectAllBtn(status, selIds.length, selIds.filter(id=>isSelected(id)).length):'';
     return `<div class="flex-1 min-w-[170px] flex flex-col rounded-xl p-2 bg-gray-100 dark:bg-slate-900/70 max-h-[calc(100vh-200px)]">
-      <div class="flex items-center justify-between px-2 py-1.5 mb-1 shrink-0">
+      <div class="flex items-center justify-between gap-1 px-2 py-1.5 mb-1 shrink-0">
         <div class="flex items-center gap-2 min-w-0">
           <span class="w-2 h-2 rounded-full shrink-0" style="background:${m.dot}"></span>
           <h3 class="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-slate-300 truncate">${escapeHtml(status)}</h3>
           <span class="text-[11px] font-semibold text-gray-500 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 px-1.5 rounded">${col.length}</span>
         </div>
+        ${selAll}
       </div>
       <div class="kanban-col space-y-2 rounded-lg p-1 flex-1 overflow-y-auto scrollbar-thin min-h-[120px]" data-status="${escapeAttr(status)}">
         ${col.length?col.map(taskCard).join(''):'<div class="rounded-md border-2 border-dashed border-gray-300 dark:border-slate-700 py-7 text-center"><p class="text-xs text-gray-400 italic">Tarik kartu ke sini</p></div>'}
