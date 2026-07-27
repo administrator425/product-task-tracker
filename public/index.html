@@ -332,7 +332,7 @@
 
         <!-- KANBAN -->
         <div id="kanbanView" class="view hide space-y-3 h-full max-w-[1700px] mx-auto">
-          <p class="text-[11px] text-gray-400 font-medium hidden sm:block px-1">Tarik kartu antar kolom untuk mengubah status.</p>
+          <div id="kanbanToolbar" class="flex items-center gap-2 px-1 flex-wrap"></div>
           <div id="kanbanBoard" class="flex gap-3 overflow-x-auto pb-4 min-h-[calc(100vh-210px)]"></div>
         </div>
 
@@ -750,7 +750,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.46.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.47.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -838,6 +838,7 @@ let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: localStorage.getItem('tt_current_user') || 'Nynda',
   managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], collabManagers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
+  kanbanSelect:false, selected:[],
   dashFilters: {preset:'all', start:'', end:'', field:'due', status:[], pic:[], priority:[]}, openDashFilter:'',
   repFilters: {preset:'all', start:'', end:'', field:'created', pic:[], stage:[]}, openRepFilter:'', repPic:'',
   selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabViz: 'grid', _collabFilter: {q:'',type:'',pic:'',status:'',mine:false}, notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
@@ -1635,7 +1636,72 @@ function renderCharts(){
 }
 
 /* ---------- Kanban (per Status) ---------- */
+/* ---------- Kanban: pilih banyak kartu & pindah status sekaligus ---------- */
+// Hanya task biasa yang bisa dipilih (kartu collab statusnya turunan, tidak bisa di-set manual).
+function isSelectable(t){ return t && !t._collab && canEditTask(t); }
+function isSelected(id){ return state.selected.indexOf(id)>=0; }
+function toggleCardSelect(id){ const i=state.selected.indexOf(id); if(i>=0) state.selected.splice(i,1); else state.selected.push(id); renderBoard(); }
+function clearSelection(){ state.selected=[]; renderBoard(); }
+function toggleKanbanSelect(){ state.kanbanSelect=!state.kanbanSelect; if(!state.kanbanSelect) state.selected=[]; renderBoard(); }
+function onKanbanCardClick(ev, id){
+  if(state.kanbanSelect){
+    if(ev&&ev.stopPropagation) ev.stopPropagation();
+    const t=state.tasks.find(x=>x.id===id);
+    if(!isSelectable(t)){ showToast('Task ini tidak bisa dipilih untuk pindah massal.', false); return; }
+    toggleCardSelect(id); return;
+  }
+  openTaskModal(id);
+}
+// Pindahkan semua task terpilih ke satu status. Menghormati gerbang "Done" & no-op.
+function bulkMoveStatus(newStatus){
+  if(!newStatus || newStatus==='Tanpa Status') return;
+  if(isDoneStatus(newStatus) && !canSetDone()){ showToast(doneDeniedMsg(), false); return; }
+  const targets=state.selected.map(id=>state.tasks.find(t=>t.id===id))
+    .filter(t=>isSelectable(t) && !same(t.status,newStatus));
+  if(!targets.length){ showToast('Tidak ada task yang perlu dipindahkan ke '+newStatus+'.', false); return; }
+  const prevMap={}; const stamp=todayStr()+' '+new Date().toTimeString().slice(0,5);
+  targets.forEach(t=>{ prevMap[t.id]=t.status; t.status=newStatus; t.lastUpdate=stamp; });
+  state.selected=[];                         // kosongkan pilihan, mode pilih tetap aktif
+  renderBoard();
+  if(!IS_GAS){ showToast(targets.length+' task → '+newStatus+' (preview)'); return; }
+  let i=0, okCount=0; const failIds=[];
+  (function next(){
+    if(i>=targets.length){
+      if(failIds.length) showToast(okCount+' berhasil, '+failIds.length+' gagal dipindahkan.', false);
+      else showToast(okCount+' task dipindahkan ke '+newStatus+'.');
+      applyRoleUI(); renderBoard(); return;
+    }
+    const t=targets[i++];
+    GAS.withSuccessHandler(res=>{
+      if(res && res.success){ okCount++; if(res.task) mergeTask(res.task); }
+      else { failIds.push(t.id); t.status=prevMap[t.id]; }
+      next();
+    }).withFailureHandler(()=>{ failIds.push(t.id); t.status=prevMap[t.id]; next(); }).quickUpdateField(t.id,'status',newStatus,state.currentUser);
+  })();
+}
+function renderKanbanToolbar(){
+  const bar=document.getElementById('kanbanToolbar'); if(!bar) return;
+  if(isViewOnly()){ bar.innerHTML=''; return; }
+  const on=state.kanbanSelect;
+  const toggle=`<button onclick="toggleKanbanSelect()" class="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm font-semibold ${on?'bg-indigo-600 text-white border-indigo-600':'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700'}"><span class="material-icons-round text-[18px]">${on?'check_box':'check_box_outline_blank'}</span>Pilih Banyak</button>`;
+  if(!on){
+    bar.innerHTML=`${toggle}<span class="text-[11px] text-gray-400 font-medium hidden sm:inline">Tarik kartu antar kolom untuk mengubah status — atau aktifkan <b>Pilih Banyak</b> untuk pindah beberapa sekaligus.</span>`;
+    return;
+  }
+  const n=state.selected.length;
+  const KO=['Todo','In progress','Review PM','Revisi','Hold','Done'];
+  const statuses=KO.filter(s=>(state.options.status||[]).some(o=>same(o,s)));
+  const moveBtns=n?statuses.map(s=>{
+    const done=isDoneStatus(s); const blocked=done&&!canSetDone();
+    return `<button onclick="bulkMoveStatus('${escapeAttr(s)}')" ${blocked?`title="${escapeAttr(doneDeniedMsg())}"`:''} class="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-[13px] font-medium ${blocked?'opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700':'border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'} bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200"><span class="w-2 h-2 rounded-full" style="background:${statusHex(s)}"></span>${escapeHtml(s)}</button>`;
+  }).join(''):'';
+  bar.innerHTML=`${toggle}
+    <span class="text-sm font-semibold ${n?'text-indigo-600 dark:text-indigo-300':'text-gray-400'}">${n?n+' dipilih':'Klik kartu untuk memilih'}</span>
+    ${n?`<span class="text-gray-300 dark:text-slate-600">→ pindahkan ke:</span>${moveBtns}
+      <button onclick="clearSelection()" class="ml-1 inline-flex items-center gap-1 h-8 px-2.5 rounded-full border border-gray-200 dark:border-slate-700 text-[13px] font-medium text-gray-500 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700"><span class="material-icons-round text-[15px]">close</span>Batal pilih</button>`:''}`;
+}
 function renderBoard(){
+  renderKanbanToolbar();
   state.sortables.forEach(s=>{try{s.destroy();}catch(e){}}); state.sortables=[];
   const tasks=viewTasksAll();
   let statuses=[...(state.options.status||[])];
@@ -1667,6 +1733,8 @@ function renderBoard(){
           const newStatus=evt.to.dataset.status;
           if(evt.from===evt.to){return;}
           if(newStatus==='Tanpa Status'){renderBoard();return;}
+          // Kalau kartu yang diseret termasuk yang dipilih → pindahkan SEMUA pilihan sekaligus.
+          if(state.kanbanSelect && isSelected(id)){ bulkMoveStatus(newStatus); return; }
           updateTaskStatus(id,newStatus);
         }});
       state.sortables.push(s);
@@ -1699,7 +1767,12 @@ function taskCard(t){
   if(t._collab) return collabInlineCard(t);
   const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
   const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'');
-  return `<div data-task-id="${escapeAttr(t.id)}" onclick="openTaskModal('${escapeAttr(t.id)}')" class="tt-card group ${canEditTask(t)?'':'nodrag'} bg-white dark:bg-slate-800 rounded-lg p-3 ring-1 ${isExternalTask(t)?'ring-violet-300 dark:ring-violet-800':'ring-gray-200 dark:ring-slate-700'} hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
+  const selectMode=state.kanbanSelect && isSelectable(t);
+  const sel=selectMode && isSelected(t.id);
+  const ring=sel?'ring-2 ring-indigo-500':(isExternalTask(t)?'ring-1 ring-violet-300 dark:ring-violet-800':'ring-1 ring-gray-200 dark:ring-slate-700');
+  const checkbox=selectMode?`<span class="absolute -top-2 -left-2 z-10 w-5 h-5 rounded-md flex items-center justify-center border-2 ${sel?'bg-indigo-600 border-indigo-600 text-white':'bg-white dark:bg-slate-800 border-gray-300 dark:border-slate-600'}"><span class="material-icons-round text-[14px] ${sel?'':'opacity-0'}">check</span></span>`:'';
+  return `<div data-task-id="${escapeAttr(t.id)}" onclick="onKanbanCardClick(event,'${escapeAttr(t.id)}')" class="tt-card group relative ${canEditTask(t)?'':'nodrag'} ${sel?'bg-indigo-50 dark:bg-indigo-900/20':'bg-white dark:bg-slate-800'} rounded-lg p-3 ${ring} hover:ring-indigo-300 shadow-sm cursor-pointer ${edge}">
+    ${checkbox}
     <div class="flex items-start justify-between gap-2">
       <span class="flex items-center gap-1 min-w-0"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(t.id||'-')}</span>${mirrorChip(t)}</span>
       <span class="flex items-center gap-1 shrink-0">

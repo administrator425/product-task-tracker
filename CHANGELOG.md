@@ -10,6 +10,18 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.47.0 — Kanban: pilih banyak kartu & pindah status sekaligus
+- Tombol **Pilih Banyak** di atas board Kanban. Saat aktif:
+  - Tiap kartu (task biasa) muncul **checkbox** di pojok; klik kartu = pilih/batal (bukan buka detail).
+  - Bar aksi menampilkan **"N dipilih → pindahkan ke:"** dengan tombol cepat tiap status (Todo, In progress, Review PM, Revisi, Hold, Done) + **Batal pilih**.
+  - **Drag salah satu kartu terpilih → semua yang terpilih ikut pindah** ke kolom tujuan sekaligus.
+- Kasus utama: manager memindahkan banyak task **Review PM → Done** dalam sekali klik, tak perlu satu per satu.
+- **Gerbang "Done" tetap dihormati**: user yang bukan Done-approver melihat tombol Done dalam keadaan nonaktif (dengan alasan di tooltip); percobaan pindah massal ke Done diblokir dan pilihan tetap dipertahankan agar bisa diarahkan ke status lain.
+- Kartu **Task Kolaborasi** tidak bisa dipilih (statusnya turunan dari proses, bukan diset manual) — kliknya tetap membuka collab.
+- Task yang sudah berada di status tujuan otomatis dilewati; perpindahan dikirim **berurutan** ke backend untuk menghindari tabrakan tulis di spreadsheet, lalu satu notifikasi ringkasan ("N task dipindahkan ke X").
+
+---
+
 ## 1.46.0 — Filter Dashboard & Laporan + drill-down per PIC
 ### Dashboard — filter baru (tersedia untuk SEMUA user, manager maupun user biasa)
 - **Rentang tanggal**: pilih dasar tanggalnya lewat toggle **Deadline / Dibuat**, lalu preset **Semua · Hari ini · 7 hari · 30 hari · Bulan ini**, atau isi tanggal dari–sampai sendiri (otomatis jadi mode custom).
