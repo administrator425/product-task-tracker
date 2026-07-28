@@ -750,7 +750,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.48.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.49.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
@@ -2525,15 +2525,15 @@ function renderCollabSteps(c){
     const turn=isMyTurnStep(c,s), mine=same(s.pic,state.currentUser), canChk=canCheckStepClient(s);
     const overdue=s.deadline && !s.done && s.deadline < todayStr();
     const expanded=(state._collabExpanded||{})[s.order];
-    const sub=(state.checklistSummary||{})[collabStepTaskId(s.order)];
+    const sc=stepSubComplete(s.order); const locked=!s.done && !sc.complete;   // sub-ceklis belum tuntas → main terkunci
     const editNote=canEditStepNote(s);
     return `<div class="rounded-lg bg-white dark:bg-slate-900 border ${turn?'border-rose-200 dark:border-rose-900/50':'border-gray-100 dark:border-slate-800'}">
       <div class="flex items-center gap-2 p-2">
-        <input type="checkbox" ${s.done?'checked':''} ${canChk?'':'disabled'} onchange="toggleCollabStep(${s.order},this.checked)" class="w-4 h-4 shrink-0 accent-indigo-600 ${canChk?'cursor-pointer':'opacity-50'}">
+        <input type="checkbox" data-step-main="${s.order}" ${s.done?'checked':''} ${(canChk&&!locked)?'':'disabled'} title="${locked?('Selesaikan semua sub-ceklis dulu ('+sc.done+'/'+sc.total+')'):''}" onchange="toggleCollabStep(${s.order},this.checked)" class="w-4 h-4 shrink-0 accent-indigo-600 ${(canChk&&!locked)?'cursor-pointer':'opacity-50'}">
         <span class="w-5 text-center text-[10px] font-mono text-gray-400 shrink-0">${s.order}</span>
         <div class="flex-1 min-w-0">
           <div class="text-sm ${s.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(s.name)}</div>
-          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}${sub?`<span class="text-gray-400">· <span class="material-icons-round text-[11px] align-middle">checklist</span>${sub.done}/${sub.total}</span>`:''}</div>
+          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${stepSubBadge(s.order,s.done)}</span></div>
         </div>
         ${turn?'<span class="shrink-0 text-[10px] font-bold text-rose-600">GILIRAN</span>':(s.done?'<span class="material-icons-round text-emerald-500 text-[18px] shrink-0">check_circle</span>':'')}
         <button type="button" onclick="toggleStepExpand(${s.order})" title="Catatan & sub-ceklis" class="shrink-0 text-gray-300 hover:text-indigo-600"><span id="collab-chev-${s.order}" class="material-icons-round text-[18px]">${expanded?'expand_less':'expand_more'}</span></button>
@@ -2555,6 +2555,33 @@ function renderCollabSteps(c){
   steps.forEach(s=>{ if((state._collabExpanded||{})[s.order]) loadStepChecklist(s.order); });   // muat ulang sub-ceklis yang terbuka
 }
 function collabStepTaskId(order){ return state._collabId+'#'+order; }
+// Status kelengkapan sub-ceklis sebuah proses (dari ringkasan bootstrap / hasil load). Tanpa sub-ceklis = dianggap lengkap.
+function stepSubComplete(order){
+  const s=(state.checklistSummary||{})[collabStepTaskId(order)];
+  if(!s || !s.total) return {total:0, done:0, complete:true};
+  return {total:s.total, done:s.done, complete: s.done>=s.total};
+}
+// Badge sub-ceklis di baris proses: gembok (amber) bila belum tuntas & main belum selesai, centang (hijau) bila tuntas.
+function stepSubBadge(order, done){
+  const sc=stepSubComplete(order); if(!sc.total) return '';
+  const locked=!done && !sc.complete;
+  const cls=locked?'text-amber-600 font-semibold':(sc.complete?'text-emerald-600':'text-gray-400');
+  const ic=locked?'lock':(sc.complete?'task_alt':'checklist');
+  return `<span class="${cls}">· <span class="material-icons-round text-[11px] align-middle">${ic}</span>${sc.done}/${sc.total}</span>`;
+}
+// Perbarui kunci checkbox utama + badge sebuah proses tanpa render ulang seluruh daftar (dipakai saat sub-ceklis berubah).
+function syncStepMainCheckbox(order){
+  const c=currentCollab(); const s=((c&&c.steps)||[]).find(x=>x.order===order); if(!s) return;
+  const canChk=canCheckStepClient(s); const sc=stepSubComplete(order); const locked=!s.done && !sc.complete;
+  const box=document.querySelector('#collabSteps input[data-step-main="'+order+'"]');
+  if(box){
+    box.disabled=!(canChk&&!locked);
+    box.title=locked?('Selesaikan semua sub-ceklis dulu ('+sc.done+'/'+sc.total+')'):'';
+    box.classList.toggle('cursor-pointer', canChk&&!locked);
+    box.classList.toggle('opacity-50', !(canChk&&!locked));
+  }
+  const w=document.getElementById('collab-subbadge-'+order); if(w) w.innerHTML=stepSubBadge(order, s.done);
+}
 function canEditStepNote(s){ return !isViewOnly() && (isManager(state.currentUser) || isDev() || same(s&&s.pic, state.currentUser)); }
 function toggleStepExpand(order){
   state._collabExpanded=state._collabExpanded||{}; state._collabExpanded[order]=!state._collabExpanded[order];
@@ -2587,6 +2614,7 @@ function renderStepChecklist(order, items){
     (editable?`<div class="flex gap-1 mt-1"><input id="collab-subck-input-${order}" onkeydown="if(event.key==='Enter'){event.preventDefault();addStepChecklist(${order});}" class="flex-1 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none" placeholder="Tambah sub-item…"><button type="button" onclick="addStepChecklist(${order})" class="px-2 rounded bg-indigo-600 text-white text-xs font-semibold">+</button></div>`:'');
   state.checklistSummary=state.checklistSummary||{};
   if(total) state.checklistSummary[collabStepTaskId(order)]={done,total}; else delete state.checklistSummary[collabStepTaskId(order)];
+  syncStepMainCheckbox(order);   // sub-ceklis berubah → segarkan kunci main-ceklis + badge
 }
 function addStepChecklist(order){
   const inp=document.getElementById('collab-subck-input-'+order); const text=(inp&&inp.value||'').trim(); if(!text) return;
@@ -2603,6 +2631,10 @@ function deleteStepChecklist(order, row){
 }
 function toggleCollabStep(order, done){
   const id=state._collabId; if(!id) return;
+  if(done){   // gerbang: main-ceklis hanya boleh dicentang bila sub-ceklis tuntas
+    const sc=stepSubComplete(order);
+    if(!sc.complete){ showToast('Selesaikan dulu semua sub-ceklis proses ini ('+sc.done+'/'+sc.total+').', false); renderCollabSteps(currentCollab()); return; }
+  }
   GAS.withSuccessHandler(res=>{
     if(!res||!res.success){ showToast((res&&res.message)||'Gagal mencentang', false); renderCollabSteps(currentCollab()); return; }
     state.collabs=res.collabs||state.collabs; showToast(res.message);

@@ -1057,6 +1057,14 @@ async function setCollabStepDone(collabId, order, done, actor) {
   if (!canCheckStep(pic, actor)) {
     return { success: false, message: `Hanya ${pic || 'PIC proses ini'} yang bisa mencentang proses ini.` };
   }
+  // Main-ceklis proses tak boleh dicentang selama sub-ceklisnya belum tuntas (membatalkan centang selalu boleh).
+  if (val) {
+    const sub = await getChecklist(`${collabId}#${order}`);
+    const undone = sub.filter(i => !i.done).length;
+    if (sub.length && undone > 0) {
+      return { success: false, message: `Selesaikan dulu semua sub-ceklis proses ini (${sub.length - undone}/${sub.length}).` };
+    }
+  }
   const rn = idx + 2;
   await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!F${rn}:H${rn}`, [[val ? 'TRUE' : 'FALSE', val ? actor : '', val ? nowStamp() : '']]);
   await logActivity(actor, val ? 'Collab Step Done' : 'Collab Step Undone', collabId, `Proses ${order}: ${String((r && r[2]) || '')}`);

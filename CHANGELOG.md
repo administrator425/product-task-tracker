@@ -10,6 +10,16 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.49.0 — Collab: main-ceklis proses terkunci sampai sub-ceklis tuntas
+- Di **Proses Beruntun**, checkbox utama sebuah proses **tidak bisa dicentang** selama masih ada **sub-ceklis** yang belum selesai.
+  - Checkbox utama tampil **nonaktif** dengan tooltip "Selesaikan semua sub-ceklis dulu (X/Y)".
+  - Badge sub-ceklis di baris proses berubah jadi **gembok (amber)** saat belum tuntas, dan **centang hijau** begitu semua sub-ceklis selesai — saat itu checkbox utama otomatis terbuka.
+  - Membatalkan centang (undo) **selalu** boleh, meski sub-ceklis belum lengkap (mis. data lama yang terlanjur ter-Done).
+  - Proses **tanpa** sub-ceklis tetap bisa dicentang seperti biasa.
+- Aturan ini ditegakkan **di frontend dan backend**: `setCollabStepDone` menolak penandaan selesai bila sub-ceklis proses itu belum tuntas (`Selesaikan dulu semua sub-ceklis proses ini (X/Y)`), jadi tak bisa di-bypass lewat ringkasan yang kedaluwarsa.
+
+---
+
 ## 1.48.0 — Kanban pilih banyak: perbaikan scroll + "pilih semua per kolom"
 - **Perbaikan bug scroll**: memilih kartu setelah men-scroll ke bawah tidak lagi melompat balik ke atas. Toggle satu kartu kini memperbarui **hanya kartu itu** (tanpa membangun ulang board), dan semua render ulang lain (pilih semua, batal, pindah massal) **mempertahankan posisi scroll** tiap kolom.
 - **Pilih semua per kolom**: di header tiap kolom (saat mode Pilih Banyak aktif) ada tombol centang:
