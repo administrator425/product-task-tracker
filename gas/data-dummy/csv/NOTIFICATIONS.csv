@@ -1,0 +1,10 @@
+﻿ID,For User,Type,Ref ID,From,Text,Created At,Read
+N-SEED-1,Staff Soal,turn,COL-001,Leader Konten,"Giliran Anda: ""Membuat 250 soal"" (setelah Leader Konten menyelesaikan proses 1)",2026-07-23 14:00:00,FALSE
+N-SEED-2,Staff QC,turn,COL-002,Staff Soal,"Giliran Anda: ""QC video & materi"" (setelah Staff Soal menyelesaikan proses 3)",2026-07-26 17:00:00,FALSE
+N-SEED-3,Staff Data,mention,TSK-019,Manager,"Manager men-tag Anda: ""Mantap @Staff Data. Tambahin juga breakdown per stage kalau bisa.""",2026-07-26 14:10:00,FALSE
+N-SEED-4,Leader Konten,mention,TSK-017,Staff Materi,"Staff Materi men-tag Anda: ""@Leader Konten struktur bab Journey Polisi sudah oke belum?""",2026-07-27 10:45:00,TRUE
+N-SEED-5,Leader Sistem,mention,TSK-020,Staff Data,"Staff Data men-tag Anda: ""@Leader Sistem subbab JadiBUMN ada duplikat di kategori Numerik.""",2026-07-28 16:20:00,TRUE
+N-SEED-6,Staff Input,mention,TSK-018,Manager,"Manager men-tag semua: ""@everyone tolong bantu cek preview Markaz sore ini ya.""",2026-07-25 09:05:00,FALSE
+N-SEED-7,Staff Materi,mention,TSK-018,Manager,"Manager men-tag semua: ""@everyone tolong bantu cek preview Markaz sore ini ya.""",2026-07-25 09:05:00,FALSE
+N-SEED-8,Staff Soal,mention,COL-001,Manager,"Manager men-tag Anda: ""Update dong progres paket TO SNBT, @Staff Soal @Staff QC.""",2026-07-29 13:40:00,FALSE
+N-SEED-9,Staff Input,mention,COL-002,Manager,"Manager men-tag Anda: ""Bagus. @Staff Input siap-siap untuk input & atur akses ya.""",2026-07-26 11:15:00,FALSE

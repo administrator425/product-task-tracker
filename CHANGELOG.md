@@ -10,6 +10,176 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.52.0 — Kelola user dikunci ke mode Dev (Manager tidak bisa)
+Menyiapkan onboarding anggota baru (mis. anak magang) dengan kontrol akses satu pintu.
+
+- **Menambah/mengubah/menonaktifkan/menghapus user sekarang HANYA bisa dari mode Dev.**
+  Sebelumnya Manager juga bisa. Alasannya: pemberian akses dan kenaikan hak tidak boleh
+  bisa dilakukan tanpa sepengetahuan pemilik sistem, dan Manager tak boleh punya jalan
+  untuk menaikkan hak siapa pun — termasuk dirinya.
+  - Ditegakkan **di backend** (`canManageUsers_` → hanya `dev`), jadi bukan sekadar
+    menyembunyikan tombol. Percobaan dari Manager/Leader/Staff ditolak server.
+  - Aturan lama "hanya Dev boleh memberi peran Dev/Manager" jadi tidak perlu lagi dan
+    **dihapus** (`ROLES_DEV_ONLY`) — sekarang seluruh pengelolaan user memang milik Dev.
+- **Manager yang membuka Pengaturan** melihat keterangan singkat: pengelolaan user ada di
+  mode Dev, dan alternatifnya mengisi sheet `USERS` langsung — bukan sekadar menemukan
+  fiturnya hilang tanpa penjelasan. Leader/Staff tidak melihat apa pun soal ini.
+- Panel Kelola User diberi label **MODE DEV**, dan peran **"Dev" tak bisa dipilih** untuk
+  baris user (Dev adalah mode ber-PIN, bukan anggota daftar).
+- Nama **"Dev"** ditolak sebagai nama user biasa.
+
+### Perbaikan
+- **User baru kini langsung muncul di semua pemilih.** Sebelumnya hanya dropdown PIC/Support
+  & pemilih identitas yang tersegarkan; **Fokus PIC** dan **form Tambah Task** baru ikut
+  setelah muat ulang. Sekarang `populateManagerFocus()` dan `populateModalDropdowns()`
+  ikut dipanggil.
+
+### Pengujian
+- `test/gas.test.js` → **253 assertion**. Bagian kelola user ditulis ulang mengikuti alur
+  onboarding magang: Manager/Leader/Staff ditolak di setiap operasi, Dev berhasil, naik-turun
+  peran langsung berlaku, nonaktif mencabut hak tanpa menghilangkan task, plus 7 assertion
+  UI (panel Dev-only, keterangan untuk Manager, label MODE DEV).
+- Diverifikasi lewat simulator `google.script.run`: sebagai Dev panel muncul; sebagai Manager
+  panel hilang & keterangan tampil; sebagai Leader/Staff tak ada apa pun. Alur penuh diuji —
+  tambah "Magang", muncul di 3 dropdown, diberi task, magang hanya melihat task itu,
+  percobaannya menambah user ditolak, lalu dinonaktifkan & dihapus.
+
+---
+
+## 1.51.1 — Perbaikan: layar "Memuat…" menggantung saat deploy di Apps Script
+Dilaporkan dari deployment Apps Script sungguhan: halaman ter-render (KPI, grafik, pengingat
+semua muncul) tapi overlay **"Memuat task tracker…" tidak pernah hilang**; pada muat ulang lain
+halamannya tampil polos tanpa gaya sama sekali.
+
+**Sebabnya bukan kompleksitas project**, melainkan rapuhnya penanganan library CDN:
+
+- `afterLoad()` menyembunyikan overlay di **baris terakhir**. Kalau ada satu langkah di
+  tengahnya melempar error, overlay tak pernah ditutup — padahal semua yang sudah ter-render
+  tetap terlihat. Persis gejala yang dilaporkan.
+- `renderCharts()` menyentuh `Chart.defaults` **tanpa memeriksa** Chart.js sudah termuat.
+  Bila CDN diblokir/lambat (jaringan kantor, sekolah, ISP), ini melempar `ReferenceError`
+  dan mematikan seluruh sisa `afterLoad()`.
+
+Perbaikan:
+
+- **`afterLoad()` kini memakai `try/finally`** — layar "Memuat…" dijamin tertutup apa pun yang
+  terjadi, dan pesan errornya ditampilkan sebagai notifikasi (bukan diam-diam).
+- **`renderCharts()` menjaga `Chart`**; kotak grafik menampilkan penjelasan bila Chart.js gagal
+  dimuat. (`Gantt`, `FullCalendar`, dan `Sortable` sudah dijaga sebelumnya.)
+- **Deteksi library yang gagal dimuat** (`missingLibs()`) + notifikasi sekali yang menyebut
+  jumlahnya, supaya penyebabnya jelas alih-alih halaman rusak tanpa keterangan.
+- **Semua akses `localStorage` lewat pembungkus aman `LS`** — di iframe Apps Script,
+  `localStorage` bisa melempar `SecurityError` saat cookie pihak ketiga diblokir, dan akses
+  di inisialisasi `state` dulu bisa mematikan seluruh script sebelum apa pun ter-render.
+
+Hasilnya: dengan **semua CDN diblokir**, aplikasi tetap memuat 50 task, KPI terisi, dan
+14 tab bisa dibuka tanpa error — hanya tampilannya polos dan grafiknya diganti pesan.
+
+### Pengujian
+- Simulator baru menjalankan frontend lewat **`google.script.run` tiruan** (jalur Apps Script
+  sungguhan, bukan `fetch`) — jalur yang sebelumnya tak pernah diuji dan menjadi celah bug ini.
+- `test/gas.test.js` +12 assertion ketahanan (try/finally, penjagaan tiap library, `.hide` tak
+  bergantung Tailwind, pembungkus `localStorage`). Total **239 assertion**.
+
+---
+
+## 1.51.0 — Peran user (Manager/Leader/Staff) + file data dummy siap impor
+Persiapan agar paket `gas/` bisa **dipublikasikan/dijual** apa adanya.
+
+### Sistem peran & kelola user (versi Apps Script)
+- Sheet baru **`USERS`** (Nama · Peran · Aktif) jadi sumber peran, menggantikan
+  pengaturan lewat environment variable yang harus disentuh developer.
+- Lima peran dengan hak berjenjang:
+
+  | Peran | Lihat semua task | Set "Done" | Setup kolaborasi | Task lintas divisi | Kelola user |
+  |---|:--:|:--:|:--:|:--:|:--:|
+  | Dev | ✅ | ✅ | ✅ | ✅ | ✅ (termasuk beri peran Dev/Manager) |
+  | Manager | ✅ | ✅ | ✅ | ✅ | ✅ (kecuali beri peran Dev/Manager) |
+  | Leader | ✅ | ✅ | ✅ | — | — |
+  | Staff | hanya miliknya | — | — | — | — |
+  | Lihat Saja | terbatas | — | — | — | — |
+
+- Panel baru **Pengaturan → Kelola User & Peran**: tambah user, ubah peran, aktif/nonaktif,
+  hapus — lengkap dengan legenda hak tiap peran. User baru **otomatis masuk dropdown
+  PIC & Support**, jadi langsung bisa diberi task.
+- Pengamanan ditegakkan **di server**, bukan cuma di tampilan: hanya Dev yang boleh
+  mengangkat Dev/Manager (mencegah user menaikkan haknya sendiri), Manager tak boleh
+  mengubah/menghapus user ber-peran Manager/Dev, dan tak seorang pun bisa menghapus
+  akunnya sendiri. User nonaktif langsung kehilangan hak, task lamanya tetap utuh.
+- Frontend menurunkan hak dari `state.users`; kalau backend tak mengirim `meta.users`
+  (versi Vercel), semuanya **otomatis kembali ke perilaku lama** dan panel Kelola User
+  disembunyikan — jadi instalasi lama tidak berubah sama sekali.
+
+### Siap publikasi
+- **Tidak ada PIN bawaan lagi.** `DEV_PIN` kosong secara default di kedua versi, dan
+  mode Dev menolak PIN apa pun (termasuk kosong) sampai property/env itu diisi sendiri.
+  Nilai bawaan `'3108'` yang sebelumnya tertanam di `api/_sheets.js` **dihapus**.
+- **Nama contoh diganti generik**: Manager, Leader Konten, Leader Sistem, Staff Materi,
+  Staff Soal, Staff QC, Staff Input, Staff Data, Staff Liveclass — tidak ada lagi nama
+  orang asli di dalam produk.
+
+### File data dummy siap pakai — `gas/data-dummy/`
+- **`ProductTrack-Data-Dummy.xlsx`** — 1 file berisi 13 sheet (header Main tetap di baris 3,
+  tanggal tersimpan sebagai tanggal asli, sheet internal sudah tersembunyi). Unggah ke
+  Drive → buka dengan Google Sheets → langsung jalan.
+- **`csv/`** — satu CSV per sheet untuk impor terpisah.
+- **`README.md`** — rincian isi tiap sheet, daftar peran, dan kondisi demo yang disiapkan.
+
+### Perbaikan
+- **`@mention` untuk nama ber-spasi.** Parser lama berhenti di spasi, jadi `@Staff Data`
+  bisa salah menotifikasi `Staff Soal` — masalah yang sama akan muncul untuk nama asli
+  seperti "Budi Santoso". Sekarang nama **terpanjang** dicocokkan lebih dulu, di backend
+  maupun pada penyorotan teks di UI. Tag ambigu (`@Staff` saja) tidak menotifikasi siapa pun.
+
+### Pengujian
+- `test/gas.test.js` bertambah jadi **227 assertion**, termasuk 7 uji mention nama ber-spasi
+  dan ±30 uji peran/kelola user (batas kenaikan peran, nonaktif, hapus, hak per peran).
+- `npm test` = 78 + 227 = **305 assertion**.
+
+---
+
+## 1.50.0 — Paket Google Apps Script siap jual + data dummy lengkap
+Folder baru **`gas/`** berisi versi ProductTrack yang berjalan **100% di dalam Google**
+(Spreadsheet = database, Apps Script = server, Web App = aplikasi). Tidak perlu hosting,
+service account, atau kartu kredit — pembeli cukup menyalin satu spreadsheet.
+
+- **`gas/Code.gs`** — backend lengkap, port dari `api/_sheets.js` ke `SpreadsheetApp`:
+  seluruh fitur ikut (task, ceklis, task kolaborasi + sub-ceklis, komentar, mention
+  `@user`/`@everyone`, notifikasi giliran, link & catatan per-user, dashboard lain,
+  PIN per-user, gerbang Done, mode lihat-saja).
+  - Bebas dari **kuota baca 60/menit** yang membatasi versi Vercel — SpreadsheetApp
+    tidak memakai kuota Sheets API itu.
+  - **LockService** pada `saveTask` supaya dua orang menyimpan bersamaan tak saling menimpa baris.
+  - Notifikasi **handoff giliran** kini dibuat otomatis saat sebuah proses collab dicentang.
+- **`gas/Seed.gs`** — menu "⚡ ProductTrack" + generator data dummy: **50 task, 6 task
+  kolaborasi (26 proses), 33 item ceklis, 20 komentar, 34 aktivitas, 9 notifikasi,
+  13 link, 9 catatan, 3 dashboard**. Semua tanggal **relatif hari ini**, sehingga demo
+  selalu punya task overdue, jatuh tempo hari ini, dan yang akan datang.
+  - Sheet "mesin" (`ACTIVITY`, `COMMENTS`, `CHECKLIST`, `COLLAB`, `COLLAB_STEPS`,
+    `NOTIFICATIONS`, `AUTH`, `LINKS`, `DASHBOARDS`, `NOTES`) otomatis **disembunyikan**;
+    hanya `Main` & `OPTIONS` yang terlihat.
+- **`gas/README.md`** — panduan pasang 3 langkah, konfigurasi Script Properties, kuota, dan troubleshooting.
+
+### Perbaikan yang ikut kena ke versi Vercel
+- **Link berbagi `?view=lintas` kini juga jalan di Apps Script.** Halaman Apps Script
+  berjalan di dalam iframe tanpa query string aslinya, jadi `doGet` menyuntikkan mode ke
+  `window.__TT_VIEW` dan `detectViewLock()` membacanya sebagai cadangan (tetap kompatibel
+  dengan versi Vercel yang membaca query string).
+- **Stempel waktu tidak lagi tampil kacau.** Kolom Created At / Done At / Checked At /
+  UpdatedAt dulu dibaca mentah, sehingga bisa muncul sebagai angka serial atau teks
+  `"Mon Jul 28 2026 ..."`. Sekarang dirapikan lewat `stampStr_()`.
+- **`formatDate_` memakai getter waktu lokal** untuk nilai bertipe Date — memakai getter
+  UTC membuat tanggal mundur 1 hari di GMT+7.
+
+### Pengujian
+- Test suite baru **`test/gas.test.js`**: menjalankan `Code.gs` + `Seed.gs` sungguhan di
+  Node dengan `SpreadsheetApp` tiruan yang meniru perilaku asli Sheets (string→Date,
+  `TRUE`→boolean), lalu memverifikasi seed, bootstrap, ketepatan tanggal, gerbang Done,
+  kunci sub-ceklis, mode tamu, PIN, dan `doGet`. **179 assertion.**
+- `npm test` kini menjalankan kedua suite (78 + 179 = **257 assertion**).
+
+---
+
 ## 1.49.0 — Collab: main-ceklis proses terkunci sampai sub-ceklis tuntas
 - Di **Proses Beruntun**, checkbox utama sebuah proses **tidak bisa dicentang** selama masih ada **sub-ceklis** yang belum selesai.
   - Checkbox utama tampil **nonaktif** dengan tooltip "Selesaikan semua sub-ceklis dulu (X/Y)".

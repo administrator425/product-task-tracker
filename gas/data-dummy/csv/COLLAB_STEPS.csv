@@ -1,0 +1,27 @@
+﻿Collab ID,Order,Step,PIC,Deadline,Done,Done By,Done At,Note
+COL-001,1,Menyusun kurikulum & blueprint,Leader Konten,2026-07-24,TRUE,Leader Konten,2026-07-25 16:00:00,"Blueprint final, 5 paket x 100 soal."
+COL-001,2,Membuat 250 soal,Staff Soal,2026-08-01,FALSE,,,"Butuh tambahan 3 hari, soal Numerik lebih berat dari perkiraan."
+COL-001,3,QC soal & pembahasan,Staff QC,2026-08-06,FALSE,,,
+COL-001,4,Input ke SIADU,Staff Input,2026-08-11,FALSE,,,
+COL-001,5,Generate paket & publish,Leader Sistem,2026-08-17,FALSE,,,
+COL-002,1,Riset kebutuhan & silabus,Leader Konten,2026-07-10,TRUE,Leader Konten,2026-07-11 16:00:00,
+COL-002,2,Menyusun materi 12 bab,Staff Materi,2026-07-20,TRUE,Staff Materi,2026-07-21 16:00:00,Semua bab sudah proofread.
+COL-002,3,Take video 40 sesi,Staff Soal,2026-07-28,TRUE,Staff Soal,2026-07-29 16:00:00,
+COL-002,4,QC video & materi,Staff QC,2026-08-05,FALSE,,,
+COL-002,5,Input & atur akses course,Staff Input,2026-08-14,FALSE,,,
+COL-002,6,Launch & monitoring minggu pertama,Staff Liveclass,2026-08-29,FALSE,,,
+COL-003,1,Menyusun jadwal & pengajar,Staff Liveclass,2026-07-05,TRUE,Staff Liveclass,2026-07-06 16:00:00,
+COL-003,2,Menyiapkan materi presentasi,Leader Konten,2026-07-12,TRUE,Leader Konten,2026-07-13 16:00:00,
+COL-003,3,Pelaksanaan 8 sesi liveclass,Staff Materi,2026-07-22,TRUE,Staff Materi,2026-07-23 16:00:00,Rata-rata kehadiran 82%.
+COL-003,4,Rekap absensi & report,Manager,2026-07-27,TRUE,Manager,2026-07-28 16:00:00,
+COL-004,1,Mapping journey & milestone,Leader Konten,2026-08-02,TRUE,Leader Konten,2026-07-30 16:00:00,
+COL-004,2,Menyusun konten tiap tahap,Staff Materi,2026-08-11,FALSE,,,
+COL-004,3,Membuat soal diagnostik,Staff Soal,2026-08-19,FALSE,,,
+COL-004,4,Bangun logika rekomendasi,Staff Data,2026-08-31,FALSE,,,
+COL-004,5,QC & uji coba journey,Staff QC,2026-09-13,FALSE,,,
+COL-005,1,Kurasi 500 soal drilling,Staff Soal,2026-08-04,FALSE,,,
+COL-005,2,Kategorisasi tingkat kesulitan,Leader Sistem,2026-08-13,FALSE,,,
+COL-005,3,Publish set drilling,Staff Input,2026-08-24,FALSE,,,
+COL-006,1,Audit materi lama,Staff QC,2026-08-03,TRUE,Staff QC,2026-07-30 16:00:00,Ada 18 materi yang perlu ditulis ulang.
+COL-006,2,Desain ulang struktur bab,Leader Konten,2026-08-10,FALSE,,,
+COL-006,3,Update video & thumbnail,Staff Input,2026-08-19,FALSE,,,

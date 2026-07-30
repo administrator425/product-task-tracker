@@ -1,0 +1,124 @@
+﻿Type,Value,Active,Parent
+status,Todo,TRUE,
+status,In progress,TRUE,
+status,Review PM,TRUE,
+status,Revisi,TRUE,
+status,Hold,TRUE,
+status,Done,TRUE,
+priority,Urgent,TRUE,
+priority,High,TRUE,
+priority,Normal,TRUE,
+priority,Low,TRUE,
+stage,RnD,TRUE,
+stage,Develop Materi,TRUE,
+stage,Develop Soal,TRUE,
+stage,QC Konten,TRUE,
+stage,Input,TRUE,
+stage,Liveclass,TRUE,
+stage,Report,TRUE,
+stage,Data & Intelligence,TRUE,
+stage,Manajemen Sistem,TRUE,
+stage,Manajemen Guru,TRUE,
+platform,All Platform,TRUE,
+platform,Cerebrum,TRUE,
+platform,JadiASN,TRUE,
+platform,JadiPPPK,TRUE,
+platform,JadiBUMN,TRUE,
+platform,JadiSekdin,TRUE,
+platform,JadiBeasiswa,TRUE,
+platform,JadiOJK,TRUE,
+platform,JadiPCPM,TRUE,
+platform,JadiPrajurit,TRUE,
+platform,JadiPolisi,TRUE,
+platform,Jago TPA,TRUE,
+platform,Siadu,TRUE,
+platform,Markaz,TRUE,
+platform,Toefl Academy,TRUE,
+platform,IT,TRUE,
+platform,Marketing,TRUE,
+platform,Sales,TRUE,
+pic,Manager,TRUE,
+pic,Staff Soal,TRUE,
+pic,Leader Konten,TRUE,
+pic,Staff Input,TRUE,
+pic,Leader Sistem,TRUE,
+pic,Staff Data,TRUE,
+pic,Staff Materi,TRUE,
+pic,Staff QC,TRUE,
+pic,Staff Liveclass,TRUE,
+pic,Lintas Divisi,TRUE,
+support,Manager,TRUE,
+support,Staff Soal,TRUE,
+support,Leader Konten,TRUE,
+support,Staff Input,TRUE,
+support,Leader Sistem,TRUE,
+support,Staff Data,TRUE,
+support,Staff Materi,TRUE,
+support,Staff QC,TRUE,
+support,Staff Liveclass,TRUE,
+support,Lintas Divisi,TRUE,
+division,IT,TRUE,
+division,Marketing,TRUE,
+division,Sales,TRUE,
+verb,Menyusun,TRUE,RnD
+object,kurikulum,TRUE,RnD||Menyusun
+object,product knowledge,TRUE,RnD||Menyusun
+object,silabus,TRUE,RnD||Menyusun
+object,sistem penilaian,TRUE,RnD||Menyusun
+object,panduan,TRUE,RnD||Menyusun
+verb,Membuat,TRUE,RnD
+object,mapping,TRUE,RnD||Membuat
+object,prompt,TRUE,RnD||Membuat
+verb,Melakukan,TRUE,RnD
+object,riset,TRUE,RnD||Melakukan
+verb,Menyusun,TRUE,Develop Materi
+object,materi,TRUE,Develop Materi||Menyusun
+object,journey,TRUE,Develop Materi||Menyusun
+verb,Mengambil (take),TRUE,Develop Materi
+object,video pembahasan,TRUE,Develop Materi||Mengambil (take)
+verb,Melakukan,TRUE,Develop Materi
+object,syuting,TRUE,Develop Materi||Melakukan
+object,retake,TRUE,Develop Materi||Melakukan
+verb,Membuat,TRUE,Develop Soal
+object,soal,TRUE,Develop Soal||Membuat
+object,pembahasan,TRUE,Develop Soal||Membuat
+verb,Menyusun,TRUE,Develop Soal
+object,paket tryout,TRUE,Develop Soal||Menyusun
+verb,Melakukan,TRUE,QC Konten
+object,QC,TRUE,QC Konten||Melakukan
+verb,Memperbarui,TRUE,QC Konten
+object,bumper,TRUE,QC Konten||Memperbarui
+object,thumbnail,TRUE,QC Konten||Memperbarui
+verb,Menginput,TRUE,Input
+object,soal,TRUE,Input||Menginput
+object,video pembahasan,TRUE,Input||Menginput
+object,jadwal,TRUE,Input||Menginput
+verb,Membangun,TRUE,Input
+object,sistem otomatis,TRUE,Input||Membangun
+verb,Memonitor,TRUE,Liveclass
+object,liveclass,TRUE,Liveclass||Memonitor
+verb,Menyusun,TRUE,Liveclass
+object,jadwal,TRUE,Liveclass||Menyusun
+verb,Merapikan,TRUE,Manajemen Sistem
+object,subbab,TRUE,Manajemen Sistem||Merapikan
+verb,Menyusun,TRUE,Manajemen Sistem
+object,kerangka kategori,TRUE,Manajemen Sistem||Menyusun
+verb,Generate/regenerate,TRUE,Manajemen Sistem
+object,paket,TRUE,Manajemen Sistem||Generate/regenerate
+verb,Menampilkan/menyembunyikan,TRUE,Manajemen Sistem
+object,kategori,TRUE,Manajemen Sistem||Menampilkan/menyembunyikan
+verb,Mendistribusikan,TRUE,Manajemen Guru
+object,proyek video pembahasan,TRUE,Manajemen Guru||Mendistribusikan
+object,proyek komplit,TRUE,Manajemen Guru||Mendistribusikan
+verb,Menyusun,TRUE,Manajemen Guru
+object,jadwal,TRUE,Manajemen Guru||Menyusun
+verb,Membuat,TRUE,Data & Intelligence
+object,query,TRUE,Data & Intelligence||Membuat
+verb,Melakukan,TRUE,Data & Intelligence
+object,scraping,TRUE,Data & Intelligence||Melakukan
+verb,Membangun,TRUE,Data & Intelligence
+object,dashboard,TRUE,Data & Intelligence||Membangun
+verb,Menyelesaikan,TRUE,Report
+object,report,TRUE,Report||Menyelesaikan
+verb,Mengelompokkan,TRUE,Report
+object,data,TRUE,Report||Mengelompokkan

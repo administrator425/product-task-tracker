@@ -18,7 +18,8 @@
 
 const { google } = require('googleapis');
 const crypto = require('crypto');
-const DEV_PIN = String(process.env.DEV_PIN || '3108').trim();
+// Tidak ada nilai bawaan: mode Dev mati sampai DEV_PIN diisi di environment.
+const DEV_PIN = String(process.env.DEV_PIN || '').trim();
 const PIN_SALT = String(process.env.PIN_SALT || 'pt_pin_salt_v1');
 function hashPin(user, pin) {
   return crypto.createHash('sha256').update(String(user || '').toLowerCase().trim() + ':' + String(pin || '') + ':' + PIN_SALT).digest('hex');
@@ -125,6 +126,9 @@ async function getSheets() {
   return _sheetsClient;
 }
 
+// Catatan: manajemen user & peran (sheet USERS) hanya ada di versi Apps Script
+// (lihat gas/Code.gs). Di versi ini peran tetap diatur lewat environment variable,
+// dan frontend otomatis memakai jalur lama karena bootstrap tidak mengirim meta.users.
 function getManagers() {
   const raw = process.env.MANAGERS || 'Nynda';
   return raw.split(',').map(s => s.trim()).filter(Boolean);
@@ -1463,7 +1467,11 @@ async function readAuthRaw(pre) {
 //  - Mode user biasa: jika user punya PIN khusus -> wajib cocok; jika belum -> bebas (tanpa PIN).
 async function verifyPin(user, pin) {
   user = String(user || '').trim();
-  if (user === '__dev__') return { ok: String(pin || '').trim() === DEV_PIN };
+  // DEV_PIN kosong = mode Dev dinonaktifkan (jangan sampai PIN kosong dianggap cocok).
+  if (user === '__dev__') {
+    if (!DEV_PIN) return { ok: false, message: 'Mode Dev belum diaktifkan (env DEV_PIN belum diisi).' };
+    return { ok: String(pin || '').trim() === DEV_PIN };
+  }
   const rows = await readAuthRaw();
   const found = rows.find(r => r.user.toLowerCase() === user.toLowerCase());
   if (!found) return { ok: true, noPin: true };
@@ -1610,9 +1618,9 @@ async function deleteUserFolder(user, folder) {
 /* ------------------------------------------------------------------ */
 /* DASHBOARD LAIN (dashboard eksternal — CRUD khusus Dev)              */
 /* ------------------------------------------------------------------ */
-const DEFAULT_DASHBOARDS = [
-  ['Monitoring Liveclass', 'Pantau jadwal & progress liveclass divisi produk.', 'live_tv', 'https://script.google.com/a/macros/officecerebrum.com/s/AKfycbyT316LqY077YmfhPCAzEgyw9yUQ-pscC_hcW_e1T3mRliSZBhdXQPWxxorwkxD5FDLMA/exec'],
-];
+// Isian awal sheet DASHBOARDS saat pertama kali dibuat. Sengaja kosong supaya tidak ada
+// URL internal yang ikut terdistribusi — tambahkan lewat tab "Dashboard Lain" (mode Dev).
+const DEFAULT_DASHBOARDS = [];
 async function ensureDashboardsSheet() {
   await ensureSheetExists(CONFIG.DASHBOARDS_SHEET);
   const head = await valuesGet(`${CONFIG.DASHBOARDS_SHEET}!A1:D1`);
