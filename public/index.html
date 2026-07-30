@@ -772,7 +772,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.52.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.53.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -990,6 +990,9 @@ function isLeader(user){
   const u=baseName(user);
   return (state.doneApprovers||[]).some(a=>baseName(a)===u) && !isManager(user);
 }
+// Peran ini hanya ada bila sheet USERS dipakai (bukan mode env var lama).
+function isStaff(user){ return usersConfigured() && hasRole(user,'staff'); }
+function isMagang(user){ return usersConfigured() && hasRole(user,'magang'); }
 // Boleh melihat SEMUA task tim (bukan cuma miliknya sendiri).
 function canSeeAllTasks(user){ return isManager(user) || isLeader(user); }
 // Boleh menambah/mengubah user & peran.
@@ -1002,6 +1005,7 @@ function roleBadgeClass(role){
   if(r==='dev') return 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-200';
   if(r==='manager') return 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200';
   if(r==='leader') return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200';
+  if(r==='magang') return 'bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-200';
   if(r==='lihat saja') return 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100';
   if(r==='nonaktif') return 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400';
   return 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300';
@@ -1011,7 +1015,8 @@ const ROLE_POWERS={
   'Dev':'Semua hak • SATU-SATUNYA yang bisa menambah user & mengatur peran.',
   'Manager':'Lihat semua task • set Done • setup kolaborasi • task lintas divisi • kelola dropdown.',
   'Leader':'Lihat semua task • set Done • setup kolaborasi.',
-  'Staff':'Hanya task miliknya • status maksimal "Review PM".',
+  'Staff':'Task miliknya + semua task anak magang • boleh mem-Done-kan task magang • task sendiri maksimal "Review PM".',
+  'Magang':'HANYA task sesama magang • tidak melihat kerjaan karyawan • maksimal "Review PM".',
   'Lihat Saja':'Baca terbatas: task lintas divisi saja.'
 };
 // Mode "Lintas Divisi" = akses lihat-saja untuk divisi lain (IT, Marketing, Sales):
@@ -1028,20 +1033,35 @@ function canMirror(){ return !isViewOnly() && isManager(state.currentUser); } //
 function inLintasView(t){ return isExternalTask(t) || isMirrored(t); }
 function canCreateExternal(){ return !isViewOnly() && isManager(state.currentUser); }
 function canEditTask(t){ if(isViewOnly()) return false; if(isExternalTask(t)) return isManager(state.currentUser); return true; }
-// Status "Done" bersifat final: hanya "Done approver" yang boleh menetapkannya.
-// Daftar approver TERPISAH dari hak manager (Dhea & Alya boleh Done tapi tetap Member).
-// User lain maksimal sampai "Review PM"; task yang sudah Done tetap boleh ditarik balik.
-function canSetDone(){
+// Status "Done" bersifat final. Izinnya bergantung pada SIAPA PIC task tersebut:
+//   Manager / Leader / Dev → task siapa pun
+//   Staff                  → hanya task milik anak MAGANG (ia yang membimbing)
+//   Magang                 → tidak pernah; maksimal "Review PM"
+// Task yang sudah Done tetap boleh ditarik balik oleh siapa saja yang bisa mengedit.
+function canSetDoneFor(task){
   if(isViewOnly()) return false;
-  if(isManager(state.currentUser)) return true;                 // Manager + Dev
-  if(isLeader(state.currentUser)) return true;                  // Leader
-  if(usersConfigured()) return false;
-  const u=baseName(state.currentUser);
+  const me=state.currentUser;
+  if(isManager(me)) return true;                          // Manager + Dev
+  if(isLeader(me)) return true;                           // Leader
+  if(usersConfigured()){
+    if(isMagang(me)) return false;
+    if(isStaff(me)) return !task || isMagang(task.pic);   // tanpa task = pertanyaan umum
+    return false;
+  }
+  const u=baseName(me);
   return (state.doneApprovers||[]).some(a=>baseName(a)===u);
 }
 function isDoneStatus(v){ return String(v||'').trim().toLowerCase()==='done'; }
-function statusOptionsFor(currentStatus){ let o=state.options.status||[]; if(!canSetDone() && !isDoneStatus(currentStatus)) o=o.filter(s=>!isDoneStatus(s)); return o; }
-function doneDeniedMsg(){ return 'Hanya '+((state.doneApprovers||[]).join(', ')||'manager')+' yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan.'; }
+function statusOptionsFor(currentStatus, task){
+  let o=state.options.status||[];
+  if(!canSetDoneFor(task) && !isDoneStatus(currentStatus)) o=o.filter(s=>!isDoneStatus(s));
+  return o;
+}
+function doneDeniedMsg(task){
+  if(task && isMagang(task.pic)) return 'Task anak magang hanya bisa ditutup ("Done") oleh karyawan — Staff, Leader, atau Manager.';
+  const who=(state.doneApprovers||[]).join(', ');
+  return 'Hanya '+(who||'manager')+' yang bisa menandai task "Done". Set ke "Review PM" agar diteruskan.';
+}
 function supportNames(t){return String(t.support||'').split(',').map(x=>x.trim()).filter(Boolean);}
 function ownsTask(t,user){return same(t.pic,user) || supportNames(t).some(s=>same(s,user));}
 // Peran user pada sebuah task: PIC (penanggung jawab) vs Support (hanya membantu).
@@ -1052,13 +1072,20 @@ function roleChip(t){
   if(isSupportOnly(t,state.currentUser)) return `<span class="inline-flex items-center h-[16px] px-1.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 text-[9px] font-bold tracking-wide">SUPPORT</span>`;
   return '';
 }
+// Task milik anak magang (PIC-nya seorang magang) — dipakai untuk aturan visibilitas.
+function isMagangTask(t){ return isMagang(t && t.pic); }
 function scopedTasks(){
   if(isViewOnly()) return state.tasks.filter(inLintasView);   // task lintas divisi + task internal yang di-mirror PM/Dev
   if(canSeeAllTasks(state.currentUser)){                       // Manager, Leader, Dev
     if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
     return [...state.tasks];
   }
-  return state.tasks.filter(t=>ownsTask(t,state.currentUser));
+  const me=state.currentUser;
+  // Magang → hanya lingkungan magang: task sendiri + task sesama magang (tak lihat kerjaan karyawan).
+  // Staff  → task sendiri + SEMUA task anak magang, karena Staff yang membimbing.
+  // Rumusnya kebetulan sama: "milik saya ATAU milik magang".
+  if(isMagang(me) || isStaff(me)) return state.tasks.filter(t=>ownsTask(t,me) || isMagangTask(t));
+  return state.tasks.filter(t=>ownsTask(t,me));
 }
 // Deteksi link berbagi ?view=lintas → kunci ke mode lihat-saja (switcher disembunyikan).
 // ?view=normal atau ?unlock=1 untuk membuka kunci (berguna saat owner mau preview lalu kembali).
@@ -1276,7 +1303,9 @@ function submitPin(){
   if(!/^\d{4}$/.test(pin)){ if(err){ err.textContent='PIN harus 4 digit angka.'; err.classList.remove('hide'); } return; }
   GAS.withSuccessHandler(function(res){
     if(res && res.ok){ const t=p.target; closePinModal(false); setCurrentUser(t); }
-    else { if(err){ err.textContent='PIN salah.'; err.classList.remove('hide'); } }
+    // Tampilkan alasan SEBENARNYA dari server (mis. "DEV_PIN belum diset") —
+    // dulu selalu "PIN salah", yang menyesatkan saat PIN-nya memang belum dikonfigurasi.
+    else { if(err){ err.textContent=(res && res.message) ? res.message : 'PIN salah.'; err.classList.remove('hide'); } }
   }).withFailureHandler(function(e){ if(err){ err.textContent='Gagal verifikasi: '+(e.message||e); err.classList.remove('hide'); } }).verifyPin(p.verifyUser, pin);
 }
 function pinInputKey(e){ if(e.key==='Enter'){ e.preventDefault(); submitPin(); } else if(e.key==='Escape'){ closePinModal(true); } }
@@ -1622,7 +1651,7 @@ function quickUpdate(ev, id, field, value){
   if(!canEditTask(t)){ if(isExternalTask(t)&&!isViewOnly()) showToast('Hanya manager/dev yang bisa mengubah task lintas divisi.', false); return; }
   const prev=t[field]; if(same(prev,value)) return;
   // Gerbang "Done": yang bukan Done approver tak boleh memindahkan task KE Done (menarik balik boleh).
-  if(field==='status' && isDoneStatus(value) && !isDoneStatus(prev) && !canSetDone()){ showToast(doneDeniedMsg(), false); renderAll(); return; }
+  if(field==='status' && isDoneStatus(value) && !isDoneStatus(prev) && !canSetDoneFor(t)){ showToast(doneDeniedMsg(t), false); renderAll(); return; }
   t[field]=value; t.lastUpdate=todayStr()+' '+new Date().toTimeString().slice(0,5);
   if(IS_GAS){
     GAS.withSuccessHandler(res=>{
@@ -1634,7 +1663,7 @@ function quickUpdate(ev, id, field, value){
 function inlineSelect(field, t){
   const cur=t[field]||'';
   if(!canEditTask(t)) return `<span class="text-xs font-medium text-gray-700 dark:text-slate-200">${escapeHtml(cur||'—')}</span>`;
-  const opts=(field==='status') ? statusOptionsFor(cur) : (state.options[field]||[]);
+  const opts=(field==='status') ? statusOptionsFor(cur, t) : (state.options[field]||[]);
   const options=opts.map(o=>`<option value="${escapeAttr(o)}" ${same(o,cur)?'selected':''}>${escapeHtml(o)}</option>`).join('');
   return `<select onclick="event.stopPropagation()" onchange="quickUpdate(event,'${escapeAttr(t.id)}','${field}',this.value)" class="text-xs font-medium text-gray-700 dark:text-slate-200 bg-transparent border border-gray-200 dark:border-slate-700 rounded-md px-1.5 py-1 outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer">${options}</select>`;
 }
@@ -1831,10 +1860,20 @@ function onKanbanCardClick(ev, id){
 // Pindahkan semua task terpilih ke satu status. Menghormati gerbang "Done" & no-op.
 function bulkMoveStatus(newStatus){
   if(!newStatus || newStatus==='Tanpa Status') return;
-  if(isDoneStatus(newStatus) && !canSetDone()){ showToast(doneDeniedMsg(), false); return; }
-  const targets=state.selected.map(id=>state.tasks.find(t=>t.id===id))
+  let picked=state.selected.map(id=>state.tasks.find(t=>t.id===id))
     .filter(t=>isSelectable(t) && !same(t.status,newStatus));
+  // Izin "Done" dinilai PER TASK (Staff boleh menutup task magang, tapi bukan task karyawan lain).
+  let ditolak=0;
+  if(isDoneStatus(newStatus)){
+    const boleh=picked.filter(t=>canSetDoneFor(t));
+    const tolak=picked.filter(t=>!canSetDoneFor(t));
+    ditolak=tolak.length;
+    picked=boleh;
+    if(!picked.length){ showToast(doneDeniedMsg(tolak[0]||null), false); return; }
+  }
+  const targets=picked;
   if(!targets.length){ showToast('Tidak ada task yang perlu dipindahkan ke '+newStatus+'.', false); return; }
+  if(ditolak) showToast(ditolak+' task dilewati — Anda tak berhak mem-Done-kannya.', false);
   const prevMap={}; const stamp=todayStr()+' '+new Date().toTimeString().slice(0,5);
   targets.forEach(t=>{ prevMap[t.id]=t.status; t.status=newStatus; t.lastUpdate=stamp; });
   state.selected=[];                         // kosongkan pilihan, mode pilih tetap aktif
@@ -1868,8 +1907,12 @@ function renderKanbanToolbar(){
   const KO=['Todo','In progress','Review PM','Revisi','Hold','Done'];
   const statuses=KO.filter(s=>(state.options.status||[]).some(o=>same(o,s)));
   const moveBtns=n?statuses.map(s=>{
-    const done=isDoneStatus(s); const blocked=done&&!canSetDone();
-    return `<button onclick="bulkMoveStatus('${escapeAttr(s)}')" ${blocked?`title="${escapeAttr(doneDeniedMsg())}"`:''} class="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-[13px] font-medium ${blocked?'opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700':'border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'} bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200"><span class="w-2 h-2 rounded-full" style="background:${statusHex(s)}"></span>${escapeHtml(s)}</button>`;
+    // Tombol "Done" hanya nonaktif bila TAK SATU pun task terpilih boleh ditutup —
+    // izinnya per task (Staff boleh menutup task magang), sisanya dilewati saat dijalankan.
+    const done=isDoneStatus(s);
+    const selTasks=state.selected.map(id=>state.tasks.find(t=>t.id===id)).filter(Boolean);
+    const blocked=done && !selTasks.some(t=>canSetDoneFor(t));
+    return `<button onclick="bulkMoveStatus('${escapeAttr(s)}')" ${blocked?`title="${escapeAttr(doneDeniedMsg(selTasks[0]||null))}"`:''} class="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full border text-[13px] font-medium ${blocked?'opacity-40 cursor-not-allowed border-gray-200 dark:border-slate-700':'border-gray-300 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700'} bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200"><span class="w-2 h-2 rounded-full" style="background:${statusHex(s)}"></span>${escapeHtml(s)}</button>`;
   }).join(''):'';
   bar.innerHTML=`${toggle}
     <span class="text-sm font-semibold ${n?'text-indigo-600 dark:text-indigo-300':'text-gray-400'}">${n?n+' dipilih':'Klik kartu untuk memilih'}</span>
@@ -2227,7 +2270,7 @@ function openTaskModal(id='', dupSrc=null){
   populateVerbSelect(t?.stage||'', t?.verb||'', t?.objek||'');
   setVal('fieldJumlah', t?.jumlah||''); setVal('fieldDetail', t?.detail||'');
   setVal('fieldCreatedDate', t?.createdDate||todayStr()); setVal('fieldDueDate', t?.dueDate||'');
-  fillSelect('fieldStatus', statusOptionsFor(t?.status||'Todo'), null, t?.status||'Todo'); setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal');
+  fillSelect('fieldStatus', statusOptionsFor(t?.status||'Todo', t), null, t?.status||'Todo'); setVal('fieldStatus', t?.status||'Todo'); setVal('fieldPriority', t?.priority||'Normal');
   setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
   setVal('fieldDivisiTujuan', t?.divisiTujuan||''); setVal('fieldKontakDivisi', t?.kontakDivisi||'');
   const selectedPlatform=String(t?.platform||'').split(',').map(x=>x.trim()).filter(Boolean);
@@ -2269,7 +2312,7 @@ function saveTaskFromModal(){
   const existing=task.id?state.tasks.find(x=>x.id===task.id):null;
   if((String(task.divisiTujuan||'').trim() || (existing&&isExternalTask(existing))) && !isManager(state.currentUser)){ showToast('Hanya manager/dev yang bisa membuat/mengubah task lintas divisi.', false); return; }
   // Gerbang "Done": yang bukan Done approver tak boleh menyimpan task sebagai Done kecuali sebelumnya memang sudah Done.
-  if(isDoneStatus(task.status) && !canSetDone() && !(existing && isDoneStatus(existing.status))){ showToast(doneDeniedMsg(), false); return; }
+  if(isDoneStatus(task.status) && !canSetDoneFor(task) && !(existing && isDoneStatus(existing.status))){ showToast(doneDeniedMsg(task), false); return; }
   task.actor=state.currentUser;
   document.getElementById('loading').classList.remove('hide');
   // Item ceklis yang ditampung saat task baru dikirim setelah ID terbit dari server.

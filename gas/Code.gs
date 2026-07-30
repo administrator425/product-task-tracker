@@ -85,8 +85,8 @@ var DEFAULT_OPTIONS = {
     'JadiBeasiswa', 'JadiOJK', 'JadiPCPM', 'JadiPrajurit', 'JadiPolisi',
     'Jago TPA', 'Siadu', 'Markaz', 'Toefl Academy', 'IT', 'Marketing', 'Sales'
   ],
-  pic: ['Manager', 'Staff Soal', 'Leader Konten', 'Staff Input', 'Leader Sistem', 'Staff Data', 'Staff Materi', 'Staff QC', 'Staff Liveclass', 'Lintas Divisi'],
-  support: ['Manager', 'Staff Soal', 'Leader Konten', 'Staff Input', 'Leader Sistem', 'Staff Data', 'Staff Materi', 'Staff QC', 'Staff Liveclass', 'Lintas Divisi'],
+  pic: ['Manager', 'Staff Soal', 'Leader Konten', 'Staff Input', 'Leader Sistem', 'Staff Data', 'Staff Materi', 'Staff QC', 'Staff Liveclass', 'Magang Konten', 'Magang Data', 'Lintas Divisi'],
+  support: ['Manager', 'Staff Soal', 'Leader Konten', 'Staff Input', 'Leader Sistem', 'Staff Data', 'Staff Materi', 'Staff QC', 'Staff Liveclass', 'Magang Konten', 'Magang Data', 'Lintas Divisi'],
   division: ['IT', 'Marketing', 'Sales']
 };
 
@@ -121,10 +121,14 @@ SHEET_HEADERS[CONFIG.USERS_SHEET] = ['Nama', 'Peran', 'Aktif'];
 /*            task lintas divisi & dropdown. TIDAK kelola user.        */
 /*  Leader  — lihat semua task, set Done, setup kolaborasi.            */
 /*            TIDAK bisa kelola user maupun task lintas divisi.        */
-/*  Staff   — hanya task miliknya, status maksimal "Review PM".        */
+/*  Staff   — task miliknya + SEMUA task anak magang (membimbing).     */
+/*            Boleh menutup (Done) task milik magang, tapi task-nya    */
+/*            sendiri maksimal "Review PM".                            */
+/*  Magang  — HANYA task sesama magang (termasuk miliknya sendiri).    */
+/*            Tidak melihat pekerjaan karyawan. Maksimal "Review PM".  */
 /*  Lihat Saja — akses baca terbatas (task lintas divisi saja).        */
 /* ------------------------------------------------------------------ */
-var ROLES = ['Dev', 'Manager', 'Leader', 'Staff', 'Lihat Saja'];
+var ROLES = ['Dev', 'Manager', 'Leader', 'Staff', 'Magang', 'Lihat Saja'];
 var ROLE_DEFAULT = 'Staff';
 
 /* ================================================================== */
@@ -203,9 +207,19 @@ function isLeaderActor_(name) {
   return csvProp_('DONE_APPROVERS', '').some(function (a) { return baseName_(a) === baseName_(name); });
 }
 
+// Anak magang: peran paling terbatas, dan pekerjaannya dibimbing karyawan.
+function isMagangActor_(name) {
+  if (!baseName_(name)) return false;
+  return usersConfigured_() && hasRole_(name, 'magang');
+}
+function isStaffActor_(name) {
+  if (!baseName_(name)) return false;
+  return usersConfigured_() && hasRole_(name, 'staff');
+}
+
 function isDoneStatus_(v) { return String(v || '').trim().toLowerCase() === 'done'; }
 
-// Siapa yang boleh MENETAPKAN status "Done": Manager, Leader, dan Dev.
+// Siapa yang boleh MENETAPKAN status "Done" secara umum: Manager, Leader, dan Dev.
 function getDoneApprovers_() {
   if (usersConfigured_()) {
     return usersRaw_().filter(function (u) {
@@ -215,10 +229,24 @@ function getDoneApprovers_() {
   }
   return csvProp_('DONE_APPROVERS', 'Manager');
 }
-function canApproveDone_(name) {
+
+// Boleh menutup task ke "Done"?  Bergantung pada SIAPA PIC task itu:
+//  - Manager / Leader / Dev  -> task siapa pun.
+//  - Staff                   -> hanya task milik anak MAGANG (ia yang membimbing).
+//  - Magang                  -> tidak pernah (maksimal "Review PM").
+// taskPic boleh dikosongkan untuk pertanyaan umum "orang ini bisa Done sama sekali?".
+function canApproveDone_(name, taskPic) {
   if (!baseName_(name)) return false;
   if (isManagerActor_(name)) return true;
-  if (usersConfigured_()) return isLeaderActor_(name);
+  if (usersConfigured_()) {
+    if (isLeaderActor_(name)) return true;
+    if (isMagangActor_(name)) return false;
+    if (isStaffActor_(name)) {
+      if (taskPic === undefined || taskPic === null || taskPic === '') return true;  // pertanyaan umum
+      return isMagangActor_(taskPic);
+    }
+    return false;
+  }
   var n = baseName_(name);
   return getDoneApprovers_().some(function (a) { return baseName_(a) === n; });
 }
@@ -245,9 +273,13 @@ function usersDeniedMessage_() {
   return 'Hanya mode Dev yang bisa mengelola user & peran. Masuk lewat tekan-tahan logo ProductTrack, atau ubah langsung di sheet USERS.';
 }
 
-function doneDeniedMessage_() {
+function doneDeniedMessage_(taskPic) {
   var who = getDoneApprovers_();
-  return 'Hanya ' + (who.length ? who.join(', ') : 'Manager/Leader') + ' yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan.';
+  var siapa = who.length ? who.join(', ') : 'Manager/Leader';
+  if (taskPic && isMagangActor_(taskPic)) {
+    return 'Task anak magang hanya bisa ditutup ("Done") oleh karyawan — Staff, Leader, atau Manager. Magang sendiri maksimal "Review PM".';
+  }
+  return 'Hanya ' + siapa + ' yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan.';
 }
 
 /* ---- CRUD user (dipanggil dari tab Pengaturan) ---- */
@@ -687,8 +719,10 @@ function saveTask(task) {
     // Gerbang "Done": hanya Done approver yang boleh MENETAPKAN status ke Done.
     // Task yang sudah Done boleh tetap Done atau ditarik balik.
     var oldStatus = (existingTask && existingTask.status) || '';
-    if (isDoneStatus_(task.status) && !isDoneStatus_(oldStatus) && !canApproveDone_(actor)) {
-      return { success: false, message: doneDeniedMessage_() };
+    // Izin Done bergantung pada PIC task-nya (Staff boleh menutup task anak magang).
+    var finalPic = String(task.pic || (existingTask && existingTask.pic) || '').trim();
+    if (isDoneStatus_(task.status) && !isDoneStatus_(oldStatus) && !canApproveDone_(actor, finalPic)) {
+      return { success: false, message: doneDeniedMessage_(finalPic) };
     }
 
     var finalId = task.id || generateTaskId_(ids);
@@ -748,10 +782,13 @@ function quickUpdateField(taskId, field, value, actor) {
   }
 
   // Gerbang "Done": yang bukan approver tak boleh memindahkan task KE Done (menarik balik boleh).
-  if (f === 'status' && isDoneStatus_(value) && !canApproveDone_(actor)) {
+  // Izinnya bergantung PIC task — Staff boleh menutup task milik anak magang.
+  if (f === 'status' && isDoneStatus_(value)) {
     var prev = valuesGet_(taskRowRange_(row));
     var existing = rowToTask_(prev[0] || [], row);
-    if (!isDoneStatus_(existing.status)) return { success: false, message: doneDeniedMessage_() };
+    if (!isDoneStatus_(existing.status) && !canApproveDone_(actor, existing.pic)) {
+      return { success: false, message: doneDeniedMessage_(existing.pic) };
+    }
   }
 
   valuesUpdate_(CONFIG.TASK_SHEET + '!' + col + row, [[value]]);

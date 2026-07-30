@@ -220,7 +220,7 @@ const iso = off => {
 console.log('\n=== 1. Seed data dummy ===');
 const seedRes = call('seedDummyData');
 ok('seedDummyData sukses', seedRes && seedRes.success === true);
-eq('50 task ter-seed', seedRes.counts.task, 50);
+eq('54 task ter-seed', seedRes.counts.task, 54);
 eq('6 task kolaborasi ter-seed', seedRes.counts.collab, 6);
 ok('ceklis ter-seed (>30)', seedRes.counts.checklist > 30);
 ok('komentar ter-seed (>15)', seedRes.counts.comment > 15);
@@ -241,7 +241,7 @@ ok('OPTIONS TERLIHAT', SS.getSheetByName('OPTIONS').isSheetHidden() === false);
 
 console.log('\n=== 3. Bootstrap (yang dibaca frontend) ===');
 const boot = call('getBootstrapData');
-eq('bootstrap: 50 task', boot.tasks.length, 50);
+eq('bootstrap: 54 task', boot.tasks.length, 54);
 eq('bootstrap: 6 collab', boot.collabs.length, 6);
 ok('bootstrap: options.status lengkap', boot.options.status.length >= 6);
 ok('bootstrap: options.pic lengkap', boot.options.pic.length >= 9);
@@ -249,8 +249,8 @@ ok('bootstrap: verbMap terisi (rumus nama task)', Object.keys(boot.options.verbM
 ok('bootstrap: objekMap terisi', Object.keys(boot.options.objekMap).length > 5);
 eq('bootstrap: managers default', boot.meta.managers.join(','), 'Manager');
 eq('bootstrap: doneApprovers = Manager + Leader', boot.meta.doneApprovers.join(','), 'Manager,Leader Konten,Leader Sistem');
-eq('bootstrap: 10 user terdaftar', boot.meta.users.length, 10);
-eq('bootstrap: daftar peran', boot.meta.roles.join(','), 'Dev,Manager,Leader,Staff,Lihat Saja');
+eq('bootstrap: 12 user terdaftar', boot.meta.users.length, 12);
+eq('bootstrap: daftar peran', boot.meta.roles.join(','), 'Dev,Manager,Leader,Staff,Magang,Lihat Saja');
 ok('bootstrap: activity terbaru di atas', boot.activity.length > 30);
 ok('bootstrap: checklistSummary terisi', Object.keys(boot.checklistSummary).length >= 10);
 ok('bootstrap: links terisi', boot.links.length > 10);
@@ -279,7 +279,7 @@ const prios = {}; boot.tasks.forEach(t => prios[t.priority] = (prios[t.priority]
 const stages = new Set(boot.tasks.map(t => t.stage));
 eq('10 stage terpakai', stages.size, 10);
 const pics = new Set(boot.tasks.map(t => t.pic));
-ok('>=9 PIC terpakai', pics.size >= 9);
+ok('>=11 PIC terpakai', pics.size >= 11);
 ok('ada task lintas divisi (Divisi Tujuan)', boot.tasks.filter(t => t.divisiTujuan).length === 3);
 ok('task lintas divisi punya kontak', boot.tasks.filter(t => t.divisiTujuan && t.kontakDivisi).length === 3);
 ok('ada task di-mirror ke Lintas Divisi', boot.tasks.filter(t => t.mirror === 'Ya').length === 3);
@@ -359,47 +359,47 @@ const created = call('saveTask', {
   platform: 'Cerebrum', pic: 'Staff Data', support: ['Staff QC', 'Staff Input'], dueDate: iso(5), actor: 'Manager'
 });
 eq('saveTask sukses', created.success, true);
-eq('ID baru berurutan TSK-051', created.task.id, 'TSK-051');
+eq('ID baru berurutan TSK-055', created.task.id, 'TSK-055');
 eq('total task bertambah', call('getTasks').length, before + 1);
 eq('support array -> teks', created.task.support, 'Staff QC, Staff Input');
 eq('dueDate tersimpan benar', created.task.dueDate, iso(5));
 eq('createdBy = actor', created.task.createdBy, 'Manager');
 eq('createdDate = hari ini', created.task.createdDate, iso(0));
 
-const addCk = call('addChecklistItem', 'TSK-051', 'Item ceklis uji', 'Staff Data');
+const addCk = call('addChecklistItem', 'TSK-055', 'Item ceklis uji', 'Staff Data');
 eq('tambah ceklis oleh PIC sukses', addCk.success, true);
-eq('ceklis TSK-051 = 1 item', addCk.checklist.length, 1);
+eq('ceklis TSK-055 = 1 item', addCk.checklist.length, 1);
 const ckRow = addCk.checklist[0].row;
-const setCk = call('setChecklistDone', 'TSK-051', ckRow, true, 'Staff Data');
+const setCk = call('setChecklistDone', 'TSK-055', ckRow, true, 'Staff Data');
 eq('centang ceklis sukses', setCk.success, true);
 eq('item tercentang', setCk.checklist[0].done, true);
 eq('checkedBy tercatat', setCk.checklist[0].checkedBy, 'Staff Data');
 ok('checkedAt rapi', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(setCk.checklist[0].checkedAt));
-const ckOutsider = call('addChecklistItem', 'TSK-051', 'Item dari orang luar', 'Leader Sistem');
+const ckOutsider = call('addChecklistItem', 'TSK-055', 'Item dari orang luar', 'Leader Sistem');
 eq('non-PIC tidak boleh tambah ceklis task', ckOutsider.success, false);
-const delByPic = call('deleteChecklistItem', 'TSK-051', ckRow, 'Staff Data');
+const delByPic = call('deleteChecklistItem', 'TSK-055', ckRow, 'Staff Data');
 eq('PIC tidak boleh hapus item ceklis task', delByPic.success, false);
-const delByPm = call('deleteChecklistItem', 'TSK-051', ckRow, 'Manager');
+const delByPm = call('deleteChecklistItem', 'TSK-055', ckRow, 'Manager');
 eq('PM boleh hapus item ceklis task', delByPm.success, true);
 
-const cm = call('addComment', { taskId: 'TSK-051', author: 'Manager', message: 'Halo @Staff Data tolong cek ini ya' });
+const cm = call('addComment', { taskId: 'TSK-055', author: 'Manager', message: 'Halo @Staff Data tolong cek ini ya' });
 eq('tambah komentar sukses', cm.success, true);
 eq('komentar tersimpan', cm.comments.length, 1);
 ok('timestamp komentar rapi', /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(cm.comments[0].timestamp));
 const noti = call('getNotifications', 'Staff Data');
-ok('mention @Staff Data menghasilkan notifikasi', noti.some(n => /men-tag Anda/.test(n.text) && n.refId === 'TSK-051'));
-const cmAll = call('addComment', { taskId: 'TSK-051', author: 'Manager', message: '@everyone rapat jam 3' });
+ok('mention @Staff Data menghasilkan notifikasi', noti.some(n => /men-tag Anda/.test(n.text) && n.refId === 'TSK-055'));
+const cmAll = call('addComment', { taskId: 'TSK-055', author: 'Manager', message: '@everyone rapat jam 3' });
 eq('komentar @everyone sukses', cmAll.success, true);
 const notiUma = call('getNotifications', 'Staff QC');
 ok('@everyone menotifikasi user lain', notiUma.some(n => /men-tag semua/.test(n.text)));
 const notiSelf = call('getNotifications', 'Manager');
-ok('penulis tidak menotifikasi dirinya sendiri', !notiSelf.some(n => n.refId === 'TSK-051' && /men-tag semua/.test(n.text)));
+ok('penulis tidak menotifikasi dirinya sendiri', !notiSelf.some(n => n.refId === 'TSK-055' && /men-tag semua/.test(n.text)));
 
 console.log('\n=== 10. Hapus task & baca ulang ===');
-const delRes = call('deleteTask', 'TSK-051', 'Manager');
+const delRes = call('deleteTask', 'TSK-055', 'Manager');
 eq('hapus task sukses', delRes.success, true);
 eq('jumlah task kembali', delRes.tasks.length, before);
-ok('TSK-051 hilang', !delRes.tasks.some(t => t.id === 'TSK-051'));
+ok('TSK-055 hilang', !delRes.tasks.some(t => t.id === 'TSK-055'));
 ok('task lain tidak ikut tergeser', delRes.tasks[0].id === 'TSK-001' && delRes.tasks[9].id === 'TSK-010');
 
 console.log('\n=== 11. Mode lihat-saja (Lintas Divisi) ===');
@@ -471,13 +471,15 @@ eq('penulis tak menotifikasi dirinya', mentionOf('@Staff Data catat ya', 'Staff 
 
 console.log('\n=== 15. Peran user (Dev / Manager / Leader / Staff) ===');
 const users = call('getUsers');
-eq('10 user ter-seed', users.length, 10);
+eq('12 user ter-seed', users.length, 12);
 ok('semua user aktif', users.every(u => u.active === true));
 const roleMap = {}; users.forEach(u => roleMap[u.name] = u.role);
 eq('Manager berperan Manager', roleMap['Manager'], 'Manager');
 eq('Leader Konten berperan Leader', roleMap['Leader Konten'], 'Leader');
 eq('Leader Sistem berperan Leader', roleMap['Leader Sistem'], 'Leader');
 eq('Staff Soal berperan Staff', roleMap['Staff Soal'], 'Staff');
+eq('Magang Konten berperan Magang', roleMap['Magang Konten'], 'Magang');
+eq('Magang Data berperan Magang', roleMap['Magang Data'], 'Magang');
 eq('Lintas Divisi berperan Lihat Saja', roleMap['Lintas Divisi'], 'Lihat Saja');
 ok('TIDAK ada nama orang asli di daftar user',
   !users.some(u => /nynda|alya|dhea|andika|arifah|bilar|kiki/i.test(u.name)));
@@ -488,6 +490,38 @@ eq('Staff TIDAK boleh setup kolaborasi', call('saveCollab', { title: 'Uji Staff'
 eq('Staff TIDAK boleh set Done', call('quickUpdateField', 'TSK-030', 'status', 'Done', 'Staff QC').success, false);
 eq('Leader Sistem boleh set Done', call('quickUpdateField', 'TSK-030', 'status', 'Done', 'Leader Sistem').success, true);
 
+console.log('\n=== 15b. Peran Magang: visibilitas & Done berbasis PIC ===');
+const T = call('getTasks');
+const picOf = id => (T.filter(t => t.id === id)[0] || {}).pic;
+const magangTasks = T.filter(t => /^Magang /.test(t.pic)).map(t => t.id);
+ok('ada 4 task milik magang', magangTasks.length === 4);
+
+// Gerbang Done di server, dinilai per PIC task.
+const tMagang = magangTasks[0];                                   // PIC = Magang Konten
+const tKaryawan = T.filter(t => t.pic === 'Staff Soal' && t.status !== 'Done')[0].id;
+// Staff BOLEH menutup task magang — inti permintaan.
+const staffDoneMagang = call('quickUpdateField', tMagang, 'status', 'Done', 'Staff QC');
+eq('Staff BOLEH mem-Done-kan task magang', staffDoneMagang.success, true);
+// ...tapi TIDAK task karyawan lain.
+const staffDoneKaryawan = call('quickUpdateField', tKaryawan, 'status', 'Done', 'Staff QC');
+eq('Staff TIDAK boleh mem-Done-kan task karyawan', staffDoneKaryawan.success, false);
+// Magang tak boleh menutup apa pun, termasuk task sesama magang & miliknya sendiri.
+const magangDoneSendiri = call('quickUpdateField', magangTasks[1], 'status', 'Done', 'Magang Konten');
+eq('Magang TIDAK boleh mem-Done-kan task sendiri', magangDoneSendiri.success, false);
+ok('pesannya menjelaskan aturan magang', /anak magang/i.test(magangDoneSendiri.message));
+eq('Magang TIDAK boleh mem-Done-kan task sesama magang',
+  call('quickUpdateField', magangTasks[2], 'status', 'Done', 'Magang Data').success, false);
+// Leader & Manager tetap bisa apa pun.
+eq('Leader boleh mem-Done-kan task magang', call('quickUpdateField', magangTasks[1], 'status', 'Done', 'Leader Konten').success, true);
+eq('Manager boleh mem-Done-kan task karyawan', call('quickUpdateField', tKaryawan, 'status', 'Done', 'Manager').success, true);
+// Lewat saveTask (form) juga ditegakkan.
+const saveMagangByStaff = call('saveTask', { id: magangTasks[2], taskName: 'Rekap data pendaftar mingguan', pic: 'Magang Data', status: 'Done', actor: 'Staff Data' });
+eq('saveTask: Staff boleh menutup task magang', saveMagangByStaff.success, true);
+const saveKaryawanByStaff = call('saveTask', { id: 'TSK-020', taskName: 'x', pic: 'Leader Sistem', status: 'Done', actor: 'Staff QC' });
+eq('saveTask: Staff tak boleh menutup task karyawan', saveKaryawanByStaff.success, false);
+// Magang tidak masuk daftar approver umum.
+ok('magang bukan Done-approver', call('getBootstrapData').meta.doneApprovers.every(a => !/^Magang /.test(a)));
+
 console.log('\n=== 16. Kelola user: HANYA Dev (Manager pun tidak boleh) ===');
 // Semua peran selain Dev harus ditolak — termasuk Manager.
 eq('Staff TIDAK boleh menambah user', call('saveUser', 'Staff Desain', 'Staff', true, 'Staff Soal').success, false);
@@ -495,12 +529,12 @@ eq('Leader TIDAK boleh menambah user', call('saveUser', 'Staff Desain', 'Staff',
 const addByMgr = call('saveUser', 'Staff Desain', 'Staff', true, 'Manager');
 eq('Manager TIDAK boleh menambah user', addByMgr.success, false);
 ok('pesannya mengarahkan ke mode Dev', /mode Dev/i.test(addByMgr.message) && /USERS/.test(addByMgr.message));
-eq('daftar user tak berubah', call('getUsers').length, 10);
+eq('daftar user tak berubah', call('getUsers').length, 12);
 
 // Dev — satu-satunya yang boleh.
 const addByDev = call('saveUser', 'Anak Magang', 'Staff', true, 'Dev');
 eq('Dev BOLEH menambah user', addByDev.success, true);
-eq('user baru masuk daftar', addByDev.users.length, 11);
+eq('user baru masuk daftar', addByDev.users.length, 13);
 ok('user baru otomatis masuk dropdown PIC', (addByDev.options.pic || []).indexOf('Anak Magang') >= 0);
 ok('user baru otomatis masuk dropdown Support', (addByDev.options.support || []).indexOf('Anak Magang') >= 0);
 eq('user baru berperan Staff', call('getUsers').filter(u => u.name === 'Anak Magang')[0].role, 'Staff');
@@ -532,7 +566,7 @@ eq('Staff tidak boleh menghapus user', call('deleteUser', 'Anak Magang', 'Staff 
 eq('Manager tidak boleh menghapus user', call('deleteUser', 'Anak Magang', 'Manager').success, false);
 const delUser = call('deleteUser', 'Anak Magang', 'Dev');
 eq('Dev boleh menghapus user', delUser.success, true);
-eq('daftar kembali 10 user', delUser.users.length, 10);
+eq('daftar kembali 12 user', delUser.users.length, 12);
 
 console.log('\n=== 16b. UI: panel Kelola User terkunci ke mode Dev ===');
 const uiHtml = call('doGet', {})._html;

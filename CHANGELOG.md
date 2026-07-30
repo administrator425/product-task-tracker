@@ -10,6 +10,53 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.53.0 — Peran "Magang" + izin Done berbasis PIC + perbaikan PIN Dev
+Menyiapkan anak magang ikut memakai tracker tanpa melihat pekerjaan tim inti.
+
+### Peran baru: Magang
+Daftar peran jadi **Dev · Manager · Leader · Staff · Magang · Lihat Saja**, dipilih Dev
+saat menambah user.
+
+| Peran | Task yang terlihat | Set "Done" |
+|---|---|---|
+| Dev / Manager / Leader | semua | task siapa pun |
+| **Staff** | miliknya **+ semua task magang** | **hanya task magang** |
+| **Magang** | **hanya task sesama magang** | — |
+
+- **Magang hanya melihat task sesama magang** (termasuk miliknya). Pekerjaan karyawan tidak
+  muncul di Dashboard, Kanban, List, Timeline, maupun Calendar mereka.
+- **Staff melihat semua task magang** di samping task miliknya — supaya bisa membimbing.
+- **Izin "Done" sekarang ditentukan oleh SIAPA PIC task-nya**, bukan hanya peran si penekan
+  tombol: Staff boleh menutup task milik magang (pembimbing menyetujui hasil kerjanya), tapi
+  tetap tidak boleh menutup task karyawan lain. Magang tak bisa mem-Done-kan apa pun,
+  termasuk task miliknya sendiri.
+- Ditegakkan **di server** (`canApproveDone_(actor, taskPic)` dipakai `saveTask` &
+  `quickUpdateField`), bukan hanya disembunyikan di UI.
+- Frontend: `canSetDoneFor(task)` menggantikan `canSetDone()` di seluruh titik keputusan —
+  dropdown status inline, form task, dan pindah-massal Kanban. Pada pindah-massal, izin
+  dinilai **per task**: yang boleh diproses, yang tidak dilewati dengan pemberitahuan
+  jumlahnya; tombol "Done" hanya nonaktif bila tak satu pun task terpilih boleh ditutup.
+
+### Perbaikan PIN Mode Dev
+- **Penyebab "PIN salah padahal sudah diisi": pesannya menyesatkan.** Frontend selalu
+  menampilkan "PIN salah", padahal server mengirim alasan sebenarnya — biasanya
+  *"DEV_PIN belum diset"* karena tombol **Save script properties** di Project Settings
+  terlewat. Sekarang pesan dari server yang ditampilkan.
+- **Menu baru** di spreadsheet: **⚡ ProductTrack → Atur PIN Mode Dev** (langsung tersimpan,
+  tanpa masuk Project Settings) dan **Cek status PIN Mode Dev**.
+
+### Data dummy
+- Ditambah **2 user Magang** (Magang Konten, Magang Data) dan **4 task milik magang** —
+  di-*append* agar Task ID lama tidak bergeser. Total kini **12 user / 54 task**.
+
+### Pengujian
+- `test/gas.test.js` +18 assertion untuk peran Magang: Staff boleh mem-Done-kan task magang,
+  Staff ditolak pada task karyawan, magang ditolak pada task sendiri & sesama magang,
+  Leader/Manager tetap bebas, penegakan lewat `saveTask` maupun `quickUpdateField`, dan
+  magang tak masuk daftar approver.
+
+---
+
 ## 1.52.0 — Kelola user dikunci ke mode Dev (Manager tidak bisa)
 Menyiapkan onboarding anggota baru (mis. anak magang) dengan kontrol akses satu pintu.
 

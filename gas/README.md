@@ -81,13 +81,35 @@ Selesai.
 Peran disimpan di sheet **USERS** dan diatur dari aplikasi:
 **Pengaturan → Kelola User & Peran**.
 
-| Peran | Lihat semua task | Set "Done" | Setup kolaborasi | Task lintas divisi | **Kelola user** |
-|---|:--:|:--:|:--:|:--:|:--:|
-| **Dev** | ✅ | ✅ | ✅ | ✅ | ✅ **(hanya Dev)** |
-| **Manager** | ✅ | ✅ | ✅ | ✅ | — |
-| **Leader** | ✅ | ✅ | ✅ | — | — |
-| **Staff** | hanya miliknya | — | — | — | — |
-| **Lihat Saja** | terbatas | — | — | — | — |
+| Peran | Task yang terlihat | Set "Done" | Setup kolaborasi | Task lintas divisi | **Kelola user** |
+|---|---|---|:--:|:--:|:--:|
+| **Dev** | semua | task siapa pun | ✅ | ✅ | ✅ **(hanya Dev)** |
+| **Manager** | semua | task siapa pun | ✅ | ✅ | — |
+| **Leader** | semua | task siapa pun | ✅ | — | — |
+| **Staff** | miliknya **+ semua task magang** | **hanya task magang** | — | — | — |
+| **Magang** | **hanya task sesama magang** | — | — | — | — |
+| **Lihat Saja** | task lintas divisi saja | — | — | — | — |
+
+### Cara kerja peran Magang
+
+Dibuat untuk anak magang yang ikut memakai tracker tapi tidak perlu melihat pekerjaan tim inti:
+
+- **Magang hanya melihat task sesama magang** (termasuk miliknya). Pekerjaan karyawan
+  tidak muncul di Dashboard, Kanban, List, Timeline, maupun Calendar mereka.
+- **Karyawan (Staff) melihat semua task magang** di samping task miliknya sendiri —
+  supaya bisa membimbing dan memeriksa hasil kerjanya.
+- **Task magang boleh ditutup ("Done") oleh Staff**, bukan hanya Manager/Leader.
+  Jadi pembimbing langsung bisa menyetujui hasil kerja magang tanpa menunggu Manager.
+  Sebaliknya, task milik karyawan tetap tidak bisa ditutup oleh Staff.
+- **Magang sendiri tidak bisa mem-Done-kan apa pun** — maksimal "Review PM", termasuk
+  untuk task miliknya sendiri. Persetujuan selalu datang dari karyawan.
+
+Ringkasnya, izin "Done" ditentukan oleh **siapa PIC task-nya**, bukan hanya oleh peran
+si penekan tombol. Aturan ini ditegakkan di server, bukan cuma disembunyikan di tampilan.
+
+> Catatan teknis: penyaringan tampilan dilakukan di browser (seperti peran lain sejak awal),
+> jadi ini pemisahan **kerapian & alur kerja**, bukan enkripsi data. Untuk kerahasiaan
+> ketat antar-peran, datanya perlu difilter di server — beri tahu bila itu dibutuhkan.
 
 ### Menambah anggota tim (mis. anak magang baru)
 
@@ -132,8 +154,8 @@ Semua tanggal **relatif terhadap hari ini**, jadi demo selalu terlihat hidup
 
 | Isi | Jumlah | Mencakup |
 |---|---|---|
-| User & peran | **10** | 1 Manager, 2 Leader, 6 Staff, 1 Lihat Saja |
-| Task | **50** | 6 status, 4 prioritas, 10 stage, 9 PIC, 15 platform |
+| User & peran | **12** | 1 Manager, 2 Leader, 6 Staff, **2 Magang**, 1 Lihat Saja |
+| Task | **54** | 6 status, 4 prioritas, 10 stage, 11 PIC, 15 platform — termasuk **4 task anak magang** |
 | Task kolaborasi | **6** | 5 tipe (Course/Tryout-Latsol/Liveclass/Drilling/Journey) + 1 tanpa tipe |
 | Proses beruntun | 26 | lengkap dgn PIC, deadline, catatan, status selesai |
 | Ceklis | 33 item | 7 task + 4 sub-ceklis proses kolaborasi |
@@ -192,14 +214,20 @@ Kalau tidak diisi, dipakai nilai default.
 ### Mengaktifkan mode Dev
 
 Mode Dev **sengaja tidak aktif** di paket ini — tidak ada PIN bawaan, supaya produk
-yang Anda kirim ke pembeli tidak punya pintu belakang.
+yang Anda kirim ke pembeli tidak punya pintu belakang. Mode Dev penting karena **hanya
+Dev yang bisa menambah user & mengatur peran**.
 
-1. Project Settings → **Script Properties** → **Add script property**
-2. Property: `DEV_PIN` · Value: PIN pilihan Anda (mis. 6 digit acak)
-3. Di aplikasi: **tekan-tahan logo ProductTrack ±2 detik**, lalu masukkan PIN itu.
+**Cara termudah (disarankan):** di spreadsheet, menu
+**⚡ ProductTrack → Atur PIN Mode Dev** → masukkan 4 digit → OK.
+Cek kapan pun lewat **⚡ ProductTrack → Cek status PIN Mode Dev**.
 
-Dev sengaja disembunyikan dari daftar pemilih identitas dan hanya bisa dimasuki lewat
-cara di atas. Selama `DEV_PIN` kosong, PIN apa pun (termasuk kosong) akan ditolak.
+Cara manual: Project Settings → **Script Properties** → Add → `DEV_PIN` = PIN Anda →
+**jangan lupa klik "Save script properties"**.
+
+Lalu di aplikasi: **tekan-tahan logo ProductTrack ±2 detik**, masukkan PIN itu.
+
+> Selama `DEV_PIN` kosong, PIN apa pun (termasuk kosong) ditolak, dan pesan errornya
+> menyebutkan bahwa PIN-nya memang belum diatur — bukan sekadar "PIN salah".
 
 ---
 
@@ -250,6 +278,7 @@ pemakaian intensif), hapus baris lama secara berkala agar tetap ringan.
 
 | Gejala | Sebab & solusi |
 |---|---|
+| **"PIN salah" padahal PIN sudah diisi di Script Properties** | Kemungkinan besar tombol **Save script properties** belum ditekan, jadi propertinya tak tersimpan. Pakai menu **⚡ ProductTrack → Atur PIN Mode Dev** (langsung tersimpan), atau cek dengan **Cek status PIN Mode Dev**. Sejak v1.53.0 pesan errornya menyebut sebab sebenarnya. |
 | **Layar "Memuat task tracker…" tak hilang** | Sejak v1.51.1 tidak terjadi lagi — layar itu selalu ditutup dan errornya muncul sebagai notifikasi. Kalau masih terjadi, Anda memakai versi lama: **Deploy → Manage deployments → ✏️ → Version: New version → Deploy**. |
 | **Tampilan polos tanpa warna/tata letak** | Library tampilan (Tailwind, Chart.js, dll) diambil dari internet dan sedang gagal dimuat — biasanya diblokir jaringan kantor/sekolah, atau koneksi lambat. Muat ulang; kalau menetap, coba jaringan lain. Aplikasi tetap berfungsi, hanya tampilannya polos. |
 | **Grafik Dashboard kosong + ada notifikasi "library gagal dimuat"** | Sama seperti di atas, khusus Chart.js. Fitur lain tetap jalan. |

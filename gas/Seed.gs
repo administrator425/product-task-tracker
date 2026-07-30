@@ -20,6 +20,9 @@ function onOpen() {
     .addItem('1. Setup + Isi Data Dummy', 'seedDummyData')
     .addItem('2. Setup saja (tanpa data dummy)', 'setupOnly')
     .addSeparator()
+    .addItem('Atur PIN Mode Dev', 'setDevPinPrompt')
+    .addItem('Cek status PIN Mode Dev', 'checkDevPin')
+    .addSeparator()
     .addItem('Sembunyikan sheet internal', 'hideInternalSheets')
     .addItem('Tampilkan semua sheet', 'showAllSheets')
     .addSeparator()
@@ -64,6 +67,39 @@ function showAllSheets() {
 function toast_(msg) {
   try { SpreadsheetApp.getActiveSpreadsheet().toast(msg, 'ProductTrack', 8); }
   catch (e) { Logger.log(msg); }
+}
+
+/* ================================================================== */
+/* PIN MODE DEV                                                       */
+/* ================================================================== */
+/*
+ * Mengisi Script Property DEV_PIN lewat menu, supaya tidak perlu masuk
+ * Project Settings (langkah "Save script properties" di sana sering terlewat,
+ * dan akibatnya mode Dev menolak PIN yang terasa sudah benar).
+ */
+function setDevPinPrompt() {
+  var ui = SpreadsheetApp.getUi();
+  var cur = PropertiesService.getScriptProperties().getProperty('DEV_PIN');
+  var res = ui.prompt(
+    'Atur PIN Mode Dev',
+    'Masukkan PIN 4 digit untuk masuk Mode Dev.\n'
+    + 'Mode Dev = satu-satunya yang bisa menambah user & mengatur peran.\n\n'
+    + (cur ? 'PIN saat ini sudah terpasang (tersembunyi). Isi baru untuk menggantinya.' : 'Belum ada PIN — mode Dev masih nonaktif.'),
+    ui.ButtonSet.OK_CANCEL);
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+  var pin = String(res.getResponseText() || '').trim();
+  if (!/^\d{4}$/.test(pin)) { ui.alert('PIN harus tepat 4 digit angka. Tidak ada perubahan.'); return; }
+  PropertiesService.getScriptProperties().setProperty('DEV_PIN', pin);
+  _props = null;   // buang memo agar langsung terbaca
+  ui.alert('PIN Mode Dev tersimpan.\n\nCara masuk: buka aplikasi, tekan-tahan logo ProductTrack ±2 detik, lalu masukkan PIN ini.');
+}
+
+function checkDevPin() {
+  var cur = PropertiesService.getScriptProperties().getProperty('DEV_PIN');
+  var msg = cur
+    ? 'PIN Mode Dev SUDAH terpasang (' + String(cur).length + ' digit). Masuk lewat tekan-tahan logo ProductTrack ±2 detik.'
+    : 'PIN Mode Dev BELUM diatur — mode Dev nonaktif. Pakai menu "Atur PIN Mode Dev".';
+  SpreadsheetApp.getUi().alert(msg);
 }
 
 /* ================================================================== */
@@ -156,7 +192,15 @@ var DUMMY_TASKS = [
   // ---------- Lintas divisi (3) — punya Divisi Tujuan ----------
   { c: -7, d: 4, st: 'In progress', pr: 'High', n: 'Request banner promo Tryout Akbar SNBT', sg: 'Manajemen Sistem', pf: 'Marketing', pic: 'Manager', sup: '', doc: 'Brief Banner TO Akbar', pn: '', mn: 'Butuh 3 ukuran: feed, story, web.', dv: 'Marketing', kd: 'Kontak Marketing', vb: '', jm: '', ob: '', dt: '', by: 'Manager' },
   { c: -6, d: 6, st: 'Todo', pr: 'Normal', n: 'Request perbaikan bug login Siadu', sg: 'Manajemen Sistem', pf: 'Siadu', pic: 'Leader Sistem', sup: '', doc: 'Tiket #4412', pn: '', mn: '', dv: 'IT', kd: 'Kontak IT', vb: '', jm: '', ob: '', dt: '', by: 'Leader Sistem' },
-  { c: -5, d: 8, st: 'Review PM', pr: 'Normal', n: 'Request data closing penjualan Juli', sg: 'Data & Intelligence', pf: 'All Platform', pic: 'Staff Data', sup: '', doc: '', pn: 'Data sudah dikirim, menunggu konfirmasi.', mn: '', dv: 'Sales', kd: 'Kontak Sales', vb: '', jm: '', ob: '', dt: '', by: 'Staff Data' }
+  { c: -5, d: 8, st: 'Review PM', pr: 'Normal', n: 'Request data closing penjualan Juli', sg: 'Data & Intelligence', pf: 'All Platform', pic: 'Staff Data', sup: '', doc: '', pn: 'Data sudah dikirim, menunggu konfirmasi.', mn: '', dv: 'Sales', kd: 'Kontak Sales', vb: '', jm: '', ob: '', dt: '', by: 'Staff Data' },
+
+  // ---------- Task anak magang (4) ----------
+  // Dipakai untuk mendemokan aturan: magang hanya melihat task sesama magang,
+  // Staff melihat + boleh menutup (Done) task magang.
+  { c: -9, d: -1, st: 'Review PM', pr: 'Normal', n: 'Merapikan 40 soal hasil input magang', sg: 'QC Konten', pf: 'JadiASN', pic: 'Magang Konten', sup: 'Staff QC', doc: 'Latihan Batch 1', pn: 'Sudah selesai, mohon direview.', mn: 'Cek konsistensi format.', vb: '', jm: '', ob: '', dt: '', by: 'Staff QC' },
+  { c: -6, d: 2, st: 'In progress', pr: 'Normal', n: 'Menginput 60 soal latihan ke SIADU', sg: 'Input', pf: 'Siadu', pic: 'Magang Konten', sup: 'Staff Input', doc: '', pn: '35 dari 60 selesai.', mn: '', vb: 'Menginput', jm: '60', ob: 'soal', dt: 'latihan magang', by: 'Staff Input' },
+  { c: -4, d: 0, st: 'Todo', pr: 'High', n: 'Rekap data pendaftar mingguan', sg: 'Data & Intelligence', pf: 'All Platform', pic: 'Magang Data', sup: 'Staff Data', doc: '', pn: '', mn: 'Pakai template yang sudah ada.', vb: '', jm: '', ob: '', dt: '', by: 'Staff Data' },
+  { c: -3, d: 6, st: 'In progress', pr: 'Low', n: 'Belajar alur QC video pembahasan', sg: 'QC Konten', pf: 'Cerebrum', pic: 'Magang Data', sup: '', doc: 'Panduan Onboarding', pn: 'Sedang mempelajari panduan.', mn: '', vb: '', jm: '', ob: '', dt: '', by: 'Staff QC' }
 ];
 
 /* ================================================================== */
@@ -384,6 +428,8 @@ var DUMMY_USERS = [
   ['Staff Input', 'Staff', true],
   ['Staff Data', 'Staff', true],
   ['Staff Liveclass', 'Staff', true],
+  ['Magang Konten', 'Magang', true],
+  ['Magang Data', 'Magang', true],
   ['Lintas Divisi', 'Lihat Saja', true]
 ];
 

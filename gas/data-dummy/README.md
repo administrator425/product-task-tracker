@@ -31,9 +31,9 @@ Tampilkan lewat menu **View → Show → Hidden sheets** bila perlu.
 
 | Sheet | Baris data | Isi | Tampil? |
 |---|---:|---|---|
-| **Main** | 50 | Database task. **Header di baris 3**, data mulai baris 4, kolom B–V | ✅ |
-| **OPTIONS** | 123 | Semua pilihan dropdown + rumus nama task (stage → kata kerja → objek) | ✅ |
-| **USERS** | 10 | Daftar anggota tim + perannya | ✅ |
+| **Main** | 54 | Database task. **Header di baris 3**, data mulai baris 4, kolom B–V | ✅ |
+| **OPTIONS** | 127 | Semua pilihan dropdown + rumus nama task (stage → kata kerja → objek) | ✅ |
+| **USERS** | 12 | Daftar anggota tim + perannya | ✅ |
 | COMMENTS | 20 | Diskusi per task & per task kolaborasi, termasuk `@mention` | — |
 | CHECKLIST | 48 | 33 ceklis task + 15 sub-ceklis proses kolaborasi | — |
 | COLLAB | 6 | Task kolaborasi (proyek dengan proses beruntun) | — |
@@ -57,7 +57,8 @@ Ganti sesuka Anda lewat **Pengaturan → Kelola User** (mode Dev), atau langsung
 | Manager | Manager | Lihat semua task • set Done • setup kolaborasi • task lintas divisi |
 | Leader Konten | Leader | Lihat semua task • set Done • setup kolaborasi |
 | Leader Sistem | Leader | sama seperti di atas |
-| Staff Materi, Staff Soal, Staff QC, Staff Input, Staff Data, Staff Liveclass | Staff | Hanya task miliknya • status maksimal "Review PM" |
+| Staff Materi, Staff Soal, Staff QC, Staff Input, Staff Data, Staff Liveclass | Staff | Task miliknya **+ semua task magang** • boleh mem-Done-kan task magang • task sendiri maksimal "Review PM" |
+| Magang Konten, Magang Data | Magang | **Hanya task sesama magang** • tidak melihat kerjaan karyawan • maksimal "Review PM" |
 | Lintas Divisi | Lihat Saja | Baca terbatas: task lintas divisi saja |
 
 **Menambah/mengubah user hanya bisa dari mode Dev** — Manager sekalipun tidak bisa.
@@ -77,6 +78,9 @@ langsung melihat aplikasi dalam keadaan "hidup":
 - **COL-001 proses 2** — sub-ceklis baru 2/5, jadi centang utamanya **terkunci** (mendemokan aturan kunci)
 - **COL-002 proses 4** — sub-ceklis 4/4, jadi **siap dicentang**
 - **COL-003** — semua proses selesai, statusnya *Selesai*
+- **4 task milik anak magang** untuk mencoba aturan peran Magang: masuk sebagai
+  `Magang Konten` (hanya melihat 4 task magang), lalu sebagai `Staff QC`
+  (melihat task sendiri + semua task magang, dan boleh mem-Done-kannya)
 - Tab **Laporan** langsung berisi angka (ada event "→ Done" dan komentar dalam 7 hari terakhir)
 
 > Karena tanggalnya relatif, makin lama file ini disimpan makin "basi" tanggalnya.
