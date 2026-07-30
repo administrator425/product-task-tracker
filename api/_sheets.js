@@ -18,8 +18,10 @@
 
 const { google } = require('googleapis');
 const crypto = require('crypto');
-// Tidak ada nilai bawaan: mode Dev mati sampai DEV_PIN diisi di environment.
-const DEV_PIN = String(process.env.DEV_PIN || '').trim();
+// PIN mode Dev untuk deployment INTERNAL (Vercel) — ada nilai bawaan supaya mode Dev
+// tetap bisa dimasuki tanpa perlu menyetel env var. Timpa dengan env DEV_PIN bila mau ganti.
+// Catatan: paket Apps Script di gas/ (yang didistribusikan) sengaja TIDAK punya bawaan.
+const DEV_PIN = String(process.env.DEV_PIN || '3108').trim();
 const PIN_SALT = String(process.env.PIN_SALT || 'pt_pin_salt_v1');
 function hashPin(user, pin) {
   return crypto.createHash('sha256').update(String(user || '').toLowerCase().trim() + ':' + String(pin || '') + ':' + PIN_SALT).digest('hex');
@@ -1469,7 +1471,7 @@ async function verifyPin(user, pin) {
   user = String(user || '').trim();
   // DEV_PIN kosong = mode Dev dinonaktifkan (jangan sampai PIN kosong dianggap cocok).
   if (user === '__dev__') {
-    if (!DEV_PIN) return { ok: false, message: 'Mode Dev belum diaktifkan (env DEV_PIN belum diisi).' };
+    if (!DEV_PIN) return { ok: false, message: 'Mode Dev belum diaktifkan (set env DEV_PIN di Vercel).' };
     return { ok: String(pin || '').trim() === DEV_PIN };
   }
   const rows = await readAuthRaw();
