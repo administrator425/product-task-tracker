@@ -10,6 +10,39 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.58.0 — Kelola User memuat SEMUA nama, bukan cuma yang tercatat di sheet
+
+### Ada hak yang hilang diam-diam
+Panel **Kelola User & Peran** hanya menampilkan baris yang sudah ada di sheet `USERS`.
+Padahal `roleOf()` mengembalikan peran **kosong** untuk nama yang tidak tercatat di situ —
+jadi begitu sheet `USERS` mulai diisi (walau baru 2 orang), semua nama lain yang dipakai
+di task otomatis kehilangan seluruh haknya: tak bisa set Done, tak masuk daftar approver,
+tak punya wewenang apa pun. Dan karena mereka tidak muncul di panel mana pun, Dev tidak
+punya cara memperbaikinya selain menyunting sheet secara manual.
+
+Terbukti di data produksi: `Nynda` berperan `""` dan `isManager('Nynda')` bernilai `false`.
+
+### Yang berubah
+- **`knownPeople()`** — mengumpulkan semua nama yang dikenal sistem: baris `USERS` +
+  dropdown PIC + PIC/Support yang benar-benar dipakai di task. Duplikat beda kapital/spasi
+  digabung, nama kosong dan `Dev` dibuang.
+- **`userAdminRows()`** — menggabungkan yang terdaftar dan yang belum, menaruh yang
+  **belum diatur di paling atas** karena merekalah yang butuh tindakan. Urutannya stabil,
+  jadi indeks baris tidak pernah meleset ke orang lain.
+- Baris yang belum terdaftar diberi lencana **"Belum diatur"**, latar amber, dan opsi
+  **"— belum diatur —"** yang terpilih. Memilih peran = sekaligus mendaftarkan orangnya.
+- Spanduk peringatan menyebut **berapa orang** yang haknya masih kosong.
+- Tombol **hapus** dan **nonaktifkan** disembunyikan *dan* dijaga di handler untuk baris
+  yang belum terdaftar — bukan cuma disembunyikan di tampilan.
+- `changeUserRole` / `toggleUserActive` / `removeUser` kini membaca daftar gabungan yang
+  sama; sebelumnya mereka mengindeks `state.users` sehingga akan menunjuk orang yang salah.
+
+### Catatan
+Murni perubahan frontend — `saveUser` di backend sudah menerima nama baru apa adanya,
+jadi tidak ada perubahan di `api/` maupun `gas/Code.gs`.
+
+---
+
 ## 1.57.0 — PIN khusus anak magang + tab "Kerjaan Magang" untuk karyawan
 
 ### Masalahnya lebih dalam dari sekadar dropdown

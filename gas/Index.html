@@ -502,7 +502,7 @@
           </div>
           <div id="userAdminCard" class="hide bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 p-5">
             <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2"><span class="material-icons-round text-[20px] text-indigo-600">group</span> Kelola User &amp; Peran <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-200">MODE DEV</span></h2>
-            <p class="text-sm text-gray-500 mt-1 mb-3">Tambah anggota tim (mis. anak magang baru) dan tentukan hak aksesnya. User baru otomatis masuk ke dropdown <b>PIC</b> &amp; <b>Support</b> sehingga langsung bisa diberi task.</p>
+            <p class="text-sm text-gray-500 mt-1 mb-3">Tabel di bawah memuat <b>semua nama yang dikenal sistem</b> — termasuk yang dipakai di task tapi belum punya peran — jadi peran siapa pun bisa diubah di sini tanpa mengubah kode. User baru otomatis masuk ke dropdown <b>PIC</b> &amp; <b>Support</b> sehingga langsung bisa diberi task.</p>
             <div id="rolePowerLegend" class="grid grid-cols-1 md:grid-cols-2 gap-1.5 mb-4"></div>
             <div class="flex flex-wrap items-end gap-2 mb-4 p-3 rounded-xl bg-gray-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-800">
               <div class="flex-1 min-w-[180px]">
@@ -780,7 +780,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.57.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.58.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -3523,6 +3523,33 @@ function deleteFolder(name){
 function assignableRoles(){
   return (state.roles||[]).filter(r=>String(r).toLowerCase()!=='dev');
 }
+/* Semua nama yang DIKENAL sistem, bukan cuma yang sudah tercatat di sheet USERS:
+   dropdown PIC + PIC/Support yang benar-benar dipakai di task. Tanpa ini, orang yang
+   belum terdaftar tidak muncul di mana pun padahal roleOf() sudah menganggapnya
+   tak berperan — hak mereka hilang diam-diam dan Dev tak punya cara memperbaikinya. */
+function knownPeople(){
+  const seen=new Map();               // nama ternormalisasi -> ejaan yang ditampilkan
+  const add=n=>{ const k=baseName(n); if(!k||k==='dev') return; if(!seen.has(k)) seen.set(k,String(n).trim()); };
+  (state.users||[]).forEach(u=>add(u.name));
+  (state.options&&state.options.pic||[]).forEach(add);
+  (state.tasks||[]).forEach(t=>{
+    add(t.pic);
+    const sup=Array.isArray(t.support)?t.support:String(t.support||'').split(',');
+    sup.forEach(add);
+  });
+  return Array.from(seen.values());
+}
+/* Baris tabel Kelola User: gabungan terdaftar + belum terdaftar. Yang belum diatur
+   ditaruh di atas karena merekalah yang butuh tindakan. */
+function userAdminRows(){
+  const reg=new Map((state.users||[]).map(u=>[baseName(u.name),u]));
+  return knownPeople().map(name=>{
+    const u=reg.get(baseName(name));
+    return u ? { name:u.name, role:String(u.role||'Staff'), active:u.active!==false, registered:true }
+             : { name, role:'', active:true, registered:false };
+  }).sort((a,b)=> a.registered!==b.registered ? (a.registered?1:-1)
+                                              : a.name.localeCompare(b.name,'id'));
+}
 function renderUserAdmin(){
   const card=document.getElementById('userAdminCard'); if(!card) return;
   const hint=document.getElementById('userAdminHint');
@@ -3553,26 +3580,35 @@ function renderUserAdmin(){
   }
 
   const list=document.getElementById('userAdminList'); if(!list) return;
-  const users=(state.users||[]);
-  if(!users.length){ list.innerHTML='<div class="py-6 text-center text-sm text-gray-400">Belum ada user terdaftar. Tambahkan lewat form di atas.</div>'; return; }
-  const rows=users.map((u,i)=>{
-    const opts=assignableRoles();
-    const roleCell=`<select onchange="changeUserRole(${i},this.value)" class="h-8 px-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium outline-none">
-          ${opts.map(r=>`<option value="${escapeAttr(r)}" ${same(r,u.role)?'selected':''}>${escapeHtml(r)}</option>`).join('')}
-          ${opts.some(r=>same(r,u.role))?'':`<option value="${escapeAttr(u.role)}" selected>${escapeHtml(u.role)}</option>`}
+  const people=userAdminRows();
+  if(!people.length){ list.innerHTML='<div class="py-6 text-center text-sm text-gray-400">Belum ada nama yang dikenal sistem. Tambahkan lewat form di atas.</div>'; return; }
+  const belum=people.filter(p=>!p.registered).length;
+  const opts=assignableRoles();
+  const rows=people.map((u,i)=>{
+    // Yang belum terdaftar diberi opsi kosong terpilih: memilih peran = sekaligus mendaftarkan.
+    const roleCell=`<select onchange="changeUserRole(${i},this.value)" class="h-8 px-2 rounded-lg border ${u.registered?'border-gray-200 dark:border-slate-700':'border-amber-300 dark:border-amber-700'} bg-white dark:bg-slate-900 text-xs font-medium outline-none">
+          ${u.registered?'':'<option value="" selected>— belum diatur —</option>'}
+          ${opts.map(r=>`<option value="${escapeAttr(r)}" ${u.registered&&same(r,u.role)?'selected':''}>${escapeHtml(r)}</option>`).join('')}
+          ${(!u.registered||opts.some(r=>same(r,u.role)))?'':`<option value="${escapeAttr(u.role)}" selected>${escapeHtml(u.role)}</option>`}
         </select>`;
-    return `<tr class="border-t border-gray-100 dark:border-slate-800">
+    const statusCell=u.registered
+      ? `<button onclick="toggleUserActive(${i})" class="inline-flex items-center gap-1 h-7 px-2 rounded-full text-[11px] font-semibold ${u.active===false?'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400':'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}">
+          <span class="material-icons-round text-[13px]">${u.active===false?'toggle_off':'toggle_on'}</span>${u.active===false?'Nonaktif':'Aktif'}</button>`
+      : `<span class="inline-flex items-center gap-1 h-7 px-2 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="Nama ini dipakai di task/dropdown tapi belum punya peran, jadi haknya kosong.">
+          <span class="material-icons-round text-[13px]">error_outline</span>Belum diatur</span>`;
+    return `<tr class="border-t border-gray-100 dark:border-slate-800 ${u.registered?'':'bg-amber-50/50 dark:bg-amber-900/10'}">
       <td class="px-3 py-2"><div class="flex items-center gap-2">${avatar(u.name)}<span class="font-medium text-gray-800 dark:text-slate-200">${escapeHtml(u.name)}</span>${same(u.name,state.currentUser)?'<span class="text-[10px] text-indigo-500 font-semibold">(Anda)</span>':''}</div></td>
       <td class="px-3 py-2">${roleCell}</td>
-      <td class="px-3 py-2">
-        <button onclick="toggleUserActive(${i})" class="inline-flex items-center gap-1 h-7 px-2 rounded-full text-[11px] font-semibold ${u.active===false?'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400':'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'}">
-          <span class="material-icons-round text-[13px]">${u.active===false?'toggle_off':'toggle_on'}</span>${u.active===false?'Nonaktif':'Aktif'}</button>
-      </td>
+      <td class="px-3 py-2">${statusCell}</td>
       <td class="px-3 py-2 text-right">
-        ${same(u.name,state.currentUser)?'':`<button onclick="removeUser(${i})" title="Hapus user" class="text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[18px]">delete_outline</span></button>`}
+        ${(u.registered&&!same(u.name,state.currentUser))?`<button onclick="removeUser(${i})" title="Hapus user" class="text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[18px]">delete_outline</span></button>`:''}
       </td></tr>`;
   }).join('');
-  list.innerHTML=`<table class="w-full text-sm"><thead><tr class="text-left text-[11px] uppercase tracking-wider text-gray-400">
+  const banner=belum?`<div class="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-200">
+      <span class="material-icons-round text-[15px] mt-0.5">warning_amber</span>
+      <span><b>${belum} orang belum punya peran.</b> Selama belum diatur, hak mereka kosong — tidak bisa set Done maupun ikut wewenang apa pun. Pilih perannya di kolom Peran untuk langsung mendaftarkan.</span>
+    </div>`:'';
+  list.innerHTML=banner+`<table class="w-full text-sm"><thead><tr class="text-left text-[11px] uppercase tracking-wider text-gray-400">
       <th class="px-3 py-2">Nama</th><th class="px-3 py-2">Peran</th><th class="px-3 py-2">Status</th><th class="px-3 py-2"></th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -3595,17 +3631,18 @@ function submitNewUser(){
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).saveUser(name, role, true, state.currentUser);
 }
 function changeUserRole(i,role){
-  const u=(state.users||[])[i]; if(!u) return;
-  GAS.withSuccessHandler(res=>pushUserResult(res,'Gagal mengubah peran.'))
+  const u=userAdminRows()[i]; if(!u) return;
+  if(!role){ renderUserAdmin(); return; }   // kembali ke "— belum diatur —", bukan perintah
+  GAS.withSuccessHandler(res=>pushUserResult(res, u.registered?'Gagal mengubah peran.':'Gagal mendaftarkan user.'))
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).saveUser(u.name, role, u.active!==false, state.currentUser);
 }
 function toggleUserActive(i){
-  const u=(state.users||[])[i]; if(!u) return;
+  const u=userAdminRows()[i]; if(!u || !u.registered) return;
   GAS.withSuccessHandler(res=>pushUserResult(res,'Gagal mengubah status.'))
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).saveUser(u.name, u.role, u.active===false, state.currentUser);
 }
 function removeUser(i){
-  const u=(state.users||[])[i]; if(!u) return;
+  const u=userAdminRows()[i]; if(!u || !u.registered) return;
   if(!confirm('Hapus "'+u.name+'" dari daftar user?\n\nTask lamanya tidak ikut terhapus.')) return;
   GAS.withSuccessHandler(res=>pushUserResult(res,'Gagal menghapus user.'))
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).deleteUser(u.name, state.currentUser);

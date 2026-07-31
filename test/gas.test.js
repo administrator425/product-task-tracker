@@ -610,6 +610,34 @@ ok('penanda-terbaca memanggil markNotificationsRead', /markNotifsReadSilently\(\
 ok('notifikasi komentar task membuka chat-nya', /function openNotif\(refId\)[\s\S]{0,1500}?selectCommunicationTask\(t\.id\)/.test(commHtml));
 ok('komentar sendiri tak dihitung belum-dibaca (toleran)', /!same\(c\.user, state\.currentUser\)/.test(commHtml));
 
+console.log('\n=== 16d. Kelola User memuat SEMUA nama, bukan cuma yang terdaftar ===');
+const uaHtml = call('doGet', {})._html;
+// Masalah yang diperbaiki: begitu sheet USERS terisi, roleOf() mengembalikan '' untuk
+// nama yang belum tercatat — haknya hilang diam-diam DAN ia tak muncul di panel mana pun,
+// jadi Dev tak punya cara membetulkannya tanpa menyunting sheet/kode.
+ok('ada pengumpul semua nama yang dikenal', /function knownPeople\(\)/.test(uaHtml));
+ok('nama diambil dari dropdown PIC', /function knownPeople\(\)[\s\S]{0,600}?state\.options&&state\.options\.pic\|\|\[\]\)\.forEach\(add\)/.test(uaHtml));
+ok('nama diambil dari PIC & Support di task', /function knownPeople\(\)[\s\S]{0,900}?state\.tasks\|\|\[\]\)\.forEach\([\s\S]{0,200}?add\(t\.pic\)/.test(uaHtml));
+ok('"dev" tak ikut jadi baris user', /function knownPeople\(\)[\s\S]{0,400}?k==='dev'\) return/.test(uaHtml));
+ok('baris = gabungan terdaftar + belum terdaftar', /function userAdminRows\(\)[\s\S]{0,700}?registered:true[\s\S]{0,200}?registered:false/.test(uaHtml));
+ok('yang belum diatur ditaruh paling atas', /userAdminRows\(\)[\s\S]{0,900}?a\.registered!==b\.registered/.test(uaHtml));
+ok('tabel memakai userAdminRows, bukan state.users', /const people=userAdminRows\(\)/.test(uaHtml));
+ok('tabel TIDAK lagi memetakan state.users langsung', !/const users=\(state\.users\|\|\[\]\);\s*if\(!users\.length\)/.test(uaHtml));
+// Memilih peran untuk nama yang belum terdaftar = sekaligus mendaftarkannya.
+ok('ada opsi "belum diatur" utk yang tak terdaftar', /— belum diatur —/.test(uaHtml));
+ok('ada lencana peringatan "Belum diatur"', /Belum diatur<\/span>/.test(uaHtml));
+ok('ada spanduk jumlah yang belum berperan', /belum punya peran/.test(uaHtml));
+// Handler harus membaca daftar gabungan yang sama, kalau tidak indeksnya meleset ke orang lain.
+ok('changeUserRole memakai userAdminRows', /function changeUserRole\(i,role\)\{\s*const u=userAdminRows\(\)\[i\]/.test(uaHtml));
+ok('toggleUserActive memakai userAdminRows', /function toggleUserActive\(i\)\{\s*const u=userAdminRows\(\)\[i\]/.test(uaHtml));
+ok('removeUser memakai userAdminRows', /function removeUser\(i\)\{\s*const u=userAdminRows\(\)\[i\]/.test(uaHtml));
+ok('tak ada lagi handler yang indeks ke state.users', !/const u=\(state\.users\|\|\[\]\)\[i\]/.test(uaHtml));
+// Aksi yang mustahil untuk baris belum terdaftar harus dijaga, bukan cuma disembunyikan.
+ok('nonaktifkan dijaga utk yg belum terdaftar', /function toggleUserActive\(i\)[\s\S]{0,200}?!u\.registered\) return/.test(uaHtml));
+ok('hapus dijaga utk yg belum terdaftar', /function removeUser\(i\)[\s\S]{0,200}?!u\.registered\) return/.test(uaHtml));
+ok('memilih opsi kosong bukan perintah simpan', /function changeUserRole\(i,role\)[\s\S]{0,300}?if\(!role\)\{ renderUserAdmin\(\); return; \}/.test(uaHtml));
+ok('keterangan panel menyebut semua nama dikenal', /semua nama yang dikenal sistem/.test(uaHtml));
+
 console.log('\n=== 17. Mode Dev TIDAK aktif sebelum DEV_PIN diisi ===');
 eq('PIN kosong ditolak saat DEV_PIN belum diset', call('verifyPin', '__dev__', '').ok, false);
 eq('PIN apa pun ditolak', call('verifyPin', '__dev__', '3108').ok, false);
