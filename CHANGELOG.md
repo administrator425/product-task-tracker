@@ -17,15 +17,21 @@ Sebelumnya `deleteUser` hanya membuang baris di sheet `USERS`. Namanya **tetap a
 dropdown PIC & Support**, jadi anak magang yang sudah selesai masih bisa dipilih sebagai
 PIC task baru. Sekarang penghapusan sekalian mencabutnya dari kedua dropdown.
 
-### Karyawan tetap dilindungi
-`Manager`, `Leader`, dan `Staff` **tidak bisa dihapus** — namanya melekat di task lama,
-jadi mencabutnya dari dropdown akan meninggalkan task yang PIC-nya tak bisa dipilih lagi.
-Untuk yang keluar, pakai **Nonaktif**: haknya dicabut, riwayatnya utuh. Di tabel mereka
-diberi ikon gembok, bukan tombol hapus. Penjagaan ini ada di **server** (`api/_sheets.js`
-dan `gas/Code.gs`), bukan cuma di tampilan — menembak `deleteUser` langsung pun ditolak.
+### Karyawan tetap: pengaman dua langkah
+`Manager`, `Leader`, dan `Staff` yang **masih aktif tidak bisa dihapus** — namanya melekat
+di task lama, jadi mencabutnya dari dropdown akan meninggalkan task yang PIC-nya tak bisa
+dipilih lagi. Di tabel mereka diberi ikon gembok, bukan tombol hapus.
 
-Yang boleh dihapus: **Magang**, **Lihat Saja**, dan nama yang belum berperan. `Dev` dan
-diri sendiri selalu ditolak.
+**Nonaktifkan dulu, baru tombol hapusnya muncul.** Dua langkah ini mencegah penghapusan
+tak sengaja, tapi tetap memberi jalan keluar untuk akun duplikat atau salah ketik — kasus
+nyata: dua akun Manager untuk orang yang sama. Untuk karyawan yang sekadar keluar, cukup
+berhenti di Nonaktif: haknya dicabut, riwayatnya utuh.
+
+Penjagaan ini ada di **server** (`api/_sheets.js` dan `gas/Code.gs`), bukan cuma di
+tampilan — menembak `deleteUser` langsung pun ditolak.
+
+Yang boleh langsung dihapus tanpa dinonaktifkan: **Magang**, **Lihat Saja**, dan nama yang
+belum berperan. `Dev` dan diri sendiri selalu ditolak.
 
 Nama yang cuma nyangkut di dropdown tanpa baris `USERS` juga sah dibersihkan lewat
 tombol hapus — sebelumnya ditolak dengan "User tidak ditemukan".
@@ -34,6 +40,21 @@ tombol hapus — sebelumnya ditolak dengan "User tidak ditemukan".
 Manager → Leader → Staff → Magang → Lihat Saja, memakai daftar `ROLES` aplikasi sendiri
 supaya legenda dan tabel selalu sejalan. Yang **belum diatur tetap di paling atas** karena
 merekalah yang butuh tindakan; sesama peran diurutkan menurut abjad.
+
+### Mode magang: kotak identitas tampil lagi
+Di v1.57.0 kotak **Mode User** disembunyikan sepenuhnya untuk anak magang. Akibatnya
+mereka tidak punya penanda sedang masuk sebagai siapa. Sekarang kotaknya **tetap tampil**
+— yang dimatikan hanya cara menggantinya: dropdown terkunci (`disabled`, diberi efek
+redup), tombol **"Ganti identitas"** disembunyikan, dan ditambahkan keterangan kecil
+*"Identitas terkunci untuk akun magang."*
+
+Penguncian sesungguhnya tetap di tempatnya: `requestUserSwitch` menolak, identitas
+dibaca dari cookie, dan server hanya mengirim data lingkungan magang.
+
+### Dashboard eksternal dibuka untuk magang
+`getBootstrapData` level magang tadinya mengirim `dashboards: []`. Sekarang dikirim penuh
+— isinya tautan laporan, bukan data task, jadi tidak ada yang bocor. Tab **Dashboard
+Eksternal** memang sudah tampil untuk magang, cuma isinya selalu kosong.
 
 ### Akibat perubahan v1.58.0 yang harus dicabut
 `knownPeople()` tidak lagi memungut nama dari PIC/Support **task lama**. Kalau dibiarkan,

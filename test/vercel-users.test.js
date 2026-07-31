@@ -111,7 +111,13 @@ process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({ client_email: 'a@b.c'
 const backend = require(path.join(__dirname, '..', 'api', '_sheets.js'));
 
 /* ---------------- Data awal ---------------- */
-ensureSheet('Main'); ensureSheet('OPTIONS'); ensureSheet('USERS'); ensureSheet('ACTIVITY');
+ensureSheet('Main'); ensureSheet('OPTIONS'); ensureSheet('USERS'); ensureSheet('ACTIVITY'); ensureSheet('DASHBOARDS');
+// Dashboard eksternal: dipakai untuk membuktikan magang MENERIMA-nya, bukan menerima nol.
+writeRange('DASHBOARDS!A1:D1', [['Nama', 'URL', 'Deskripsi', 'Urutan']]);
+writeRange('DASHBOARDS!A2:D3', [
+  ['Laporan Konten', 'https://example.com/a', 'Rekap mingguan', '1'],
+  ['Rekap Soal', 'https://example.com/b', 'Progres bank soal', '2'],
+]);
 writeRange('Main!B3:V3', [[
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority', 'Task Name', 'Stage', 'Platform',
   'PIC', 'Support', 'Document', 'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi',
@@ -227,24 +233,35 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   fresh();
   eq('Manager tak boleh menghapus', (await backend.deleteUser('Anak Magang Baru', 'Nynda')).success, false);
 
-  // Karyawan tetap (Manager/Leader/Staff) dilindungi: namanya melekat di task lama.
+  // Karyawan tetap yang MASIH AKTIF dilindungi: namanya melekat di task lama.
   fresh();
-  const delLeader = await backend.deleteUser('Anak Magang Baru', 'Dev');   // saat ini masih Leader
-  eq('Leader (karyawan tetap) TIDAK bisa dihapus', delLeader.success, false);
-  ok('pesannya mengarahkan ke Nonaktif', /Nonaktif/.test(delLeader.message || ''));
+  eq('Staff aktif tak bisa dihapus', (await backend.deleteUser('Ali', 'Dev')).success, false);
   fresh();
-  eq('Staff pun tak bisa dihapus', (await backend.deleteUser('Ali', 'Dev')).success, false);
-  fresh();
-  eq('Manager pun tak bisa dihapus', (await backend.deleteUser('Nynda', 'Dev')).success, false);
+  const delManager = await backend.deleteUser('Nynda', 'Dev');
+  eq('Manager aktif tak bisa dihapus', delManager.success, false);
+  ok('pesannya menyuruh nonaktifkan dulu', /Nonaktifkan dulu/.test(delManager.message || ''));
   fresh();
   ok('yang dilindungi tetap ada di sheet', readRange('USERS!A2:C').some(r => r[0] === 'Ali'));
 
-  // Turunkan lagi jadi Magang, baru boleh dihapus.
+  // Jalan keluar untuk akun duplikat/salah ketik: nonaktifkan dulu, baru boleh dihapus.
+  fresh();
+  eq('Dev membuat Manager duplikat', (await backend.saveUser('Nyndaa', 'Manager', true, 'Dev')).success, true);
+  fresh();
+  eq('duplikat yang masih aktif tetap dikunci', (await backend.deleteUser('Nyndaa', 'Dev')).success, false);
+  fresh();
+  eq('Dev menonaktifkan duplikat', (await backend.saveUser('Nyndaa', 'Manager', false, 'Dev')).success, true);
+  fresh();
+  const delNonaktif = await backend.deleteUser('Nyndaa', 'Dev');
+  eq('Manager NONAKTIF boleh dihapus', delNonaktif.success, true);
+  ok('duplikat hilang dari dropdown PIC', !(delNonaktif.options.pic || []).includes('Nyndaa'));
+  ok('yang asli TIDAK ikut terhapus', (delNonaktif.users || []).some(u => u.name === 'Nynda'));
+
+  // Magang tak perlu dinonaktifkan dulu.
   fresh();
   eq('Dev menurunkan kembali jadi Magang', (await backend.saveUser('Anak Magang Baru', 'Magang', true, 'Dev')).success, true);
   fresh();
   const del = await backend.deleteUser('Anak Magang Baru', 'Dev');
-  eq('Magang BOLEH dihapus', del.success, true);
+  eq('Magang aktif langsung boleh dihapus', del.success, true);
   eq('daftar kembali 7 user', del.users.length, 7);
   ok('baris hilang dari sheet USERS', !readRange('USERS!A2:C').some(r => r[0] === 'Anak Magang Baru'));
   // Inti permintaan: benar-benar hilang dari PIC, bukan cuma dari daftar user.
@@ -280,7 +297,11 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   ok('task karyawan biasa TIDAK terkirim', !mA.tasks.some(t => karyawan.includes(t.pic) && t.id !== 'TSK-005'));
   ok('task karyawan tempat ia Support IKUT terkirim', mA.tasks.some(t => t.id === 'TSK-005'));
   eq('riwayat aktivitas tidak dikirim', mA.activity.length, 0);
-  eq('dashboard eksternal tidak dikirim', mA.dashboards.length, 0);
+  // Dashboard eksternal SENGAJA dibuka utk magang: isinya tautan/laporan, bukan data task.
+  const dashKaryawan = (await backend.getBootstrapData({})).dashboards;
+  ok('fixture memang punya dashboard (assertion tidak hampa)', dashKaryawan.length === 2);
+  eq('magang menerima dashboard yang sama', mA.dashboards.length, dashKaryawan.length);
+  ok('isinya benar-benar terkirim', (mA.dashboards || []).some(d => d.title === 'Laporan Konten' && d.url));
   eq('daftar PIN user tidak dikirim', mA.pinUsers.length, 0);
   ok('meta.users hanya berisi magang', (mA.meta.users || []).every(u => String(u.role).toLowerCase() === 'magang'));
   eq('meta.managers dikosongkan', mA.meta.managers.length, 0);

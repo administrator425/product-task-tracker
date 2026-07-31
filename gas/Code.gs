@@ -357,8 +357,10 @@ function deleteUser(name, actor) {
   var list = usersRaw_();
   var found = null;
   for (var i = 0; i < list.length; i++) if (baseName_(list[i].name) === baseName_(name)) { found = list[i]; break; }
-  if (found && isPermanentRole_(found.role)) {
-    return { success: false, message: name + ' berperan ' + found.role + ' (karyawan tetap) dan tidak bisa dihapus. Pakai tombol Nonaktif — haknya dicabut tapi riwayat task-nya tetap utuh.' };
+  // Karyawan tetap yang masih aktif dikunci; nonaktifkan dulu. Pengaman dua langkah ini
+  // mencegah penghapusan tak sengaja tapi tetap memberi jalan untuk akun duplikat.
+  if (found && isPermanentRole_(found.role) && found.active !== false) {
+    return { success: false, message: name + ' berperan ' + found.role + ' dan masih aktif. Nonaktifkan dulu lewat tombol Aktif/Nonaktif, baru bisa dihapus.' };
   }
 
   // Nama bisa saja cuma nyangkut di dropdown tanpa baris USERS; itu tetap sah dihapus.

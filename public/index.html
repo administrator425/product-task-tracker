@@ -246,7 +246,8 @@
             <select id="currentUser" onchange="requestUserSwitch(this.value)" class="flex-1 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-2.5 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-200"></select>
           </div>
           <div id="myTasksBadge" class="mt-2 text-[11px] font-medium text-gray-500 dark:text-slate-400"></div>
-          <button onclick="showIdentityGate()" class="mt-2 w-full text-[11px] font-semibold text-indigo-600 hover:underline flex items-center justify-center gap-1"><span class="material-icons-round text-[13px]">badge</span>Ganti identitas</button>
+          <button id="switchIdentityBtn" onclick="showIdentityGate()" class="mt-2 w-full text-[11px] font-semibold text-indigo-600 hover:underline flex items-center justify-center gap-1"><span class="material-icons-round text-[13px]">badge</span>Ganti identitas</button>
+          <div id="magangLockNote" class="hide mt-2 flex items-start gap-1 text-[10px] text-gray-400 dark:text-slate-500"><span class="material-icons-round text-[12px] mt-px">lock</span><span>Identitas terkunci untuk akun magang.</span></div>
         </div>
         <div id="guestUnlockBox" class="hide p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-900/40">
           <div class="text-[10px] font-bold text-indigo-600 dark:text-indigo-300 uppercase tracking-widest mb-1 flex items-center gap-1"><span class="material-icons-round text-[14px]">visibility</span>Mode Lihat-saja</div>
@@ -1169,8 +1170,9 @@ function applyRoleUI(){
   const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
   // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas) ATAU tamu tanpa PIN.
   const guest=!!state.guestMode;
-  // Mode magang: kotak ganti-identitas disembunyikan sepenuhnya — identitasnya terkunci.
-  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView||guest||!!state.magangMode);
+  // Mode magang: kotaknya TETAP tampil (biar tahu masuk sebagai siapa), yang dikunci hanya
+  // cara menggantinya — diatur di populateUserSelect().
+  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView||guest);
   const guestBox=document.getElementById('guestUnlockBox'); if(guestBox) guestBox.classList.toggle('hide',!guest);
   // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
   const hiddenForVo=['activity','settings','report','extdash','mylinks','hariini','mynotes','collab'];
@@ -1250,8 +1252,12 @@ function populateUserSelect(){
   if(state.magangMode){   // identitas magang dikunci dari cookie — jangan pernah dipindah otomatis
     const me = magangIdentity() || state.currentUser;
     if(me) state.currentUser = me;
-    if(select){ select.innerHTML=`<option value="${escapeHtml(me||'')}">${escapeHtml(me||'')}</option>`; select.value=me||''; select.disabled=true; }
-    const box=document.getElementById('modeUserBox'); if(box) box.classList.add('hide');
+    if(select){ select.innerHTML=`<option value="${escapeHtml(me||'')}">${escapeHtml(me||'')}</option>`; select.value=me||''; select.disabled=true; select.classList.add('opacity-70','cursor-not-allowed'); }
+    // Kotaknya tetap tampil supaya anak magang tahu ia masuk sebagai siapa — yang dimatikan
+    // hanya cara menggantinya: dropdown terkunci dan tombol "Ganti identitas" disembunyikan.
+    const box=document.getElementById('modeUserBox'); if(box) box.classList.remove('hide');
+    const btn=document.getElementById('switchIdentityBtn'); if(btn) btn.classList.add('hide');
+    const note=document.getElementById('magangLockNote'); if(note) note.classList.remove('hide');
     return;
   }
   const pics = state.options.pic || ['Nynda'];
@@ -3555,15 +3561,16 @@ function userAdminRows(){
              : { name, role:'', active:true, registered:false };
   }).sort((a,b)=> (roleRank(a)-roleRank(b)) || a.name.localeCompare(b.name,'id'));
 }
-/* Karyawan tetap sengaja TIDAK bisa dihapus: namanya melekat di task lama, jadi
-   mencabutnya dari dropdown PIC meninggalkan task yatim yang PIC-nya tak bisa dipilih
-   lagi. Untuk yang keluar, pakai Nonaktif — haknya dicabut tapi riwayatnya utuh.
-   Yang boleh dihapus: Magang, Lihat Saja, dan nama yang belum berperan. */
+/* Karyawan tetap yang MASIH AKTIF tidak bisa dihapus: namanya melekat di task lama, jadi
+   mencabutnya dari dropdown PIC meninggalkan task yang PIC-nya tak bisa dipilih lagi.
+   Nonaktifkan dulu — itu pengaman dua langkah, sekaligus jalan keluar untuk akun duplikat
+   atau salah ketik. Magang, Lihat Saja, dan nama yang belum berperan langsung bisa dihapus. */
 const PERMANENT_ROLES=['Manager','Leader','Staff'];
 function isPermanentRole(role){ return PERMANENT_ROLES.some(r=>same(r,role)); }
+function isProtectedUser(u){ return !!u && u.registered && isPermanentRole(u.role) && u.active!==false; }
 function canDeleteUser(u){
   if(!u || same(u.name,state.currentUser) || baseName(u.name)==='dev') return false;
-  return !(u.registered && isPermanentRole(u.role));
+  return !isProtectedUser(u);
 }
 function renderUserAdmin(){
   const card=document.getElementById('userAdminCard'); if(!card) return;
@@ -3618,8 +3625,8 @@ function renderUserAdmin(){
       <td class="px-3 py-2 text-right">
         ${canDeleteUser(u)
           ? `<button onclick="removeUser(${i})" title="Hapus — namanya juga dicabut dari dropdown PIC &amp; Support" class="text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[18px]">delete_outline</span></button>`
-          : (u.registered&&isPermanentRole(u.role)&&!same(u.name,state.currentUser)
-              ? `<span title="Karyawan tetap tidak bisa dihapus — namanya melekat di task lama. Pakai tombol Aktif/Nonaktif untuk mencabut haknya." class="text-gray-200 dark:text-slate-700"><span class="material-icons-round text-[18px]">lock_outline</span></span>`
+          : (isProtectedUser(u)&&!same(u.name,state.currentUser)
+              ? `<span title="Karyawan tetap yang masih aktif tidak bisa dihapus — namanya melekat di task lama. Nonaktifkan dulu (klik lencana Aktif), baru tombol hapus muncul." class="text-gray-200 dark:text-slate-700"><span class="material-icons-round text-[18px]">lock_outline</span></span>`
               : '')}
       </td></tr>`;
   }).join('');
@@ -3662,7 +3669,7 @@ function toggleUserActive(i){
 }
 function removeUser(i){
   const u=userAdminRows()[i]; if(!u) return;
-  if(!canDeleteUser(u)){ showToast('"'+u.name+'" berperan '+u.role+' (karyawan tetap) dan tidak bisa dihapus. Pakai tombol Nonaktif.', false); return; }
+  if(!canDeleteUser(u)){ showToast('"'+u.name+'" berperan '+u.role+' dan masih aktif. Nonaktifkan dulu, baru bisa dihapus.', false); return; }
   if(!confirm('Hapus "'+u.name+'"?\n\nNamanya dicabut dari daftar user DAN dari dropdown PIC & Support, jadi tidak bisa dipilih lagi untuk task baru.\n\nTask lamanya tidak ikut terhapus.')) return;
   GAS.withSuccessHandler(res=>pushUserResult(res,'Gagal menghapus user.'))
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).deleteUser(u.name, state.currentUser);

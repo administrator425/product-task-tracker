@@ -1282,8 +1282,10 @@ async function deleteUser(name, actor) {
   invalidateUsers();
   await loadUsers();
   const found = _users.find(u => baseName(u.name) === baseName(name));
-  if (found && isPermanentRole(found.role)) {
-    return { success: false, message: `${name} berperan ${found.role} (karyawan tetap) dan tidak bisa dihapus. Pakai tombol Nonaktif — haknya dicabut tapi riwayat task-nya tetap utuh.` };
+  // Karyawan tetap yang masih aktif dikunci; nonaktifkan dulu. Pengaman dua langkah ini
+  // mencegah penghapusan tak sengaja tapi tetap memberi jalan untuk akun duplikat.
+  if (found && isPermanentRole(found.role) && found.active !== false) {
+    return { success: false, message: `${name} berperan ${found.role} dan masih aktif. Nonaktifkan dulu lewat tombol Aktif/Nonaktif, baru bisa dihapus.` };
   }
 
   // Nama bisa saja cuma nyangkut di dropdown tanpa baris USERS; itu tetap sah dihapus.
@@ -1520,7 +1522,7 @@ async function getBootstrapData(opts) {
       commentsSummary: (commentsSummary || []).filter(c => shownIds.has(c.taskId)),
       pinUsers: [],
       links: asUser ? (links || []).filter(l => baseName(l.user) === baseName(asUser)) : [],
-      dashboards: [],
+      dashboards,   // dashboard eksternal dibuka juga untuk magang (isinya bukan data task)
       notes: asUser ? (notes || []).filter(n => baseName(n.user) === baseName(asUser)) : [],
       checklistSummary,
       collabs: myCollabs,

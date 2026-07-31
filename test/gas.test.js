@@ -565,20 +565,22 @@ eq('tidak bisa menghapus diri sendiri', call('deleteUser', 'Dev', 'Dev').success
 eq('Staff tidak boleh menghapus user', call('deleteUser', 'Anak Magang', 'Staff Soal').success, false);
 eq('Manager tidak boleh menghapus user', call('deleteUser', 'Anak Magang', 'Manager').success, false);
 
-// Karyawan tetap dilindungi: namanya melekat di task lama, jadi mencabutnya dari
-// dropdown PIC akan meninggalkan task yang PIC-nya tak bisa dipilih lagi.
-const delTetap = call('deleteUser', 'Anak Magang', 'Dev');   // saat ini masih Leader
-eq('Leader (karyawan tetap) TIDAK bisa dihapus', delTetap.success, false);
-ok('pesannya mengarahkan ke Nonaktif', /Nonaktif/.test(delTetap.message || ''));
-eq('Staff pun tak bisa dihapus', call('deleteUser', 'Staff Soal', 'Dev').success, false);
-eq('Manager pun tak bisa dihapus', call('deleteUser', 'Manager', 'Dev').success, false);
+// Karyawan tetap yang MASIH AKTIF dilindungi: namanya melekat di task lama, jadi
+// mencabutnya dari dropdown PIC akan meninggalkan task yang PIC-nya tak bisa dipilih lagi.
+const delAktif = call('deleteUser', 'Staff Soal', 'Dev');
+eq('Staff aktif TIDAK bisa dihapus', delAktif.success, false);
+ok('pesannya menyuruh nonaktifkan dulu', /Nonaktifkan dulu/.test(delAktif.message || ''));
+eq('Manager aktif pun tak bisa dihapus', call('deleteUser', 'Manager', 'Dev').success, false);
 ok('yang dilindungi tetap terdaftar', call('getUsers').some(u => u.name === 'Staff Soal'));
 
-// Turunkan jadi Magang dulu, baru boleh dihapus.
-eq('Dev menurunkan jadi Magang', call('saveUser', 'Anak Magang', 'Magang', true, 'Dev').success, true);
+// Jalan keluar untuk akun duplikat/salah ketik: "Anak Magang" berperan Leader TAPI
+// sudah dinonaktifkan di atas — pengaman dua langkah, jadi sekarang boleh dihapus.
 const delUser = call('deleteUser', 'Anak Magang', 'Dev');
-eq('Magang BOLEH dihapus', delUser.success, true);
+eq('karyawan tetap NONAKTIF boleh dihapus', delUser.success, true);
 eq('daftar kembali 12 user', delUser.users.length, 12);
+// Magang aktif tak perlu dinonaktifkan dulu.
+call('saveUser', 'Magang Sementara', 'Magang', true, 'Dev');
+eq('Magang aktif langsung boleh dihapus', call('deleteUser', 'Magang Sementara', 'Dev').success, true);
 // Inti permintaan: benar-benar hilang dari PIC, bukan cuma dari daftar user.
 ok('nama dicabut dari dropdown PIC', (delUser.options.pic || []).indexOf('Anak Magang') < 0);
 ok('nama dicabut dari dropdown Support', (delUser.options.support || []).indexOf('Anak Magang') < 0);
@@ -618,7 +620,13 @@ ok('ada pembungkus cookie identitas magang', /function magangIdentity\(\)\{ retu
 ok('pilih identitas magang mengunci ke cookie', /function chooseIdentity\(name\)\{[\s\S]{0,400}?state\.magangMode[\s\S]{0,300}?setCookie\('tt_magang_user'/.test(commHtml));
 ok('identitas magang tak bisa dipindah otomatis', /function populateUserSelect\(\)\{[\s\S]{0,600}?state\.magangMode\)\{[\s\S]{0,300}?select\.disabled=true/.test(commHtml));
 ok('ganti user ditolak di mode magang', /function requestUserSwitch\(value\)\{[\s\S]{0,300}?state\.magangMode\)\{[\s\S]{0,150}?terkunci/.test(commHtml));
-ok('kotak Mode User disembunyikan utk magang', /modeUserBox[\s\S]{0,150}?state\.magangMode/.test(commHtml));
+// Kotak Mode User TETAP tampil utk magang (biar tahu masuk sebagai siapa); yang dimatikan
+// hanya cara menggantinya — dropdown terkunci + tombol "Ganti identitas" disembunyikan.
+ok('kotak Mode User TETAP tampil utk magang', /state\.magangMode\)\{[\s\S]{0,600}?modeUserBox'\); if\(box\) box\.classList\.remove\('hide'\)/.test(commHtml));
+ok('applyRoleUI tak lagi menyembunyikannya', !/modeUserBox'\); if\(modeBox\) modeBox\.classList\.toggle\('hide',!!state\.lockView\|\|guest\|\|!!state\.magangMode\)/.test(commHtml));
+ok('tombol "Ganti identitas" disembunyikan utk magang', /state\.magangMode\)\{[\s\S]{0,800}?switchIdentityBtn'\); if\(btn\) btn\.classList\.add\('hide'\)/.test(commHtml));
+ok('ada keterangan identitas terkunci', /id="magangLockNote"/.test(commHtml) && /Identitas terkunci untuk akun magang/.test(commHtml));
+ok('dropdown identitas magang tetap mati', /state\.magangMode\)\{[\s\S]{0,500}?select\.disabled=true/.test(commHtml));
 ok('identitas dikirim ke server sbg x-user', /'x-user': magangIdentity\(\)/.test(commHtml));
 ok('ada tab Kerjaan Magang utk karyawan', /id="nav-magang"/.test(commHtml) && /function renderMagangView\(\)/.test(commHtml));
 ok('tab Kerjaan Magang tak tampil utk magang', /function canSeeMagangView\(\)\{[\s\S]{0,200}?state\.magangMode \|\| isMagang\(state\.currentUser\)\) return false/.test(commHtml));
@@ -657,10 +665,13 @@ ok('tak ada lagi urutan terdaftar-vs-belum', !/a\.registered!==b\.registered \? 
 // Karyawan tetap dilindungi dari penghapusan; magang & sisa dropdown boleh dibersihkan.
 ok('ada daftar peran karyawan tetap', /const PERMANENT_ROLES=\['Manager','Leader','Staff'\]/.test(uaHtml));
 ok('ada penjaga boleh-hapus', /function canDeleteUser\(u\)/.test(uaHtml));
-ok('karyawan tetap tak bisa dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?!\(u\.registered && isPermanentRole\(u\.role\)\)/.test(uaHtml));
+ok('ada penanda user terlindungi', /function isProtectedUser\(u\)/.test(uaHtml));
+ok('terlindungi = karyawan tetap yang MASIH AKTIF', /function isProtectedUser\(u\)\{ return !!u && u\.registered && isPermanentRole\(u\.role\) && u\.active!==false; \}/.test(uaHtml));
+ok('karyawan tetap aktif tak bisa dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?return !isProtectedUser\(u\)/.test(uaHtml));
+ok('gembok hanya utk yang terlindungi', /isProtectedUser\(u\)&&!same\(u\.name,state\.currentUser\)/.test(uaHtml));
 ok('diri sendiri & Dev tak bisa dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?same\(u\.name,state\.currentUser\) \|\| baseName\(u\.name\)==='dev'\) return false/.test(uaHtml));
 ok('karyawan tetap diberi ikon gembok', /lock_outline/.test(uaHtml));
-ok('gembok menjelaskan pakai Nonaktif', /Karyawan tetap tidak bisa dihapus[\s\S]{0,200}?Nonaktif/.test(uaHtml));
+ok('gembok menjelaskan cara membukanya', /Karyawan tetap yang masih aktif tidak bisa dihapus[\s\S]{0,250}?Nonaktifkan dulu/.test(uaHtml));
 ok('removeUser dijaga canDeleteUser', /function removeUser\(i\)[\s\S]{0,300}?!canDeleteUser\(u\)\)\{/.test(uaHtml));
 ok('konfirmasi menyebut pencabutan dari PIC', /function removeUser\(i\)[\s\S]{0,600}?dropdown PIC & Support/.test(uaHtml));
 ok('tabel memakai userAdminRows, bukan state.users', /const people=userAdminRows\(\)/.test(uaHtml));
@@ -677,7 +688,9 @@ ok('tak ada lagi handler yang indeks ke state.users', !/const u=\(state\.users\|
 // Aksi yang mustahil untuk baris belum terdaftar harus dijaga, bukan cuma disembunyikan.
 ok('nonaktifkan dijaga utk yg belum terdaftar', /function toggleUserActive\(i\)[\s\S]{0,200}?!u\.registered\) return/.test(uaHtml));
 // Yang belum berperan JUSTRU boleh dihapus — itulah cara membersihkan sisa nama di dropdown.
-ok('yang belum berperan boleh dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?u\.registered && isPermanentRole/.test(uaHtml));
+ok('yang belum berperan boleh dihapus', /function isProtectedUser\(u\)\{ return !!u && u\.registered &&/.test(uaHtml));
+// Akun duplikat: nonaktifkan dulu, tombol hapus lalu muncul.
+ok('nonaktif melepas kuncian', /isPermanentRole\(u\.role\) && u\.active!==false/.test(uaHtml));
 ok('memilih opsi kosong bukan perintah simpan', /function changeUserRole\(i,role\)[\s\S]{0,300}?if\(!role\)\{ renderUserAdmin\(\); return; \}/.test(uaHtml));
 ok('keterangan panel menyebut semua nama dikenal', /semua nama yang dikenal sistem/.test(uaHtml));
 
