@@ -55,7 +55,7 @@ Ganti sesuka Anda lewat **Pengaturan → Kelola User** (mode Dev), atau langsung
 | Nama | Peran | Hak |
 |---|---|---|
 | Manager | Manager | Lihat semua task • set Done • setup kolaborasi • task lintas divisi |
-| Leader Konten, Leader Sistem | Leader | Lihat semua task • set Done • setup kolaborasi. Di **Komunikasi** hanya melihat percakapan miliknya |
+| Leader Konten, Leader Sistem | Leader | **Hanya task miliknya (PIC/Support)**, tapi wewenangnya penuh: boleh set Done task siapa pun & menyusun Task Kolaborasi |
 | Staff Materi, Staff Soal, Staff QC, Staff Input, Staff Data, Staff Liveclass | Staff | Task miliknya **+ semua task magang** • boleh mem-Done-kan task magang • task sendiri maksimal "Review PM" |
 | Magang Konten, Magang Data | Magang | **Hanya task sesama magang** • tidak melihat kerjaan karyawan • maksimal "Review PM" |
 | Lintas Divisi | Lihat Saja | Baca terbatas: task lintas divisi saja |

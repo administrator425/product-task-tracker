@@ -10,6 +10,36 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.56.0 — Leader melihat task miliknya saja (wewenangnya tetap penuh)
+Sebelumnya Leader ikut melihat **semua task tim** seperti Manager di Dashboard, Kanban,
+List, Timeline, dan Calendar — v1.54.0 baru mempersempitnya di tab Komunikasi saja.
+
+- **`canSeeAllTasks()` kini hanya Manager & Dev.** Leader turun ke cakupan personal:
+  hanya task yang ia **PIC atau Support**-nya, sama seperti Staff.
+- **Wewenang Leader TIDAK berubah** — masih boleh **menutup (Done) task siapa pun** dan
+  **menyusun Task Kolaborasi**, termasuk mencentang prosesnya sendiri. Yang berubah hanya
+  jangkauan lihat, bukan haknya.
+- **`commScopedTasks()` dihapus.** Setelah Leader dipersempit, aturan Komunikasi jadi sama
+  persis dengan view lain — mempertahankan dua fungsi berbeda hanya mengundang keduanya
+  berbeda diam-diam. Komunikasi & badge notifikasi kembali memakai `scopedTasks()`.
+- Legenda peran di panel Kelola User diperbarui: Leader kini tertulis *"Task miliknya saja •
+  boleh set Done task siapa pun • boleh menyusun Task Kolaborasi"*.
+
+### Pengujian
+- `test/gas.test.js` → **279 assertion**; bagian 16c ditulis ulang: memastikan
+  `canSeeAllTasks` hanya Manager, tak ada lagi cakupan Komunikasi terpisah, **dan** dua
+  assertion penjaga bahwa wewenang Done & kolaborasi Leader tetap ada.
+- Diverifikasi di **kedua konfigurasi**:
+  - *Vercel/env var* — Dhea 8 task, Alya 9 (persis PIC/Support-nya), Nynda 30; lencana
+    Leader; opsi "Done" tetap ada di dropdown & tombol Done Kanban aktif; Dhea berhasil
+    membuat, mencentang, dan menghapus Task Kolaborasi.
+  - *sheet USERS* — Dhea 3, Alya 6, Manager/Dev 24, Staff 9 (miliknya + task magang),
+    Magang 6; Done & kolaborasi Leader tetap jalan.
+  - Per-tampilan konsisten: Dashboard, Kanban, List, dan Komunikasi menunjukkan angka
+    yang sama untuk tiap peran. Nol error konsol.
+
+---
+
 ## 1.55.0 — Kelola user & peran kini ada juga di versi Vercel
 Sebelumnya sheet `USERS` + peran (Manager/Leader/Staff/Magang) hanya ada di paket Apps Script,
 jadi panel **Kelola User** tak pernah muncul di app Vercel yang dipakai tim sehari-hari.

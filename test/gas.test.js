@@ -581,12 +581,17 @@ ok('legenda Manager tak lagi menyebut kelola user', /'Manager':'[^']*kelola drop
 console.log('\n=== 16c. Komunikasi: cakupan Leader & notifikasi terbaca ===');
 const commHtml = call('doGet', {})._html;
 // Chat = kotak masuk pribadi. Leader TIDAK ikut melihat semua percakapan.
-ok('ada cakupan khusus Komunikasi', /function commScopedTasks\(\)/.test(commHtml));
-ok('Leader dipersempit ke PIC/Support', /function commScopedTasks\(\)[\s\S]{0,600}?isLeader\(state\.currentUser\)\) return state\.tasks\.filter\(t=>ownsTask\(t,state\.currentUser\)\)/.test(commHtml));
-ok('Manager tetap bisa memantau semua', /function commScopedTasks\(\)[\s\S]{0,400}?isManager\(state\.currentUser\)\)\{[\s\S]{0,200}?return \[\.\.\.state\.tasks\]/.test(commHtml));
-ok('daftar Komunikasi memakai commScopedTasks', /const arr=commScopedTasks\(\)/.test(commHtml));
-ok('badge unread dihitung dari commScopedTasks', /function totalUnreadTasks\(\)[\s\S]{0,300}?commScopedTasks\(\)/.test(commHtml));
-ok('badge TIDAK lagi memakai scopedTasks', !/function totalUnreadTasks\(\)[\s\S]{0,300}?new Set\(scopedTasks\(\)/.test(commHtml));
+// Hanya Manager/Dev yang melihat semua task. Leader punya WEWENANG penuh (Done, kolaborasi)
+// tapi daftar task-nya sebatas yang ia PIC/Support-nya — sama seperti Staff.
+ok('canSeeAllTasks hanya Manager', /function canSeeAllTasks\(user\)\{ return isManager\(user\); \}/.test(commHtml));
+ok('Leader TIDAK lagi ikut lihat-semua', !/canSeeAllTasks\(user\)\{ return isManager\(user\) \|\| isLeader\(user\)/.test(commHtml));
+ok('scopedTasks memakai canSeeAllTasks', /function scopedTasks\(\)[\s\S]{0,400}?canSeeAllTasks\(state\.currentUser\)/.test(commHtml));
+ok('daftar Komunikasi memakai cakupan yang sama', /const arr=scopedTasks\(\)/.test(commHtml));
+ok('badge unread dihitung dari scopedTasks', /function totalUnreadTasks\(\)[\s\S]{0,300}?new Set\(scopedTasks\(\)/.test(commHtml));
+ok('tak ada lagi cakupan Komunikasi terpisah', !/function commScopedTasks\(\)/.test(commHtml));
+// Wewenang Leader HARUS tetap.
+ok('Leader tetap boleh set Done', /function canSetDoneFor\(task\)\{[\s\S]{0,400}?isLeader\(me\)\) return true/.test(commHtml));
+ok('Leader tetap boleh menyusun Task Kolaborasi', /function canManageCollab\(\)\{[\s\S]{0,300}?isLeader\(state\.currentUser\)\) return true/.test(commHtml));
 // Lonceng: dibuka = terbaca, badge habis.
 ok('buka lonceng menandai terbaca', /toggleNotifMenu[\s\S]{0,400}?markNotifsReadSilently\(\)/.test(commHtml));
 ok('ada penanda-terbaca tanpa render ulang', /function markNotifsReadSilently\(\)/.test(commHtml));

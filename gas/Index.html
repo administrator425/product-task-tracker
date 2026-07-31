@@ -772,7 +772,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.55.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.56.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -993,8 +993,10 @@ function isLeader(user){
 // Peran ini hanya ada bila sheet USERS dipakai (bukan mode env var lama).
 function isStaff(user){ return usersConfigured() && hasRole(user,'staff'); }
 function isMagang(user){ return usersConfigured() && hasRole(user,'magang'); }
-// Boleh melihat SEMUA task tim (bukan cuma miliknya sendiri).
-function canSeeAllTasks(user){ return isManager(user) || isLeader(user); }
+// Boleh melihat SEMUA task tim (bukan cuma miliknya sendiri) — hanya Manager & Dev.
+// Leader SENGAJA tidak termasuk: wewenangnya tetap penuh (boleh set Done, boleh menyusun
+// Task Kolaborasi), tapi daftar task yang ia lihat sebatas yang ia PIC/Support-nya.
+function canSeeAllTasks(user){ return isManager(user); }
 // Boleh menambah/mengubah user & peran.
 // Kelola user & peran: HANYA mode Dev. Manager pun tidak bisa — supaya penambahan
 // anggota baru (mis. anak magang) dan pemberian hak lewat satu pintu saja.
@@ -1014,7 +1016,7 @@ function roleBadgeClass(role){
 const ROLE_POWERS={
   'Dev':'Semua hak • SATU-SATUNYA yang bisa menambah user & mengatur peran.',
   'Manager':'Lihat semua task • set Done • setup kolaborasi • task lintas divisi • kelola dropdown.',
-  'Leader':'Lihat semua task • set Done • setup kolaborasi.',
+  'Leader':'Task miliknya saja • boleh set Done task siapa pun • boleh menyusun Task Kolaborasi.',
   'Staff':'Task miliknya + semua task anak magang • boleh mem-Done-kan task magang • task sendiri maksimal "Review PM".',
   'Magang':'HANYA task sesama magang • tidak melihat kerjaan karyawan • maksimal "Review PM".',
   'Lihat Saja':'Baca terbatas: task lintas divisi saja.'
@@ -2156,23 +2158,13 @@ function unreadCountForTask(id, byTask, readMap){
   // tak pernah ikut terhitung sebagai "belum dibaca".
   return list.filter(c=>c.ts>last && !same(c.user, state.currentUser)).length;
 }
-// Cakupan tab Komunikasi — sengaja LEBIH SEMPIT dari view lain.
-// Chat itu kotak masuk pribadi: Leader tidak ikut melihat semua percakapan tim,
-// cukup task yang ia PIC/Support-nya. Manager/Dev tetap bisa memantau semuanya.
-// Ini juga membuat badge notifikasi hanya menghitung percakapan yang memang miliknya,
-// sehingga begitu dibaca badge-nya benar-benar habis.
-function commScopedTasks(){
-  if(isViewOnly()) return state.tasks.filter(inLintasView);
-  if(isManager(state.currentUser)){
-    if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
-    return [...state.tasks];
-  }
-  if(isLeader(state.currentUser)) return state.tasks.filter(t=>ownsTask(t,state.currentUser));
-  return scopedTasks();   // Staff/Magang: cakupan normalnya sudah personal
-}
+// Komunikasi memakai cakupan yang SAMA dengan view task lain (scopedTasks):
+// hanya Manager/Dev yang melihat semua; Leader, Staff, dan Magang sebatas miliknya.
+// Karena badge notifikasi ikut dihitung dari cakupan ini, angkanya benar-benar habis
+// begitu percakapan miliknya dibaca — bukan ikut menghitung obrolan orang lain.
 function totalUnreadTasks(){
   const byTask=commentEntriesByTask(), readMap=getCommReadMap();
-  const scopedIds=new Set(commScopedTasks().map(t=>String(t.id)));   // hanya hitung percakapan milik user
+  const scopedIds=new Set(scopedTasks().map(t=>String(t.id)));   // hanya hitung percakapan milik user
   return Object.keys(byTask).reduce((n,id)=>n+((scopedIds.has(id) && unreadCountForTask(id,byTask,readMap)>0)?1:0),0);
 }
 function notifyUnreadOnLoad(){ const n=totalUnreadTasks(); if(n>0) showToast('Ada '+n+' task dengan komentar baru untuk Anda. Cek menu Komunikasi.', true); }
@@ -2213,7 +2205,7 @@ function renderCommunicationTasks(){
   const q=(document.getElementById('commSearch')?.value||'').toLowerCase();
   const f=state.commFilters||{unreadOnly:false,pic:'',status:''};
   const byTask=commentEntriesByTask(), readMap=getCommReadMap();
-  const arr=commScopedTasks()
+  const arr=scopedTasks()
     .filter(t=>!q || Object.values(t).join(' ').toLowerCase().includes(q))
     .filter(t=>!f.pic || String(t.pic||'')===f.pic)
     .filter(t=>!f.status || String(t.status||'')===f.status)

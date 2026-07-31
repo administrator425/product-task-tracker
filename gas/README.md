@@ -85,23 +85,22 @@ Peran disimpan di sheet **USERS** dan diatur dari aplikasi:
 |---|---|---|:--:|:--:|:--:|
 | **Dev** | semua | task siapa pun | ✅ | ✅ | ✅ **(hanya Dev)** |
 | **Manager** | semua | task siapa pun | ✅ | ✅ | — |
-| **Leader** | semua | task siapa pun | ✅ | — | — |
+| **Leader** | **hanya miliknya** (PIC/Support) | task siapa pun | ✅ | — | — |
 | **Staff** | miliknya **+ semua task magang** | **hanya task magang** | — | — | — |
 | **Magang** | **hanya task sesama magang** | — | — | — | — |
 | **Lihat Saja** | task lintas divisi saja | — | — | — | — |
 
-### Tab Komunikasi punya cakupan sendiri
+### Wewenang ≠ jangkauan lihat
 
-Chat diperlakukan sebagai **kotak masuk pribadi**, jadi lebih sempit dari view lain:
+Ini yang sering disalahpahami: **Leader punya wewenang setingkat Manager, tapi jangkauan
+lihatnya setingkat Staff.**
 
-| Peran | Percakapan yang terlihat di Komunikasi |
-|---|---|
-| Dev / Manager | semua (untuk memantau) |
-| **Leader** | **hanya yang ia PIC/Support-nya** — meski di view lain ia melihat semua task |
-| Staff | miliknya + task magang |
-| Magang | task sesama magang |
+- Leader **boleh menutup (Done) task siapa pun** dan **boleh menyusun Task Kolaborasi** —
+  wewenangnya penuh.
+- Tapi daftar task yang ia lihat (Dashboard, Kanban, List, Timeline, Calendar, Komunikasi)
+  **hanya yang ia PIC atau Support-nya**. Hanya Manager & Dev yang melihat semua task.
 
-Badge notifikasi juga dihitung dari cakupan ini, sehingga angkanya benar-benar habis
+Cakupan yang sama dipakai untuk **badge notifikasi**, sehingga angkanya benar-benar habis
 begitu percakapan miliknya dibaca — bukan ikut menghitung obrolan orang lain.
 
 ### Cara kerja peran Magang
