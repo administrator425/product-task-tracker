@@ -578,6 +578,22 @@ ok('panel diberi label MODE DEV', /MODE DEV<\/span>/.test(uiHtml));
 ok('peran "Dev" tak bisa dipilih untuk baris user', /assignableRoles\(\)\{[\s\S]{0,200}!=='dev'/.test(uiHtml));
 ok('legenda Manager tak lagi menyebut kelola user', /'Manager':'[^']*kelola dropdown/.test(uiHtml));
 
+console.log('\n=== 16c. Komunikasi: cakupan Leader & notifikasi terbaca ===');
+const commHtml = call('doGet', {})._html;
+// Chat = kotak masuk pribadi. Leader TIDAK ikut melihat semua percakapan.
+ok('ada cakupan khusus Komunikasi', /function commScopedTasks\(\)/.test(commHtml));
+ok('Leader dipersempit ke PIC/Support', /function commScopedTasks\(\)[\s\S]{0,600}?isLeader\(state\.currentUser\)\) return state\.tasks\.filter\(t=>ownsTask\(t,state\.currentUser\)\)/.test(commHtml));
+ok('Manager tetap bisa memantau semua', /function commScopedTasks\(\)[\s\S]{0,400}?isManager\(state\.currentUser\)\)\{[\s\S]{0,200}?return \[\.\.\.state\.tasks\]/.test(commHtml));
+ok('daftar Komunikasi memakai commScopedTasks', /const arr=commScopedTasks\(\)/.test(commHtml));
+ok('badge unread dihitung dari commScopedTasks', /function totalUnreadTasks\(\)[\s\S]{0,300}?commScopedTasks\(\)/.test(commHtml));
+ok('badge TIDAK lagi memakai scopedTasks', !/function totalUnreadTasks\(\)[\s\S]{0,300}?new Set\(scopedTasks\(\)/.test(commHtml));
+// Lonceng: dibuka = terbaca, badge habis.
+ok('buka lonceng menandai terbaca', /toggleNotifMenu[\s\S]{0,400}?markNotifsReadSilently\(\)/.test(commHtml));
+ok('ada penanda-terbaca tanpa render ulang', /function markNotifsReadSilently\(\)/.test(commHtml));
+ok('penanda-terbaca memanggil markNotificationsRead', /markNotifsReadSilently\(\)\{[\s\S]{0,400}?markNotificationsRead\(state\.currentUser, ''\)/.test(commHtml));
+ok('notifikasi komentar task membuka chat-nya', /function openNotif\(refId\)[\s\S]{0,1500}?selectCommunicationTask\(t\.id\)/.test(commHtml));
+ok('komentar sendiri tak dihitung belum-dibaca (toleran)', /!same\(c\.user, state\.currentUser\)/.test(commHtml));
+
 console.log('\n=== 17. Mode Dev TIDAK aktif sebelum DEV_PIN diisi ===');
 eq('PIN kosong ditolak saat DEV_PIN belum diset', call('verifyPin', '__dev__', '').ok, false);
 eq('PIN apa pun ditolak', call('verifyPin', '__dev__', '3108').ok, false);

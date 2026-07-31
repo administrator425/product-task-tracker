@@ -90,6 +90,20 @@ Peran disimpan di sheet **USERS** dan diatur dari aplikasi:
 | **Magang** | **hanya task sesama magang** | — | — | — | — |
 | **Lihat Saja** | task lintas divisi saja | — | — | — | — |
 
+### Tab Komunikasi punya cakupan sendiri
+
+Chat diperlakukan sebagai **kotak masuk pribadi**, jadi lebih sempit dari view lain:
+
+| Peran | Percakapan yang terlihat di Komunikasi |
+|---|---|
+| Dev / Manager | semua (untuk memantau) |
+| **Leader** | **hanya yang ia PIC/Support-nya** — meski di view lain ia melihat semua task |
+| Staff | miliknya + task magang |
+| Magang | task sesama magang |
+
+Badge notifikasi juga dihitung dari cakupan ini, sehingga angkanya benar-benar habis
+begitu percakapan miliknya dibaca — bukan ikut menghitung obrolan orang lain.
+
 ### Cara kerja peran Magang
 
 Dibuat untuk anak magang yang ikut memakai tracker tapi tidak perlu melihat pekerjaan tim inti:

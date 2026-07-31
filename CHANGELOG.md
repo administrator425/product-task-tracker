@@ -10,6 +10,45 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.54.0 — Komunikasi jadi kotak masuk pribadi + notifikasi hilang saat dibaca
+
+### Cakupan tab Komunikasi
+- **Leader tidak lagi melihat semua percakapan** seperti Manager. Di tab Komunikasi,
+  Leader hanya melihat task yang ia **PIC atau Support**-nya. Di view lain (Dashboard,
+  Kanban, List, Timeline, Calendar) Leader tetap melihat semua task seperti sebelumnya —
+  yang berubah hanya inbox chat-nya.
+- **Manager/Dev tetap bisa memantau semua** percakapan.
+- Ditambahkan `commScopedTasks()` yang dipakai daftar Komunikasi **dan** perhitungan badge.
+
+### Notifikasi benar-benar hilang setelah dibaca
+- **Akar masalahnya sama**: badge komentar dihitung dari `scopedTasks()`, sehingga bagi
+  Manager/Leader ia menghitung percakapan di task siapa pun — termasuk yang tak pernah
+  mereka buka. Angkanya jadi seolah tak pernah habis. Sekarang dihitung dari
+  `commScopedTasks()`, jadi hanya percakapan miliknya sendiri.
+- **Lonceng notifikasi: membuka menunya = menandai terbaca.** Sebelumnya notifikasi hanya
+  hilang bila diklik satu per satu atau lewat "Tandai semua dibaca", sehingga badge sering
+  menetap. Penanda dikirim ke server tanpa merender ulang daftarnya, supaya penanda "baru"
+  tetap terlihat selama menu masih terbuka.
+- **Notifikasi mention pada task biasa kini bisa diklik** — langsung membuka percakapan
+  task itu di tab Komunikasi (sebelumnya hanya notifikasi kolaborasi yang bisa dibuka).
+- Perbandingan penulis komentar dibuat toleran (`same()`), supaya komentar sendiri tak
+  pernah terhitung "belum dibaca" karena beda kapital/spasi.
+
+### Pengujian
+- `test/gas.test.js` → **277 assertion** (+11 untuk perubahan ini).
+- Diverifikasi lewat simulator `google.script.run`: Leader Konten melihat 54 task di view
+  lain tapi hanya **9** di Komunikasi (persis yang ia PIC/Support-nya), Leader Sistem 8,
+  Manager tetap 54, Staff 12, Magang 4. Badge komentar 1 → **0** begitu chat dibuka;
+  badge lonceng 2 → **0** begitu menu dibuka, dan **tetap 0 setelah dimuat ulang dari
+  server** (jadi benar-benar tersimpan, bukan sekadar hilang di layar). Klik notifikasi
+  mention membuka chat task yang tepat. Nol error konsol.
+
+### Data dummy
+- `data-dummy/*.xlsx` dan `csv/` diregenerasi mengikuti v1.53.0 — kini **12 user / 54 task**
+  termasuk 2 Magang dan 4 task milik magang.
+
+---
+
 ## 1.53.0 — Peran "Magang" + izin Done berbasis PIC + perbaikan PIN Dev
 Menyiapkan anak magang ikut memakai tracker tanpa melihat pekerjaan tim inti.
 

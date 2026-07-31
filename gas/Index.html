@@ -772,7 +772,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.53.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.54.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -2149,11 +2149,27 @@ function latestCommentTs(list){ return (list||[]).reduce((m,c)=>c.ts>m?c.ts:m,''
 function unreadCountForTask(id, byTask, readMap){
   const list=byTask[id]; if(!list||!list.length) return 0;
   const last=readMap[id]||'';
-  return list.filter(c=>c.ts>last && c.user!==state.currentUser).length;
+  // Bandingkan penulis dengan toleran (beda kapital/spasi) supaya komentar sendiri
+  // tak pernah ikut terhitung sebagai "belum dibaca".
+  return list.filter(c=>c.ts>last && !same(c.user, state.currentUser)).length;
+}
+// Cakupan tab Komunikasi — sengaja LEBIH SEMPIT dari view lain.
+// Chat itu kotak masuk pribadi: Leader tidak ikut melihat semua percakapan tim,
+// cukup task yang ia PIC/Support-nya. Manager/Dev tetap bisa memantau semuanya.
+// Ini juga membuat badge notifikasi hanya menghitung percakapan yang memang miliknya,
+// sehingga begitu dibaca badge-nya benar-benar habis.
+function commScopedTasks(){
+  if(isViewOnly()) return state.tasks.filter(inLintasView);
+  if(isManager(state.currentUser)){
+    if(state.managerFocus) return state.tasks.filter(t=>ownsTask(t,state.managerFocus));
+    return [...state.tasks];
+  }
+  if(isLeader(state.currentUser)) return state.tasks.filter(t=>ownsTask(t,state.currentUser));
+  return scopedTasks();   // Staff/Magang: cakupan normalnya sudah personal
 }
 function totalUnreadTasks(){
   const byTask=commentEntriesByTask(), readMap=getCommReadMap();
-  const scopedIds=new Set(scopedTasks().map(t=>String(t.id)));   // hanya hitung komentar di task milik user
+  const scopedIds=new Set(commScopedTasks().map(t=>String(t.id)));   // hanya hitung percakapan milik user
   return Object.keys(byTask).reduce((n,id)=>n+((scopedIds.has(id) && unreadCountForTask(id,byTask,readMap)>0)?1:0),0);
 }
 function notifyUnreadOnLoad(){ const n=totalUnreadTasks(); if(n>0) showToast('Ada '+n+' task dengan komentar baru untuk Anda. Cek menu Komunikasi.', true); }
@@ -2194,7 +2210,7 @@ function renderCommunicationTasks(){
   const q=(document.getElementById('commSearch')?.value||'').toLowerCase();
   const f=state.commFilters||{unreadOnly:false,pic:'',status:''};
   const byTask=commentEntriesByTask(), readMap=getCommReadMap();
-  const arr=scopedTasks()
+  const arr=commScopedTasks()
     .filter(t=>!q || Object.values(t).join(' ').toLowerCase().includes(q))
     .filter(t=>!f.pic || String(t.pic||'')===f.pic)
     .filter(t=>!f.status || String(t.status||'')===f.status)
@@ -2942,7 +2958,21 @@ function loadNotifications(cb){
   GAS.withSuccessHandler(n=>{ state.notifications=Array.isArray(n)?n:[]; updateNotifBadge(); if(cb)cb(); })
      .withFailureHandler(()=>{ if(cb)cb(); }).getNotifications(state.currentUser);
 }
-function toggleNotifMenu(e){ if(e&&e.stopPropagation)e.stopPropagation(); const m=document.getElementById('notifMenu'); if(!m) return; if(m.classList.contains('hide')){ renderNotifMenu(); m.classList.remove('hide'); } else m.classList.add('hide'); }
+function toggleNotifMenu(e){
+  if(e&&e.stopPropagation)e.stopPropagation();
+  const m=document.getElementById('notifMenu'); if(!m) return;
+  if(m.classList.contains('hide')){
+    renderNotifMenu(); m.classList.remove('hide');
+    markNotifsReadSilently();   // dibuka = sudah dibaca -> badge langsung habis
+  } else m.classList.add('hide');
+}
+// Tandai terbaca di server & kosongkan badge, TAPI jangan render ulang daftarnya —
+// supaya penanda "baru" tetap terlihat selama menu masih terbuka.
+function markNotifsReadSilently(){
+  if(!IS_GAS || isViewOnly() || !unreadNotifs().length) return;
+  GAS.withSuccessHandler(res=>{ if(res&&res.notifications) state.notifications=res.notifications; updateNotifBadge(); })
+     .withFailureHandler(()=>{}).markNotificationsRead(state.currentUser, '');
+}
 function renderNotifMenu(){
   const m=document.getElementById('notifMenu'); if(!m) return;
   const list=(state.notifications||[]).slice(0,20);
@@ -2953,7 +2983,11 @@ function openNotif(refId){
   const m=document.getElementById('notifMenu'); if(m) m.classList.add('hide');
   GAS.withSuccessHandler(res=>{ if(res&&res.notifications) state.notifications=res.notifications; updateNotifBadge(); }).withFailureHandler(()=>{}).markNotificationsRead(state.currentUser, refId);
   const c=(state.collabs||[]).find(x=>x.id===refId);
-  if(c){ if(state.activeView!=='collab') switchView('collab'); openCollabModal(refId); }
+  if(c){ if(state.activeView!=='collab') switchView('collab'); openCollabModal(refId); return; }
+  // Notifikasi dari komentar task biasa: buka langsung percakapannya di Komunikasi,
+  // sekalian menandai komentarnya terbaca.
+  const t=(state.tasks||[]).find(x=>String(x.id)===String(refId));
+  if(t){ if(state.activeView!=='communication') switchView('communication'); selectCommunicationTask(t.id); }
 }
 function markAllNotifsRead(){
   GAS.withSuccessHandler(res=>{ if(res&&res.notifications) state.notifications=res.notifications; updateNotifBadge(); renderNotifMenu(); }).withFailureHandler(()=>{}).markNotificationsRead(state.currentUser, '');
