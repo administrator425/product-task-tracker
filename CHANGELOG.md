@@ -47,6 +47,14 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 - `data-dummy/*.xlsx` dan `csv/` diregenerasi mengikuti v1.53.0 — kini **12 user / 54 task**
   termasuk 2 Magang dan 4 task milik magang.
 
+### Perbaikan lencana peran
+- Di deployment **Vercel** (tanpa sheet `USERS`, peran dari env var), lencana "MODE USER"
+  salah menulis **Staff** untuk Leader — padahal haknya Leader. Sekarang label diturunkan
+  dari hak yang benar-benar berlaku, jadi tertulis **Leader**.
+- Diverifikasi pada konfigurasi Vercel (bootstrap tanpa `meta.users`): Nynda → Manager /
+  30 percakapan, Dhea → Leader / **8**, Alya → Leader / **9** (persis task yang ia
+  PIC/Support-nya), Ali → Staff / 4. Di view lain Dhea & Alya tetap melihat 30 task.
+
 ---
 
 ## 1.53.0 — Peran "Magang" + izin Done berbasis PIC + perbaikan PIN Dev

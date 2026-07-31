@@ -1107,7 +1107,10 @@ function applyRoleUI(){
   const vo=isViewOnly();
   const mgr=isManager(state.currentUser);
   const badge=document.getElementById('roleBadge');
-  const roleLbl=vo?'Lihat Saja':(String(state.currentUser||'').toLowerCase()==='dev'?'Dev':(roleOf(state.currentUser)||(mgr?'Manager':'Staff')));
+  // Tanpa sheet USERS (mode env var), roleOf() kosong — turunkan label dari hak yang berlaku
+  // supaya Leader tidak salah tertulis "Staff".
+  const roleFallback = mgr ? 'Manager' : (isLeader(state.currentUser) ? 'Leader' : 'Staff');
+  const roleLbl=vo?'Lihat Saja':(String(state.currentUser||'').toLowerCase()==='dev'?'Dev':(roleOf(state.currentUser)||roleFallback));
   if(badge){badge.textContent=roleLbl; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+roleBadgeClass(vo?'Lihat Saja':roleLbl);}
   const av=document.getElementById('userAvatar'); if(av){av.textContent=initials(state.currentUser); av.style.background=avatarBg(state.currentUser); av.style.color=avatarFg(state.currentUser);}
   document.getElementById('managerFocusBox').classList.toggle('hide',!mgr || vo);
