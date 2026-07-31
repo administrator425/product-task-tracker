@@ -780,7 +780,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.58.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.59.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -3524,31 +3524,46 @@ function assignableRoles(){
   return (state.roles||[]).filter(r=>String(r).toLowerCase()!=='dev');
 }
 /* Semua nama yang DIKENAL sistem, bukan cuma yang sudah tercatat di sheet USERS:
-   dropdown PIC + PIC/Support yang benar-benar dipakai di task. Tanpa ini, orang yang
-   belum terdaftar tidak muncul di mana pun padahal roleOf() sudah menganggapnya
-   tak berperan — hak mereka hilang diam-diam dan Dev tak punya cara memperbaikinya. */
+   baris USERS + dropdown PIC & Support. Tanpa ini, orang yang belum terdaftar tidak
+   muncul di mana pun padahal roleOf() sudah menganggapnya tak berperan — hak mereka
+   hilang diam-diam dan Dev tak punya cara memperbaikinya.
+   SENGAJA tidak memungut nama dari PIC/Support di task lama: menghapus user mencabutnya
+   dari dropdown, dan kalau task lama ikut dibaca, orang yang baru dihapus akan muncul
+   lagi sebagai "Belum diatur" — penghapusannya jadi terasa gagal. */
 function knownPeople(){
   const seen=new Map();               // nama ternormalisasi -> ejaan yang ditampilkan
   const add=n=>{ const k=baseName(n); if(!k||k==='dev') return; if(!seen.has(k)) seen.set(k,String(n).trim()); };
   (state.users||[]).forEach(u=>add(u.name));
   (state.options&&state.options.pic||[]).forEach(add);
-  (state.tasks||[]).forEach(t=>{
-    add(t.pic);
-    const sup=Array.isArray(t.support)?t.support:String(t.support||'').split(',');
-    sup.forEach(add);
-  });
+  (state.options&&state.options.support||[]).forEach(add);
   return Array.from(seen.values());
 }
-/* Baris tabel Kelola User: gabungan terdaftar + belum terdaftar. Yang belum diatur
-   ditaruh di atas karena merekalah yang butuh tindakan. */
+/* Urutan tabel = hierarki peran (Manager teratas → Magang → Lihat Saja paling bawah),
+   memakai daftar ROLES aplikasi supaya legenda dan tabel selalu sejalan.
+   Yang belum diatur ditaruh paling atas karena merekalah yang butuh tindakan. */
+function roleRank(u){
+  if(!u.registered) return -1;
+  const order=(state.roles||[]).filter(r=>!same(r,'Dev'));
+  const i=order.findIndex(r=>same(r,u.role));
+  return i<0 ? order.length : i;      // peran asing ditaruh paling bawah
+}
 function userAdminRows(){
   const reg=new Map((state.users||[]).map(u=>[baseName(u.name),u]));
   return knownPeople().map(name=>{
     const u=reg.get(baseName(name));
     return u ? { name:u.name, role:String(u.role||'Staff'), active:u.active!==false, registered:true }
              : { name, role:'', active:true, registered:false };
-  }).sort((a,b)=> a.registered!==b.registered ? (a.registered?1:-1)
-                                              : a.name.localeCompare(b.name,'id'));
+  }).sort((a,b)=> (roleRank(a)-roleRank(b)) || a.name.localeCompare(b.name,'id'));
+}
+/* Karyawan tetap sengaja TIDAK bisa dihapus: namanya melekat di task lama, jadi
+   mencabutnya dari dropdown PIC meninggalkan task yatim yang PIC-nya tak bisa dipilih
+   lagi. Untuk yang keluar, pakai Nonaktif — haknya dicabut tapi riwayatnya utuh.
+   Yang boleh dihapus: Magang, Lihat Saja, dan nama yang belum berperan. */
+const PERMANENT_ROLES=['Manager','Leader','Staff'];
+function isPermanentRole(role){ return PERMANENT_ROLES.some(r=>same(r,role)); }
+function canDeleteUser(u){
+  if(!u || same(u.name,state.currentUser) || baseName(u.name)==='dev') return false;
+  return !(u.registered && isPermanentRole(u.role));
 }
 function renderUserAdmin(){
   const card=document.getElementById('userAdminCard'); if(!card) return;
@@ -3601,7 +3616,11 @@ function renderUserAdmin(){
       <td class="px-3 py-2">${roleCell}</td>
       <td class="px-3 py-2">${statusCell}</td>
       <td class="px-3 py-2 text-right">
-        ${(u.registered&&!same(u.name,state.currentUser))?`<button onclick="removeUser(${i})" title="Hapus user" class="text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[18px]">delete_outline</span></button>`:''}
+        ${canDeleteUser(u)
+          ? `<button onclick="removeUser(${i})" title="Hapus — namanya juga dicabut dari dropdown PIC &amp; Support" class="text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[18px]">delete_outline</span></button>`
+          : (u.registered&&isPermanentRole(u.role)&&!same(u.name,state.currentUser)
+              ? `<span title="Karyawan tetap tidak bisa dihapus — namanya melekat di task lama. Pakai tombol Aktif/Nonaktif untuk mencabut haknya." class="text-gray-200 dark:text-slate-700"><span class="material-icons-round text-[18px]">lock_outline</span></span>`
+              : '')}
       </td></tr>`;
   }).join('');
   const banner=belum?`<div class="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-200">
@@ -3642,8 +3661,9 @@ function toggleUserActive(i){
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).saveUser(u.name, u.role, u.active===false, state.currentUser);
 }
 function removeUser(i){
-  const u=userAdminRows()[i]; if(!u || !u.registered) return;
-  if(!confirm('Hapus "'+u.name+'" dari daftar user?\n\nTask lamanya tidak ikut terhapus.')) return;
+  const u=userAdminRows()[i]; if(!u) return;
+  if(!canDeleteUser(u)){ showToast('"'+u.name+'" berperan '+u.role+' (karyawan tetap) dan tidak bisa dihapus. Pakai tombol Nonaktif.', false); return; }
+  if(!confirm('Hapus "'+u.name+'"?\n\nNamanya dicabut dari daftar user DAN dari dropdown PIC & Support, jadi tidak bisa dipilih lagi untuk task baru.\n\nTask lamanya tidak ikut terhapus.')) return;
   GAS.withSuccessHandler(res=>pushUserResult(res,'Gagal menghapus user.'))
      .withFailureHandler(err=>showToast('Gagal: '+(err.message||err), false)).deleteUser(u.name, state.currentUser);
 }

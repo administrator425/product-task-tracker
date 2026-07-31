@@ -564,9 +564,33 @@ eq('tidak bisa menghapus diri sendiri', call('deleteUser', 'Dev', 'Dev').success
 // Hapus: hanya Dev.
 eq('Staff tidak boleh menghapus user', call('deleteUser', 'Anak Magang', 'Staff Soal').success, false);
 eq('Manager tidak boleh menghapus user', call('deleteUser', 'Anak Magang', 'Manager').success, false);
+
+// Karyawan tetap dilindungi: namanya melekat di task lama, jadi mencabutnya dari
+// dropdown PIC akan meninggalkan task yang PIC-nya tak bisa dipilih lagi.
+const delTetap = call('deleteUser', 'Anak Magang', 'Dev');   // saat ini masih Leader
+eq('Leader (karyawan tetap) TIDAK bisa dihapus', delTetap.success, false);
+ok('pesannya mengarahkan ke Nonaktif', /Nonaktif/.test(delTetap.message || ''));
+eq('Staff pun tak bisa dihapus', call('deleteUser', 'Staff Soal', 'Dev').success, false);
+eq('Manager pun tak bisa dihapus', call('deleteUser', 'Manager', 'Dev').success, false);
+ok('yang dilindungi tetap terdaftar', call('getUsers').some(u => u.name === 'Staff Soal'));
+
+// Turunkan jadi Magang dulu, baru boleh dihapus.
+eq('Dev menurunkan jadi Magang', call('saveUser', 'Anak Magang', 'Magang', true, 'Dev').success, true);
 const delUser = call('deleteUser', 'Anak Magang', 'Dev');
-eq('Dev boleh menghapus user', delUser.success, true);
+eq('Magang BOLEH dihapus', delUser.success, true);
 eq('daftar kembali 12 user', delUser.users.length, 12);
+// Inti permintaan: benar-benar hilang dari PIC, bukan cuma dari daftar user.
+ok('nama dicabut dari dropdown PIC', (delUser.options.pic || []).indexOf('Anak Magang') < 0);
+ok('nama dicabut dari dropdown Support', (delUser.options.support || []).indexOf('Anak Magang') < 0);
+ok('pencabutan bertahan saat dibaca ulang', (call('getOptions').pic || []).indexOf('Anak Magang') < 0);
+eq('"Dev" tidak bisa dihapus', call('deleteUser', 'Dev', 'Manager Lain').success, false);
+
+// Nama yang cuma nyangkut di dropdown (tanpa baris USERS) tetap sah dibersihkan.
+call('saveOption', 'pic', 'Sisa Dropdown', '');
+const delSisa = call('deleteUser', 'Sisa Dropdown', 'Dev');
+eq('nama sisa di dropdown boleh dihapus', delSisa.success, true);
+ok('sisa dropdown benar-benar hilang', (delSisa.options.pic || []).indexOf('Sisa Dropdown') < 0);
+eq('nama tak dikenal ditolak', call('deleteUser', 'Hantu', 'Dev').success, false);
 
 console.log('\n=== 16b. UI: panel Kelola User terkunci ke mode Dev ===');
 const uiHtml = call('doGet', {})._html;
@@ -616,11 +640,29 @@ const uaHtml = call('doGet', {})._html;
 // nama yang belum tercatat — haknya hilang diam-diam DAN ia tak muncul di panel mana pun,
 // jadi Dev tak punya cara membetulkannya tanpa menyunting sheet/kode.
 ok('ada pengumpul semua nama yang dikenal', /function knownPeople\(\)/.test(uaHtml));
-ok('nama diambil dari dropdown PIC', /function knownPeople\(\)[\s\S]{0,600}?state\.options&&state\.options\.pic\|\|\[\]\)\.forEach\(add\)/.test(uaHtml));
-ok('nama diambil dari PIC & Support di task', /function knownPeople\(\)[\s\S]{0,900}?state\.tasks\|\|\[\]\)\.forEach\([\s\S]{0,200}?add\(t\.pic\)/.test(uaHtml));
+ok('nama diambil dari dropdown PIC', /function knownPeople\(\)[\s\S]{0,900}?state\.options&&state\.options\.pic\|\|\[\]\)\.forEach\(add\)/.test(uaHtml));
+ok('nama diambil dari dropdown Support', /function knownPeople\(\)[\s\S]{0,900}?state\.options&&state\.options\.support\|\|\[\]\)\.forEach\(add\)/.test(uaHtml));
+// SENGAJA tidak membaca PIC/Support dari task lama: kalau dibaca, user yang baru dihapus
+// akan muncul lagi sebagai "Belum diatur" dan penghapusannya terasa gagal.
+ok('nama TIDAK dipungut dari task lama', !/function knownPeople\(\)[\s\S]{0,900}?state\.tasks\|\|\[\]\)\.forEach/.test(uaHtml));
 ok('"dev" tak ikut jadi baris user', /function knownPeople\(\)[\s\S]{0,400}?k==='dev'\) return/.test(uaHtml));
 ok('baris = gabungan terdaftar + belum terdaftar', /function userAdminRows\(\)[\s\S]{0,700}?registered:true[\s\S]{0,200}?registered:false/.test(uaHtml));
-ok('yang belum diatur ditaruh paling atas', /userAdminRows\(\)[\s\S]{0,900}?a\.registered!==b\.registered/.test(uaHtml));
+// Urutan tabel = hierarki peran aplikasi: Manager teratas → Magang → Lihat Saja.
+ok('urutan memakai peringkat peran', /function roleRank\(u\)/.test(uaHtml));
+ok('peringkat diambil dari daftar ROLES aplikasi', /function roleRank\(u\)[\s\S]{0,300}?state\.roles\|\|\[\]\)\.filter\(r=>!same\(r,'Dev'\)\)/.test(uaHtml));
+ok('yang belum diatur tetap paling atas', /function roleRank\(u\)[\s\S]{0,200}?!u\.registered\) return -1/.test(uaHtml));
+ok('peran asing jatuh ke paling bawah', /function roleRank\(u\)[\s\S]{0,400}?i<0 \? order\.length : i/.test(uaHtml));
+ok('sort memakai roleRank lalu nama', /sort\(\(a,b\)=> \(roleRank\(a\)-roleRank\(b\)\) \|\| a\.name\.localeCompare/.test(uaHtml));
+ok('tak ada lagi urutan terdaftar-vs-belum', !/a\.registered!==b\.registered \? \(a\.registered\?1:-1\)/.test(uaHtml));
+// Karyawan tetap dilindungi dari penghapusan; magang & sisa dropdown boleh dibersihkan.
+ok('ada daftar peran karyawan tetap', /const PERMANENT_ROLES=\['Manager','Leader','Staff'\]/.test(uaHtml));
+ok('ada penjaga boleh-hapus', /function canDeleteUser\(u\)/.test(uaHtml));
+ok('karyawan tetap tak bisa dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?!\(u\.registered && isPermanentRole\(u\.role\)\)/.test(uaHtml));
+ok('diri sendiri & Dev tak bisa dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?same\(u\.name,state\.currentUser\) \|\| baseName\(u\.name\)==='dev'\) return false/.test(uaHtml));
+ok('karyawan tetap diberi ikon gembok', /lock_outline/.test(uaHtml));
+ok('gembok menjelaskan pakai Nonaktif', /Karyawan tetap tidak bisa dihapus[\s\S]{0,200}?Nonaktif/.test(uaHtml));
+ok('removeUser dijaga canDeleteUser', /function removeUser\(i\)[\s\S]{0,300}?!canDeleteUser\(u\)\)\{/.test(uaHtml));
+ok('konfirmasi menyebut pencabutan dari PIC', /function removeUser\(i\)[\s\S]{0,600}?dropdown PIC & Support/.test(uaHtml));
 ok('tabel memakai userAdminRows, bukan state.users', /const people=userAdminRows\(\)/.test(uaHtml));
 ok('tabel TIDAK lagi memetakan state.users langsung', !/const users=\(state\.users\|\|\[\]\);\s*if\(!users\.length\)/.test(uaHtml));
 // Memilih peran untuk nama yang belum terdaftar = sekaligus mendaftarkannya.
@@ -634,7 +676,8 @@ ok('removeUser memakai userAdminRows', /function removeUser\(i\)\{\s*const u=use
 ok('tak ada lagi handler yang indeks ke state.users', !/const u=\(state\.users\|\|\[\]\)\[i\]/.test(uaHtml));
 // Aksi yang mustahil untuk baris belum terdaftar harus dijaga, bukan cuma disembunyikan.
 ok('nonaktifkan dijaga utk yg belum terdaftar', /function toggleUserActive\(i\)[\s\S]{0,200}?!u\.registered\) return/.test(uaHtml));
-ok('hapus dijaga utk yg belum terdaftar', /function removeUser\(i\)[\s\S]{0,200}?!u\.registered\) return/.test(uaHtml));
+// Yang belum berperan JUSTRU boleh dihapus — itulah cara membersihkan sisa nama di dropdown.
+ok('yang belum berperan boleh dihapus', /function canDeleteUser\(u\)[\s\S]{0,300}?u\.registered && isPermanentRole/.test(uaHtml));
 ok('memilih opsi kosong bukan perintah simpan', /function changeUserRole\(i,role\)[\s\S]{0,300}?if\(!role\)\{ renderUserAdmin\(\); return; \}/.test(uaHtml));
 ok('keterangan panel menyebut semua nama dikenal', /semua nama yang dikenal sistem/.test(uaHtml));
 

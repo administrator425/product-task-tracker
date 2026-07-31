@@ -337,22 +337,56 @@ function saveUser(name, role, active, actor) {
   };
 }
 
+// Peran "karyawan tetap" — sengaja tidak bisa dihapus. Nama mereka melekat di task lama,
+// jadi mencabutnya dari dropdown PIC akan meninggalkan task yang PIC-nya tak bisa dipilih
+// lagi. Untuk yang keluar, pakai Nonaktif: haknya dicabut, riwayatnya utuh.
+var PERMANENT_ROLES = ['Manager', 'Leader', 'Staff'];
+function isPermanentRole_(role) {
+  var r = String(role || '').trim().toLowerCase();
+  for (var i = 0; i < PERMANENT_ROLES.length; i++) if (PERMANENT_ROLES[i].toLowerCase() === r) return true;
+  return false;
+}
+
 function deleteUser(name, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   name = String(name || '').trim();
   if (!canManageUsers_(actor)) return { success: false, message: usersDeniedMessage_() };
   if (!name) return { success: false, message: 'Nama user tidak boleh kosong.' };
+  if (baseName_(name) === 'dev') return { success: false, message: '"Dev" adalah mode khusus dan tidak bisa dihapus.' };
   if (baseName_(name) === baseName_(actor)) return { success: false, message: 'Tidak bisa menghapus diri sendiri.' };
   var list = usersRaw_();
   var found = null;
   for (var i = 0; i < list.length; i++) if (baseName_(list[i].name) === baseName_(name)) { found = list[i]; break; }
-  if (!found) return { success: false, message: 'User tidak ditemukan.' };
-  deleteRows_(CONFIG.USERS_SHEET, [found.row]);
-  invalidateUsers_();
+  if (found && isPermanentRole_(found.role)) {
+    return { success: false, message: name + ' berperan ' + found.role + ' (karyawan tetap) dan tidak bisa dihapus. Pakai tombol Nonaktif — haknya dicabut tapi riwayat task-nya tetap utuh.' };
+  }
+
+  // Nama bisa saja cuma nyangkut di dropdown tanpa baris USERS; itu tetap sah dihapus.
+  var inOptions = false;
+  try {
+    var raw = readOptionsRaw_();
+    for (var j = 0; j < raw.length; j++) {
+      if (raw[j].active && (raw[j].type === 'pic' || raw[j].type === 'support') && baseName_(raw[j].value) === baseName_(name)) { inOptions = true; break; }
+    }
+  } catch (e) { /* opsi tak terbaca: jangan halangi penghapusan baris USERS */ }
+  if (!found && !inOptions) return { success: false, message: 'User tidak ditemukan.' };
+
+  if (found) { deleteRows_(CONFIG.USERS_SHEET, [found.row]); invalidateUsers_(); }
+
+  // Cabut juga dari dropdown PIC & Support supaya benar-benar tak bisa dipilih lagi.
+  var options = null;
+  try { deleteOption('pic', name, ''); options = deleteOption('support', name, '').options; }
+  catch (e) { /* dropdown gagal dicabut bukan alasan membatalkan penghapusan */ }
+
   logActivity_(actor, 'User Delete', '', name);
   // PIN user ikut dihapus supaya tidak menggantung.
   try { deleteUserPin(name); } catch (e) { /* abaikan */ }
-  return { success: true, message: name + ' dihapus dari daftar user.', users: getUsers() };
+  return {
+    success: true,
+    message: name + ' dihapus dari daftar user dan dropdown PIC & Support.',
+    users: getUsers(),
+    options: options || getOptions(),
+  };
 }
 
 /* ================================================================== */

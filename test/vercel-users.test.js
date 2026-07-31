@@ -226,11 +226,45 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   eq('nama "Dev" ditolak', (await backend.saveUser('Dev', 'Staff', true, 'Dev')).success, false);
   fresh();
   eq('Manager tak boleh menghapus', (await backend.deleteUser('Anak Magang Baru', 'Nynda')).success, false);
+
+  // Karyawan tetap (Manager/Leader/Staff) dilindungi: namanya melekat di task lama.
+  fresh();
+  const delLeader = await backend.deleteUser('Anak Magang Baru', 'Dev');   // saat ini masih Leader
+  eq('Leader (karyawan tetap) TIDAK bisa dihapus', delLeader.success, false);
+  ok('pesannya mengarahkan ke Nonaktif', /Nonaktif/.test(delLeader.message || ''));
+  fresh();
+  eq('Staff pun tak bisa dihapus', (await backend.deleteUser('Ali', 'Dev')).success, false);
+  fresh();
+  eq('Manager pun tak bisa dihapus', (await backend.deleteUser('Nynda', 'Dev')).success, false);
+  fresh();
+  ok('yang dilindungi tetap ada di sheet', readRange('USERS!A2:C').some(r => r[0] === 'Ali'));
+
+  // Turunkan lagi jadi Magang, baru boleh dihapus.
+  fresh();
+  eq('Dev menurunkan kembali jadi Magang', (await backend.saveUser('Anak Magang Baru', 'Magang', true, 'Dev')).success, true);
   fresh();
   const del = await backend.deleteUser('Anak Magang Baru', 'Dev');
-  eq('Dev boleh menghapus', del.success, true);
+  eq('Magang BOLEH dihapus', del.success, true);
   eq('daftar kembali 7 user', del.users.length, 7);
   ok('baris hilang dari sheet USERS', !readRange('USERS!A2:C').some(r => r[0] === 'Anak Magang Baru'));
+  // Inti permintaan: benar-benar hilang dari PIC, bukan cuma dari daftar user.
+  ok('nama dicabut dari dropdown PIC', !(del.options.pic || []).includes('Anak Magang Baru'));
+  ok('nama dicabut dari dropdown Support', !(del.options.support || []).includes('Anak Magang Baru'));
+  fresh();
+  const optAfter = await backend.getOptions();
+  ok('pencabutan bertahan saat dibaca ulang', !(optAfter.pic || []).includes('Anak Magang Baru'));
+  fresh();
+  eq('"Dev" tidak bisa dihapus', (await backend.deleteUser('Dev', 'Dev')).success, false);
+  fresh();
+  eq('nama tak dikenal ditolak', (await backend.deleteUser('Hantu', 'Dev')).success, false);
+
+  // Nama yang cuma nyangkut di dropdown (tanpa baris USERS) tetap sah dibersihkan.
+  fresh();
+  await backend.saveOption('pic', 'Sisa Dropdown', '');
+  fresh();
+  const delOpt = await backend.deleteUser('Sisa Dropdown', 'Dev');
+  eq('nama sisa di dropdown boleh dihapus', delOpt.success, true);
+  ok('sisa dropdown benar-benar hilang', !(delOpt.options.pic || []).includes('Sisa Dropdown'));
 
   console.log('\nLevel MAGANG — server memangkas datanya, bukan menyembunyikan:');
   // Tambah satu task karyawan yang Support-nya anak magang.

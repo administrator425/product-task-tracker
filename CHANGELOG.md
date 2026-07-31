@@ -10,6 +10,40 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.59.0 — Hapus user benar-benar mencabut dari PIC + tabel diurutkan per peran
+
+### Hapus yang sungguh menghapus
+Sebelumnya `deleteUser` hanya membuang baris di sheet `USERS`. Namanya **tetap ada di
+dropdown PIC & Support**, jadi anak magang yang sudah selesai masih bisa dipilih sebagai
+PIC task baru. Sekarang penghapusan sekalian mencabutnya dari kedua dropdown.
+
+### Karyawan tetap dilindungi
+`Manager`, `Leader`, dan `Staff` **tidak bisa dihapus** — namanya melekat di task lama,
+jadi mencabutnya dari dropdown akan meninggalkan task yang PIC-nya tak bisa dipilih lagi.
+Untuk yang keluar, pakai **Nonaktif**: haknya dicabut, riwayatnya utuh. Di tabel mereka
+diberi ikon gembok, bukan tombol hapus. Penjagaan ini ada di **server** (`api/_sheets.js`
+dan `gas/Code.gs`), bukan cuma di tampilan — menembak `deleteUser` langsung pun ditolak.
+
+Yang boleh dihapus: **Magang**, **Lihat Saja**, dan nama yang belum berperan. `Dev` dan
+diri sendiri selalu ditolak.
+
+Nama yang cuma nyangkut di dropdown tanpa baris `USERS` juga sah dibersihkan lewat
+tombol hapus — sebelumnya ditolak dengan "User tidak ditemukan".
+
+### Urutan tabel mengikuti hierarki peran
+Manager → Leader → Staff → Magang → Lihat Saja, memakai daftar `ROLES` aplikasi sendiri
+supaya legenda dan tabel selalu sejalan. Yang **belum diatur tetap di paling atas** karena
+merekalah yang butuh tindakan; sesama peran diurutkan menurut abjad.
+
+### Akibat perubahan v1.58.0 yang harus dicabut
+`knownPeople()` tidak lagi memungut nama dari PIC/Support **task lama**. Kalau dibiarkan,
+user yang baru dihapus akan muncul lagi sebagai "Belum diatur" selama task lamanya masih
+ada — penghapusannya jadi terasa gagal. Sumbernya kini baris `USERS` + dropdown PIC &
+Support saja. Konsekuensinya: nama yang ada di task lama tapi sudah tidak ada di dropdown
+maupun `USERS` tidak lagi muncul di panel — dan itu memang yang diinginkan.
+
+---
+
 ## 1.58.0 — Kelola User memuat SEMUA nama, bukan cuma yang tercatat di sheet
 
 ### Ada hak yang hilang diam-diam

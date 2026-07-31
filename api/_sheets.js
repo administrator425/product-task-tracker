@@ -1262,27 +1262,59 @@ async function saveUser(name, role, active, actor) {
   };
 }
 
+// Peran "karyawan tetap" — sengaja tidak bisa dihapus. Nama mereka melekat di task lama,
+// jadi mencabutnya dari dropdown PIC akan meninggalkan task yang PIC-nya tak bisa dipilih
+// lagi. Untuk yang keluar, pakai Nonaktif: haknya dicabut, riwayatnya utuh.
+const PERMANENT_ROLES = ['Manager', 'Leader', 'Staff'];
+function isPermanentRole(role) {
+  const r = String(role || '').trim().toLowerCase();
+  return PERMANENT_ROLES.some(x => x.toLowerCase() === r);
+}
+
 async function deleteUser(name, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   name = String(name || '').trim();
   if (!canManageUsers(actor)) return { success: false, message: usersDeniedMessage() };
   if (!name) return { success: false, message: 'Nama user tidak boleh kosong.' };
+  if (baseName(name) === 'dev') return { success: false, message: '"Dev" adalah mode khusus dan tidak bisa dihapus.' };
   if (baseName(name) === baseName(actor)) return { success: false, message: 'Tidak bisa menghapus diri sendiri.' };
 
   invalidateUsers();
   await loadUsers();
   const found = _users.find(u => baseName(u.name) === baseName(name));
-  if (!found) return { success: false, message: 'User tidak ditemukan.' };
+  if (found && isPermanentRole(found.role)) {
+    return { success: false, message: `${name} berperan ${found.role} (karyawan tetap) dan tidak bisa dihapus. Pakai tombol Nonaktif — haknya dicabut tapi riwayat task-nya tetap utuh.` };
+  }
 
-  const meta = await getSheetMeta();
-  const sheetId = meta[CONFIG.USERS_SHEET] && meta[CONFIG.USERS_SHEET].sheetId;
-  if (sheetId == null) return { success: false, message: 'Sheet USERS tidak ditemukan.' };
-  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: found.row - 1, endIndex: found.row } } }]);
-  invalidateUsers();
+  // Nama bisa saja cuma nyangkut di dropdown tanpa baris USERS; itu tetap sah dihapus.
+  let inOptions = false;
+  try {
+    const raw = await readOptionsRaw();
+    inOptions = raw.some(o => o.active && (o.type === 'pic' || o.type === 'support') && baseName(o.value) === baseName(name));
+  } catch (e) { /* opsi tak terbaca: jangan halangi penghapusan baris USERS */ }
+  if (!found && !inOptions) return { success: false, message: 'User tidak ditemukan.' };
+
+  if (found) {
+    const meta = await getSheetMeta();
+    const sheetId = meta[CONFIG.USERS_SHEET] && meta[CONFIG.USERS_SHEET].sheetId;
+    if (sheetId == null) return { success: false, message: 'Sheet USERS tidak ditemukan.' };
+    await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: found.row - 1, endIndex: found.row } } }]);
+    invalidateUsers();
+  }
+
+  // Cabut juga dari dropdown PIC & Support supaya benar-benar tak bisa dipilih lagi.
+  let options = null;
+  try { await deleteOption('pic', name, ''); options = (await deleteOption('support', name, '')).options; }
+  catch (e) { /* dropdown gagal dicabut bukan alasan membatalkan penghapusan */ }
 
   await logActivity(actor, 'User Delete', '', name);
   try { await deleteUserPin(name); } catch (e) { /* PIN menggantung tak masalah */ }
-  return { success: true, message: `${name} dihapus dari daftar user.`, users: await getUsers() };
+  return {
+    success: true,
+    message: `${name} dihapus dari daftar user dan dropdown PIC & Support.`,
+    users: await getUsers(),
+    options: options || await getOptions(),
+  };
 }
 
 /* ------------------------------------------------------------------ */
