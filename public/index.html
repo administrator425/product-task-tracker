@@ -124,10 +124,11 @@
     <div class="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-800 p-6">
       <div class="flex items-center gap-2.5 mb-1">
         <div class="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><span class="material-icons-round text-[20px]">badge</span></div>
-        <div class="text-lg font-bold text-gray-900 dark:text-white">Masuk sebagai siapa?</div>
+        <div id="identityGateTitle" class="text-lg font-bold text-gray-900 dark:text-white">Masuk sebagai siapa?</div>
       </div>
-      <p class="text-sm text-gray-500 mb-4">Pilih identitas Anda untuk melanjutkan. Bisa diganti nanti lewat kotak "Mode User".</p>
-      <div id="identityGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+      <p class="text-sm text-gray-500 mb-1">Pilih identitas Anda untuk melanjutkan. Bisa diganti nanti lewat kotak "Mode User".</p>
+      <p id="identityGateNote" class="hide text-[13px] font-medium text-amber-600 dark:text-amber-400 mb-3"></p>
+      <div id="identityGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3"></div>
     </div>
   </div>
 
@@ -203,6 +204,10 @@
           <button onclick="switchView('collab')" id="nav-collab" class="nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
             <span class="material-icons-round text-[20px]">account_tree</span> <span class="flex-1">Task Kolaborasi</span>
             <span id="collabTurnBadge" class="hide inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">0</span>
+          </button>
+          <button onclick="switchView('magang')" id="nav-magang" class="hide nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
+            <span class="material-icons-round text-[20px]">school</span> <span class="flex-1">Kerjaan Magang</span>
+            <span id="magangNavBadge" class="hide inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-sky-500 text-white text-[10px] font-bold"></span>
           </button>
         </div>
 
@@ -399,6 +404,9 @@
         </div>
 
         <!-- TASK KOLABORASI (alur proses beruntun antar-PIC) -->
+        <!-- KERJAAN MAGANG (untuk karyawan — pola sama seperti view Lintas Divisi) -->
+        <div id="magangView" class="view hide max-w-[1400px] mx-auto space-y-4"><div id="magangContent" class="space-y-4"></div></div>
+
         <div id="collabView" class="view hide max-w-[1600px] mx-auto space-y-4">
           <div id="collabTurnBanner"></div>
           <div class="flex items-center justify-between gap-3 flex-wrap">
@@ -772,7 +780,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.56.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.57.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -781,11 +789,29 @@ var LS = {
   del: function(k){ try { localStorage.removeItem(k); } catch(e){} }
 };
 var APP_PW = (function(){ try { return localStorage.getItem('tt_app_pw') || ''; } catch(e){ return ''; } })();
+/* ---------- Mode Magang ----------
+   Masuk pakai PIN khusus magang. Identitas dipilih SEKALI dari daftar yang disiapkan Dev,
+   lalu dikunci di cookie — tak ada switcher, tak bisa jadi magang lain apalagi karyawan.
+   Pengamannya bukan di sini: server yang memangkas datanya (lihat api/rpc.js level 'magang').
+   Bagian ini hanya membuat pengalamannya rapi & tidak membingungkan. */
+function setCookie(k, v, days){
+  try{ document.cookie = k+'='+encodeURIComponent(v)+'; path=/; max-age='+((days||180)*86400)+'; samesite=lax'; }catch(e){}
+}
+function getCookie(k){
+  try{
+    var m = document.cookie.match(new RegExp('(?:^|; )'+k.replace(/([.$?*|{}()\[\]\\\/+^])/g,'\\$1')+'=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  }catch(e){ return ''; }
+}
+function delCookie(k){ try{ document.cookie = k+'=; path=/; max-age=0'; }catch(e){} }
+function magangIdentity(){ return getCookie('tt_magang_user'); }
 var SESSION_TOKEN = (function(){ try { return localStorage.getItem('tt_session') || ''; } catch(e){ return ''; } })();
 function callApi(action, args){
   return fetch(API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW, 'x-session': SESSION_TOKEN },
+    // x-user = identitas yang diklaim. Server TIDAK memakainya untuk menaikkan hak —
+    // hanya untuk mempersempit data pada mode magang, dan divalidasi di sana.
+    headers: { 'Content-Type': 'application/json', 'x-app-password': APP_PW, 'x-session': SESSION_TOKEN, 'x-user': magangIdentity() || '' },
     body: JSON.stringify({ action: action, args: args || [] })
   }).then(function(r){
     return r.text().then(function(txt){
@@ -869,7 +895,8 @@ const TODAY = new Date(); TODAY.setHours(0,0,0,0);
 let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: LS.get('tt_current_user') || 'Nynda',
   managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], collabManagers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
-  users: [], roles: ['Dev','Manager','Leader','Staff','Lihat Saja'], usersSupported: false,
+  users: [], roles: ['Dev','Manager','Leader','Staff','Magang','Lihat Saja'], usersSupported: false,
+  magangMode: false, magangUsers: [],
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
   kanbanSelect:false, selected:[],
   dashFilters: {preset:'all', start:'', end:'', field:'due', status:[], pic:[], priority:[]}, openDashFilter:'',
@@ -910,6 +937,14 @@ function init() {
       state.collabs = data.collabs || [];
       state.guestMode = !!data.viewOnly;                 // backend: tak ada PIN benar -> data terbatas
       if (state.guestMode) state.currentUser = VIEWONLY_USER;
+      // Mode magang: server sudah memangkas datanya. Identitas dikunci dari cookie;
+      // kalau belum memilih, halaman pemilihan magang yang tampil (lihat afterLoad).
+      state.magangMode = !!data.magangOnly;
+      state.magangUsers = data.magangUsers || [];
+      if (state.magangMode) {
+        const pick = magangIdentity();
+        if (pick && state.magangUsers.some(u => baseName(u) === baseName(pick))) state.currentUser = pick;
+      }
       if (data.meta && data.meta.managers && data.meta.managers.length) state.managers = data.meta.managers;
       if (data.meta && data.meta.doneApprovers && data.meta.doneApprovers.length) state.doneApprovers = data.meta.doneApprovers;
       if (data.meta && data.meta.collabManagers && data.meta.collabManagers.length) state.collabManagers = data.meta.collabManagers;
@@ -1076,6 +1111,13 @@ function roleChip(t){
 }
 // Task milik anak magang (PIC-nya seorang magang) — dipakai untuk aturan visibilitas.
 function isMagangTask(t){ return isMagang(t && t.pic); }
+// Semua kerjaan magang, untuk view "Kerjaan Magang" milik karyawan.
+function magangTasks(){ return state.tasks.filter(isMagangTask); }
+// Karyawan (Staff ke atas) melihat tab ini; anak magang & mode lihat-saja tidak.
+function canSeeMagangView(){
+  if(isViewOnly() || state.magangMode || isMagang(state.currentUser)) return false;
+  return usersConfigured() && state.tasks.some(isMagangTask);
+}
 function scopedTasks(){
   if(isViewOnly()) return state.tasks.filter(inLintasView);   // task lintas divisi + task internal yang di-mirror PM/Dev
   if(canSeeAllTasks(state.currentUser)){                       // Manager, Leader, Dev
@@ -1083,10 +1125,11 @@ function scopedTasks(){
     return [...state.tasks];
   }
   const me=state.currentUser;
-  // Magang → hanya lingkungan magang: task sendiri + task sesama magang (tak lihat kerjaan karyawan).
-  // Staff  → task sendiri + SEMUA task anak magang, karena Staff yang membimbing.
-  // Rumusnya kebetulan sama: "milik saya ATAU milik magang".
-  if(isMagang(me) || isStaff(me)) return state.tasks.filter(t=>ownsTask(t,me) || isMagangTask(t));
+  // Magang → lingkungan magang saja: task sendiri + sesama magang. (Di mode magang,
+  // datanya bahkan sudah dipangkas server, jadi ini lapis kerapian belakangnya.)
+  if(isMagang(me)) return state.tasks.filter(t=>ownsTask(t,me) || isMagangTask(t));
+  // Karyawan → task miliknya saja. Kerjaan magang punya tab sendiri ("Kerjaan Magang")
+  // supaya dashboard & hitungan mereka tidak tercampur.
   return state.tasks.filter(t=>ownsTask(t,me));
 }
 // Deteksi link berbagi ?view=lintas → kunci ke mode lihat-saja (switcher disembunyikan).
@@ -1116,6 +1159,7 @@ function applyRoleUI(){
   if(badge){badge.textContent=roleLbl; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+roleBadgeClass(vo?'Lihat Saja':roleLbl);}
   const av=document.getElementById('userAvatar'); if(av){av.textContent=initials(state.currentUser); av.style.background=avatarBg(state.currentUser); av.style.color=avatarFg(state.currentUser);}
   document.getElementById('managerFocusBox').classList.toggle('hide',!mgr || vo);
+  updateMagangNavBadge();   // tab "Kerjaan Magang" hanya untuk karyawan
   document.getElementById('nav-activity').classList.toggle('hide',!mgr || vo);
   const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
   const navReport=document.getElementById('nav-report'); if(navReport) navReport.classList.toggle('hide',!mgr || vo); // Laporan: manager/dev
@@ -1125,7 +1169,8 @@ function applyRoleUI(){
   const addBtn=document.getElementById('btnAddTask'); if(addBtn) addBtn.classList.toggle('hide',vo);
   // Kunci switcher mode bila diakses lewat link berbagi (?view=lintas) ATAU tamu tanpa PIN.
   const guest=!!state.guestMode;
-  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView||guest);
+  // Mode magang: kotak ganti-identitas disembunyikan sepenuhnya — identitasnya terkunci.
+  const modeBox=document.getElementById('modeUserBox'); if(modeBox) modeBox.classList.toggle('hide',!!state.lockView||guest||!!state.magangMode);
   const guestBox=document.getElementById('guestUnlockBox'); if(guestBox) guestBox.classList.toggle('hide',!guest);
   // Alihkan ke Dashboard bila view aktif termasuk yang disembunyikan untuk peran ini.
   const hiddenForVo=['activity','settings','report','extdash','mylinks','hariini','mynotes','collab'];
@@ -1202,6 +1247,13 @@ function populateUserSelect(){
     const box=document.getElementById('modeUserBox'); if(box) box.classList.add('hide');
     return;
   }
+  if(state.magangMode){   // identitas magang dikunci dari cookie — jangan pernah dipindah otomatis
+    const me = magangIdentity() || state.currentUser;
+    if(me) state.currentUser = me;
+    if(select){ select.innerHTML=`<option value="${escapeHtml(me||'')}">${escapeHtml(me||'')}</option>`; select.value=me||''; select.disabled=true; }
+    const box=document.getElementById('modeUserBox'); if(box) box.classList.add('hide');
+    return;
+  }
   const pics = state.options.pic || ['Nynda'];
   const EMAP = (typeof EMAIL_TO_USER==='object' && EMAIL_TO_USER) ? EMAIL_TO_USER : {};
   const email = loginEmail();
@@ -1230,6 +1282,8 @@ function setCurrentUser(user){state.currentUser=user;LS.set('tt_current_user',us
 function identityConfirmed(){ try{ return localStorage.getItem('tt_identity_confirmed')==='1'; }catch(_){ return false; } }
 function needIdentityPick(){
   if(isViewOnly() || state.lockView) return false;             // view/guest/lintas -> tidak perlu
+  // Magang: WAJIB memilih sekali; sesudah tersimpan di cookie tak ditanya lagi.
+  if(state.magangMode) return !magangIdentity();
   var adminSess=false; try{ adminSess=!!localStorage.getItem('tt_session'); }catch(_){ }
   if(adminSess) return false;                                   // admin Google sudah teridentifikasi
   if(!APP_PW) return false;                                     // hanya untuk yang login via PIN penuh
@@ -1238,8 +1292,21 @@ function needIdentityPick(){
 function hideIdentityGate(){ var g=document.getElementById('identityGate'); if(g) g.classList.add('hide'); }
 function showIdentityGate(){
   var g=document.getElementById('identityGate'), grid=document.getElementById('identityGrid'); if(!g||!grid) return;
-  var pics=(state.options.pic||[]).filter(function(p){ return baseName(p)!==baseName(VIEWONLY_USER); });
+  // Mode magang: pilihannya HANYA daftar magang yang disiapkan Dev (dikirim server),
+  // dan dipilih sekali saja — sesudahnya identitasnya terkunci di cookie.
+  var pics = state.magangMode
+    ? (state.magangUsers||[]).slice()
+    : (state.options.pic||[]).filter(function(p){ return baseName(p)!==baseName(VIEWONLY_USER); });
   var items=pics.slice(); // 'Dev' TERSEMBUNYI dari pemilih identitas — masuk lewat trigger rahasia (long-press logo) + DEV_PIN.
+  var judul=document.getElementById('identityGateTitle');
+  if(judul) judul.textContent = state.magangMode ? 'Masuk sebagai anak magang yang mana?' : 'Masuk sebagai siapa?';
+  var ket=document.getElementById('identityGateNote');
+  if(ket){
+    ket.textContent = state.magangMode
+      ? 'Pilihan ini tersimpan di perangkat dan tidak bisa diganti sendiri. Hubungi Dev bila salah pilih.'
+      : '';
+    ket.classList.toggle('hide', !state.magangMode);
+  }
   grid.innerHTML=items.map(function(p){
     var isDev=(p==='Dev');
     var face=isDev?'<span class="material-icons-round text-[18px]">code</span>':escapeHtml(initials(p));
@@ -1250,6 +1317,14 @@ function showIdentityGate(){
   g.classList.remove('hide');
 }
 function chooseIdentity(name){
+  // Mode magang: kunci pilihannya ke cookie, lalu muat ulang supaya server menyaring
+  // datanya untuk orang itu. Sesudah ini tak ada jalan ganti identitas dari dalam aplikasi.
+  if(state.magangMode){
+    if(!(state.magangUsers||[]).some(function(u){ return baseName(u)===baseName(name); })) return;
+    setCookie('tt_magang_user', name, 180);
+    location.reload();
+    return;
+  }
   // Selalu verifikasi PIN identitas yang dipilih — JANGAN lewati walau default saat ini kebetulan sama namanya.
   if(name==='Dev'){
     if(isDevEmail()){ setCurrentUser('Dev'); return; }
@@ -1261,6 +1336,8 @@ function chooseIdentity(name){
 }
 function requestUserSwitch(value){
   if(!value || value===state.currentUser) return;
+  // Mode magang: identitas terkunci. Ganti orang berarti login ulang (reset cookie).
+  if(state.magangMode){ populateUserSelect(); showToast('Identitas terkunci untuk akun magang.', false); return; }
   if(value==='Dev'){
     if(isDevEmail()){ setCurrentUser('Dev'); return; }
     openPinModal('__dev__','Dev','Mode Dev'); return;
@@ -1389,6 +1466,7 @@ function switchView(view){
     hariini:['Hari Ini','Fokus harian Anda: overdue, jatuh tempo hari ini, dan yang sedang dikerjakan.','wb_sunny'],
     mynotes:['Catatan Saya','Catatan pribadi Anda (hanya Anda yang bisa lihat).','sticky_note_2'],
     report:['Laporan','Filter rentang tanggal, PIC, & stage — klik PIC untuk lihat detail stage-nya.','summarize'],
+    magang:['Kerjaan Magang','Task yang dikerjakan anak magang, dikelompokkan per orang.','school'],
     dashboard:['Dashboard','Pantau progress, deadline, dan komunikasi task tim.','space_dashboard'],
     extdash:['Dashboard Lain','Kumpulan dashboard & monitoring eksternal.','dashboard_customize'],
     mylinks:['Link Saya','Kumpulan link pribadi Anda yang sering diakses.','bookmark'],
@@ -1418,6 +1496,7 @@ function renderActiveView(){
   else if(v==='calendar') renderCalendar();
   else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
   else if(v==='collab') renderCollab();
+  else if(v==='magang') renderMagangView();
   else if(v==='settings'){ renderSettings(); renderUserAdmin(); renderPinAdmin(); renderCatSubManager(); }
   else if(v==='activity') renderActivity();
   else if(v==='extdash') renderExternalDashboards();
@@ -3025,6 +3104,70 @@ function renderComments(targetId,comments){
     const meta=mine?'text-indigo-200':'text-gray-400';
     return `<div class="flex ${mine?'justify-end':'justify-start'}"><div class="max-w-[80%] ${bubble} px-3 py-2 shadow-sm">${mine?'':`<div class="flex items-center gap-1.5 mb-0.5">${avatar(c.author)}<span class="font-semibold text-[12px] text-gray-900 dark:text-white">${escapeHtml(c.author||'-')}</span></div>`}<div class="text-sm leading-relaxed whitespace-pre-wrap break-words">${escapeHtml(c.message||'')}</div><div class="text-[10px] ${meta} mt-1 text-right">${escapeHtml(c.timestamp||'')}</div></div></div>`;
   }).join('');
+}
+
+/* ---------- Kerjaan Magang (untuk karyawan) ----------
+   Dipisah dari daftar task karyawan supaya dashboard mereka tetap bersih, tapi tetap
+   mudah dipantau: dikelompokkan per anak magang, lengkap dengan hitungan overdue.
+   Karyawan boleh membuka & menutup (Done) task magang langsung dari sini. */
+function renderMagangView(){
+  const box=document.getElementById('magangContent'); if(!box) return;
+  const all=magangTasks();
+  const q=globalSearchValue();
+  const list=q ? all.filter(t=>Object.values(t).join(' ').toLowerCase().includes(q)) : all;
+
+  const byPic={};
+  list.forEach(t=>{ const p=String(t.pic||'—'); (byPic[p]=byPic[p]||[]).push(t); });
+  const names=Object.keys(byPic).sort((a,b)=>a.localeCompare(b));
+
+  const totOverdue=list.filter(isLate).length;
+  const totDone=list.filter(isDone).length;
+  const head=`<div class="flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Kerjaan Anak Magang</h2>
+        <p class="text-sm text-gray-500">Task yang PIC-nya anak magang. Klik untuk membuka — Anda boleh menutupnya ke <b>Done</b>.</p>
+      </div>
+      <div class="flex gap-2 text-center">
+        <div class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"><div class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Total</div><div class="text-lg font-bold text-gray-900 dark:text-white">${list.length}</div></div>
+        <div class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"><div class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Selesai</div><div class="text-lg font-bold text-emerald-600">${totDone}</div></div>
+        <div class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"><div class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Overdue</div><div class="text-lg font-bold ${totOverdue?'text-rose-600':'text-gray-900 dark:text-white'}">${totOverdue}</div></div>
+      </div>
+    </div>`;
+
+  if(!names.length){ box.innerHTML=head+emptyState('Belum ada task untuk anak magang.'); return; }
+
+  const blok=names.map(p=>{
+    const arr=byPic[p].slice().sort(cardSort);
+    const late=arr.filter(isLate).length, done=arr.filter(isDone).length;
+    const pal=AV_PALETTE[avHash(p)];
+    return `<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden">
+      <div class="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-gray-100 dark:border-slate-800 bg-sky-50/60 dark:bg-sky-900/10">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style="background:${pal[0]};color:${pal[1]}">${escapeHtml(String(p).trim().charAt(0).toUpperCase())}</div>
+        <div class="min-w-0">
+          <div class="font-semibold text-gray-900 dark:text-white truncate">${escapeHtml(p)}</div>
+          <div class="text-[11px] text-gray-500 dark:text-slate-400">${arr.length} task • ${done} selesai${late?` • <span class="text-rose-600 font-semibold">${late} overdue</span>`:''}</div>
+        </div>
+        <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${roleBadgeClass('Magang')}">MAGANG</span>
+      </div>
+      <div class="p-2 space-y-1">${arr.map(t=>{
+        const late2=isLate(t);
+        return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer">
+          <span class="text-[11px] font-mono text-gray-400 shrink-0">${escapeHtml(t.id)}</span>
+          <span class="text-[13px] text-gray-700 dark:text-slate-300 truncate flex-1">${escapeHtml(t.taskName||'-')}</span>
+          ${t.support?`<span class="hidden sm:inline text-[11px] text-gray-400 shrink-0">+${escapeHtml(t.support)}</span>`:''}
+          ${statusChip(t.status)}
+          <span class="text-[11px] shrink-0 ${late2?'text-rose-600 font-semibold':'text-gray-400'}">${t.dueDate?escapeHtml(t.dueDate):'—'}${late2?' • telat':''}</span>
+        </div>`;}).join('')}</div>
+    </div>`;
+  }).join('');
+  box.innerHTML=head+`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${blok}</div>`;
+}
+function updateMagangNavBadge(){
+  const nav=document.getElementById('nav-magang'); if(!nav) return;
+  nav.classList.toggle('hide', !canSeeMagangView());
+  const b=document.getElementById('magangNavBadge'); if(!b) return;
+  const n=magangTasks().filter(isLate).length;
+  b.textContent=n; b.classList.toggle('hide', n===0);
 }
 
 /* ---------- Settings ---------- */

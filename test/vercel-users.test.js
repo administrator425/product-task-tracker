@@ -232,6 +232,44 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   eq('daftar kembali 7 user', del.users.length, 7);
   ok('baris hilang dari sheet USERS', !readRange('USERS!A2:C').some(r => r[0] === 'Anak Magang Baru'));
 
+  console.log('\nLevel MAGANG — server memangkas datanya, bukan menyembunyikan:');
+  // Tambah satu task karyawan yang Support-nya anak magang.
+  writeRange('Main!B8:V8', [['TSK-005', '2026-07-01', '2026-08-01', 'In progress', 'Normal',
+    'Task karyawan dibantu magang', 'QC Konten', 'JadiASN', 'Uma', 'Magang A', '', '', '', '', '', '', '', '', '', 'Nynda', '']]);
+  const karyawan = ['Ali', 'Uma', 'Dhea', 'Nynda'];
+
+  fresh();
+  const mA = await backend.getBootstrapData({ magangOnly: true, asUser: 'Magang A' });
+  ok('flag magangOnly dikirim', mA.magangOnly === true);
+  eq('daftar identitas magang', (mA.magangUsers || []).join(','), 'Magang A,Magang B');
+  ok('SEMUA task magang terkirim', mA.tasks.filter(t => /^Magang /.test(t.pic)).length >= 2);
+  ok('task karyawan biasa TIDAK terkirim', !mA.tasks.some(t => karyawan.includes(t.pic) && t.id !== 'TSK-005'));
+  ok('task karyawan tempat ia Support IKUT terkirim', mA.tasks.some(t => t.id === 'TSK-005'));
+  eq('riwayat aktivitas tidak dikirim', mA.activity.length, 0);
+  eq('dashboard eksternal tidak dikirim', mA.dashboards.length, 0);
+  eq('daftar PIN user tidak dikirim', mA.pinUsers.length, 0);
+  ok('meta.users hanya berisi magang', (mA.meta.users || []).every(u => String(u.role).toLowerCase() === 'magang'));
+  eq('meta.managers dikosongkan', mA.meta.managers.length, 0);
+
+  fresh();
+  const mB = await backend.getBootstrapData({ magangOnly: true, asUser: 'Magang B' });
+  ok('magang lain TIDAK melihat task Support milik temannya', !mB.tasks.some(t => t.id === 'TSK-005'));
+  ok('tapi tetap melihat task sesama magang', mB.tasks.some(t => /^Magang /.test(t.pic)));
+
+  // Percobaan naik hak: mengaku karyawan sambil memakai jalur magang.
+  fresh();
+  const palsu = await backend.getBootstrapData({ magangOnly: true, asUser: 'Nynda' });
+  ok('klaim "Nynda" TIDAK memberi data karyawan', !palsu.tasks.some(t => karyawan.includes(t.pic) && t.id !== 'TSK-005'));
+  ok('klaim palsu juga tak menarik task Support orang lain', !palsu.tasks.some(t => t.id === 'TSK-005'));
+  fresh();
+  const kosong = await backend.getBootstrapData({ magangOnly: true, asUser: '' });
+  ok('tanpa klaim: hanya task milik magang', kosong.tasks.every(t => /^Magang /.test(t.pic)));
+
+  // Bandingkan dengan karyawan biasa.
+  fresh();
+  const penuh = await backend.getBootstrapData({});
+  ok('karyawan tetap menerima semua task', penuh.tasks.length > mA.tasks.length);
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();

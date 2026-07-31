@@ -10,6 +10,58 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.57.0 — PIN khusus anak magang + tab "Kerjaan Magang" untuk karyawan
+
+### Masalahnya lebih dalam dari sekadar dropdown
+Sebelum ini, siapa pun yang tahu `ACCESS_PIN` mendapat level penuh, dan `getBootstrapData`
+mengirim **seluruh task, komentar, link, dan catatan** ke browser. Identitas hanyalah pilihan
+di dropdown yang tak pernah diverifikasi server. Artinya menyembunyikan switcher **tidak
+mengamankan apa pun** — data tim tetap ada di respons jaringan.
+
+### PIN magang: dipangkas DI SERVER
+- Env baru **`MAGANG_PIN`**. Masuk dengan PIN itu → level `magang`.
+- `getBootstrapData` untuk level ini **hanya mengirim**: task milik anak magang, plus task
+  karyawan tempat magang itu terdaftar sebagai PIC/Support. Riwayat aktivitas, dashboard
+  eksternal, daftar PIN, link & catatan orang lain **tidak dikirim sama sekali**.
+- Aksi administratif diblokir di gerbang (kelola user, kelola opsi, hapus task, setup, dll).
+- Header `x-user` (identitas yang diklaim browser) **hanya bisa mempersempit**, tak pernah
+  menaikkan hak: backend memastikan nama itu memang ber-peran Magang. Mengaku "Nynda" lewat
+  jalur magang tetap hanya menerima data magang.
+
+### Identitas magang terkunci
+- Setelah PIN magang, muncul pemilihan **hanya dari daftar magang** yang disiapkan Dev.
+- Pilihannya disimpan di **cookie** (`tt_magang_user`, 180 hari) dan **tidak bisa diganti
+  dari dalam aplikasi** — kotak "Mode User" disembunyikan, `requestUserSwitch` menolak.
+  Ganti orang berarti reset cookie / login ulang.
+
+### Tab "Kerjaan Magang" untuk karyawan
+- View baru (pola seperti Lintas Divisi) berisi task anak magang, **dikelompokkan per orang**
+  lengkap dengan hitungan selesai & overdue, dan badge overdue di sidebar.
+- Karyawan bisa membuka & **menutup (Done)** task magang langsung dari sini.
+- Konsekuensinya: **kerjaan magang tidak lagi tercampur** ke daftar & KPI task karyawan —
+  dashboard mereka kembali bersih. Sebelumnya Staff melihat task magang menyatu di listnya.
+- Magang tetap bisa jadi **Support di task karyawan** dan ikut **Task Kolaborasi**.
+
+### Perbaikan
+- `populateUserSelect()` dulu memaksa identitas ke salah satu opsi PIC yang tersedia. Karena
+  nama magang belum tentu ada di daftar itu, identitas magang terlempar balik ke user lain.
+  Kini mode magang punya jalur terkunci sendiri, seperti mode berbagi Lintas Divisi.
+
+### Pengujian
+- `test/vercel-users.test.js` → **55 assertion** (+16): pemangkasan data level magang,
+  task Support ikut terkirim hanya ke magang yang bersangkutan, dan **dua uji percobaan
+  naik hak** (mengaku Manager/Staff lewat jalur magang tetap ditolak).
+- `test/gas.test.js` → **288 assertion** (+9): kunci cookie, switcher tersembunyi, penolakan
+  ganti user, header `x-user`, tab Kerjaan Magang, dan pemisahan dari daftar karyawan.
+- `npm test` → **115 + 55 + 288 = 458 assertion**.
+- Diverifikasi end-to-end melawan backend Vercel asli: dengan PIN magang server mengirim
+  **6 task, semuanya PIC magang** (0 task karyawan, 0 activity, 0 dashboard); klaim "Nynda"
+  maupun "Ali" tetap 6 task yang sama; UI mengunci identitas ke cookie, lencana "Magang",
+  tanpa opsi Done. Sisi karyawan: daftar utama Ali 3 task (bersih), tab Kerjaan Magang berisi
+  2 blok anak magang / 6 task, dan Staff berhasil menutup task magang ke Done.
+
+---
+
 ## 1.56.0 — Leader melihat task miliknya saja (wewenangnya tetap penuh)
 Sebelumnya Leader ikut melihat **semua task tim** seperti Manager di Dashboard, Kanban,
 List, Timeline, dan Calendar — v1.54.0 baru mempersempitnya di tab Komunikasi saja.

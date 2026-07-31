@@ -174,14 +174,32 @@ module.exports = async (req, res) => {
     }
   }
 
-  const gateOn = !!(FULL_PIN || VIEW_PIN || googleOn);
+  // PIN khusus anak magang: level terbatas. Datanya DISARING DI SERVER — bukan sekadar
+  // disembunyikan di browser — sehingga task karyawan tak pernah sampai ke perangkat mereka.
+  const MAGANG_PIN = (process.env.MAGANG_PIN || '').trim();
+
+  const gateOn = !!(FULL_PIN || VIEW_PIN || MAGANG_PIN || googleOn);
   let level;
   if (!gateOn) level = 'full';
   else if ((FULL_PIN && authProvided === FULL_PIN) || (sessionEmail && ALLOW_EMAILS.includes(sessionEmail))) level = 'full';
+  else if (MAGANG_PIN && authProvided === MAGANG_PIN) level = 'magang';
   else if (VIEW_PIN && authProvided === VIEW_PIN) level = 'view';
   else level = 'none';
+
   // Action yang boleh diakses di level "view" (lihat-saja): baca terbatas + chat.
   const GUEST_ACTIONS = { getBootstrapData: 1, getComments: 1, addComment: 1 };
+  // Level "magang" boleh bekerja seperti biasa, TAPI tidak boleh menyentuh hal administratif.
+  const MAGANG_DENY = {
+    saveUser: 1, deleteUser: 1, setUserPin: 1, deleteUserPin: 1, listPinUsers: 1,
+    setupTaskTracker: 1, assignMissingTaskIds: 1, seedFormulaTemplate: 1,
+    saveOption: 1, deleteOption: 1, editOption: 1,
+    addDashboard: 1, updateDashboard: 1, deleteDashboard: 1,
+    deleteTask: 1, deleteCollab: 1, saveCollab: 1, setCollabType: 1,
+  };
+
+  // Identitas yang diklaim browser. TIDAK dipercaya untuk menaikkan hak — hanya dipakai
+  // mempersempit data, dan backend memastikan namanya memang ber-peran Magang.
+  const claimedUser = String(req.headers['x-user'] || '').slice(0, 60);
 
   if (action === 'login') {
     return res.status(200).end(JSON.stringify({ success: level !== 'none', level: level, gateOn: gateOn, message: level === 'none' ? 'PIN salah.' : 'Berhasil.' }));
@@ -191,6 +209,9 @@ module.exports = async (req, res) => {
   }
   if (level === 'view' && !GUEST_ACTIONS[action]) {
     return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Perlu PIN akses penuh.' }));
+  }
+  if (level === 'magang' && MAGANG_DENY[action]) {
+    return res.status(401).end(JSON.stringify({ __error: true, code: 'AUTH', message: 'Aksi ini hanya untuk karyawan.' }));
   }
 
   const handler = HANDLERS[action];
@@ -204,8 +225,9 @@ module.exports = async (req, res) => {
 
   try {
     // Tamu (tanpa PIN) hanya menerima data terbatas dari bootstrap.
+    // Level magang: server memangkas datanya sebelum dikirim.
     const result = (action === 'getBootstrapData')
-      ? await backend.getBootstrapData({ viewOnly: level === 'view' })
+      ? await backend.getBootstrapData({ viewOnly: level === 'view', magangOnly: level === 'magang', asUser: claimedUser })
       : await handler(...args);
     // Hasil bisa berupa objek {success,...}, array, atau primitif.
     return res.status(200).end(JSON.stringify(result === undefined ? null : result));

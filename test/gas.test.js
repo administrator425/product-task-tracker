@@ -589,6 +589,17 @@ ok('scopedTasks memakai canSeeAllTasks', /function scopedTasks\(\)[\s\S]{0,400}?
 ok('daftar Komunikasi memakai cakupan yang sama', /const arr=scopedTasks\(\)/.test(commHtml));
 ok('badge unread dihitung dari scopedTasks', /function totalUnreadTasks\(\)[\s\S]{0,300}?new Set\(scopedTasks\(\)/.test(commHtml));
 ok('tak ada lagi cakupan Komunikasi terpisah', !/function commScopedTasks\(\)/.test(commHtml));
+// Mode magang: identitas terkunci di cookie, switcher hilang, dan ada tab khusus untuk karyawan.
+ok('ada pembungkus cookie identitas magang', /function magangIdentity\(\)\{ return getCookie\('tt_magang_user'\)/.test(commHtml));
+ok('pilih identitas magang mengunci ke cookie', /function chooseIdentity\(name\)\{[\s\S]{0,400}?state\.magangMode[\s\S]{0,300}?setCookie\('tt_magang_user'/.test(commHtml));
+ok('identitas magang tak bisa dipindah otomatis', /function populateUserSelect\(\)\{[\s\S]{0,600}?state\.magangMode\)\{[\s\S]{0,300}?select\.disabled=true/.test(commHtml));
+ok('ganti user ditolak di mode magang', /function requestUserSwitch\(value\)\{[\s\S]{0,300}?state\.magangMode\)\{[\s\S]{0,150}?terkunci/.test(commHtml));
+ok('kotak Mode User disembunyikan utk magang', /modeUserBox[\s\S]{0,150}?state\.magangMode/.test(commHtml));
+ok('identitas dikirim ke server sbg x-user', /'x-user': magangIdentity\(\)/.test(commHtml));
+ok('ada tab Kerjaan Magang utk karyawan', /id="nav-magang"/.test(commHtml) && /function renderMagangView\(\)/.test(commHtml));
+ok('tab Kerjaan Magang tak tampil utk magang', /function canSeeMagangView\(\)\{[\s\S]{0,200}?state\.magangMode \|\| isMagang\(state\.currentUser\)\) return false/.test(commHtml));
+ok('kerjaan magang tak lagi tercampur ke daftar karyawan', !/isMagang\(me\) \|\| isStaff\(me\)\) return state\.tasks\.filter/.test(commHtml));
+
 // Wewenang Leader HARUS tetap.
 ok('Leader tetap boleh set Done', /function canSetDoneFor\(task\)\{[\s\S]{0,400}?isLeader\(me\)\) return true/.test(commHtml));
 ok('Leader tetap boleh menyusun Task Kolaborasi', /function canManageCollab\(\)\{[\s\S]{0,300}?isLeader\(state\.currentUser\)\) return true/.test(commHtml));

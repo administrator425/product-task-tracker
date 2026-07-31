@@ -1414,8 +1414,27 @@ async function getAllCommentsLite(pre) {
     .filter(c => c.taskId);
 }
 
+// Apakah salah satu Support task ini seorang magang?
+function supportHasMagang(task) {
+  return String((task && task.support) || '').split(',').map(s => s.trim()).filter(Boolean).some(s => isMagangActor(s));
+}
+// Task yang boleh dilihat dari level "magang":
+//   - task milik magang mana pun (sesama magang saling melihat), DAN
+//   - task karyawan tempat magang INI terdaftar sebagai PIC/Support (boleh ikut membantu).
+// Nama yang diklaim browser divalidasi dulu harus ber-peran Magang, jadi klaim palsu
+// tidak bisa dipakai untuk menembus ke data karyawan.
+function magangVisibleTask(task, asUser) {
+  if (isMagangActor(task && task.pic)) return true;
+  if (supportHasMagang(task)) {
+    if (!asUser) return false;
+    return ownsTaskActor(task, asUser);
+  }
+  return !!asUser && ownsTaskActor(task, asUser);
+}
+
 async function getBootstrapData(opts) {
   const viewOnly = !!(opts && opts.viewOnly);
+  const magangOnly = !!(opts && opts.magangOnly);
   // Satu batchGet untuk SEMUA range -> hemat kuota (±2 read, bukan ±11).
   const meta = await getSheetMeta().catch(() => ({}));            // 1 read: tahu sheet mana yang ada
   const sheetOf = {
@@ -1452,6 +1471,40 @@ async function getBootstrapData(opts) {
     getChecklistSummary(pre('checklist')),
     getCollabs(pre('collab'), pre('collabSteps')).catch(() => []),
   ]);
+  if (magangOnly) {
+    // Level magang: PANGKAS di server. Task karyawan tidak pernah ikut terkirim,
+    // jadi tak bisa diintip lewat DevTools sekalipun.
+    const asUserRaw = String((opts && opts.asUser) || '').trim();
+    const asUser = isMagangActor(asUserRaw) ? asUserRaw : '';   // klaim non-magang diabaikan
+    const shown = (tasks || []).filter(t => magangVisibleTask(t, asUser));
+    const shownIds = new Set(shown.map(t => t.id));
+    const magangNames = _users.filter(u => u.active && String(u.role).toLowerCase() === 'magang').map(u => u.name);
+    // Task kolaborasi: hanya yang ada prosesnya dipegang magang.
+    const myCollabs = (collabs || []).filter(c => (c.steps || []).some(s => isMagangActor(s.pic)));
+    return {
+      tasks: shown,
+      options,
+      activity: [],
+      commentsSummary: (commentsSummary || []).filter(c => shownIds.has(c.taskId)),
+      pinUsers: [],
+      links: asUser ? (links || []).filter(l => baseName(l.user) === baseName(asUser)) : [],
+      dashboards: [],
+      notes: asUser ? (notes || []).filter(n => baseName(n.user) === baseName(asUser)) : [],
+      checklistSummary,
+      collabs: myCollabs,
+      magangOnly: true,
+      magangUsers: magangNames,          // daftar identitas yang boleh dipilih
+      meta: {
+        sheetName: CONFIG.TASK_SHEET,
+        managers: [], doneApprovers: [], collabManagers: [],
+        users: _users.filter(u => String(u.role).toLowerCase() === 'magang')
+          .map(u => ({ row: u.row, name: u.name, role: u.role, active: u.active })),
+        roles: ROLES,
+        generatedAt: nowStamp(),
+      },
+    };
+  }
+
   if (viewOnly) {
     // Tamu tanpa PIN: hanya task yang di-set Lintas (punya Divisi Tujuan) atau di-mirror,
     // plus opsi (utk label/warna), dashboards, dan ringkasan chat pada task tsb.
