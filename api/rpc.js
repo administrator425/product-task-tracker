@@ -64,6 +64,9 @@ const HANDLERS = {
   deleteCollab: (id, actor) => backend.deleteCollab(id, actor),
   getNotifications: (user) => backend.getNotifications(user),
   markNotificationsRead: (user, refId) => backend.markNotificationsRead(user, refId),
+  getUsers: () => backend.getUsers(),
+  saveUser: (name, role, active, actor) => backend.saveUser(name, role, active, actor),
+  deleteUser: (name, actor) => backend.deleteUser(name, actor),
   saveOption: (type, value, parent) => backend.saveOption(type, value, parent),
   deleteOption: (type, value, parent) => backend.deleteOption(type, value, parent),
   editOption: (type, oldValue, newValue, parent) => backend.editOption(type, oldValue, newValue, parent),
@@ -194,6 +197,10 @@ module.exports = async (req, res) => {
   if (!handler) {
     return res.status(400).end(JSON.stringify({ __error: true, message: 'Action tidak dikenal: ' + action }));
   }
+
+  // Instance serverless dipakai ulang saat masih hangat. Buang cache daftar user tiap
+  // request supaya perubahan peran langsung berlaku, bukan menunggu cold start.
+  try { backend.invalidateUsers(); } catch (e) { /* versi lama tanpa fungsi ini */ }
 
   try {
     // Tamu (tanpa PIN) hanya menerima data terbatas dari bootstrap.

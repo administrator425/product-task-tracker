@@ -10,6 +10,39 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.55.0 — Kelola user & peran kini ada juga di versi Vercel
+Sebelumnya sheet `USERS` + peran (Manager/Leader/Staff/Magang) hanya ada di paket Apps Script,
+jadi panel **Kelola User** tak pernah muncul di app Vercel yang dipakai tim sehari-hari.
+Sekarang di-port ke `api/_sheets.js` + `api/rpc.js`.
+
+- **Sheet `USERS`** (Nama · Peran · Aktif) jadi sumber peran, dibaca **dalam batch bootstrap
+  yang sudah ada** — jadi tidak menambah kuota baca Google Sheets sama sekali.
+- **Fungsi peran tetap SINKRON.** Alih-alih membuat semuanya `async` (yang akan membongkar
+  seluruh pemanggil dan 78 tes produksi), daftar user dimuat sekali per request ke cache,
+  lalu fungsi peran membacanya. `rpc.js` membuang cache di awal tiap request supaya
+  perubahan peran langsung berlaku, tidak menunggu cold start instance serverless.
+- **Cadangan environment variable dipertahankan**: selama sheet `USERS` kosong/absen,
+  peran diambil dari `MANAGERS` / `DONE_APPROVERS` / `COLLAB_MANAGERS` persis seperti dulu.
+  Instalasi yang belum menjalankan setup tidak berubah perilakunya sama sekali.
+- Ikut ter-port: **izin "Done" berbasis PIC** (Staff boleh menutup task anak magang, tapi
+  bukan task karyawan lain), **kelola user hanya oleh Dev**, dan aturan visibilitas Magang.
+- Action baru di RPC: `getUsers`, `saveUser`, `deleteUser`.
+
+### Pengujian
+- `test/logic.test.js` → **115 assertion** (+37): pengenalan peran, izin Done bergantung PIC,
+  user nonaktif kehilangan hak, kelola-user hanya Dev, dan kembalinya ke cadangan env var.
+- **`test/vercel-users.test.js` (baru) → 39 assertion**: uji integrasi backend Vercel dengan
+  googleapis diganti spreadsheet tiruan — jalur nyata baca/tulis sheet, bootstrap meta,
+  gerbang Done lewat `quickUpdateField` & `saveTask`, CRUD user, dan fallback env var.
+- `npm test` kini menjalankan tiga suite: **115 + 39 + 277 = 431 assertion**.
+- Diverifikasi end-to-end di UI melawan backend Vercel asli: Dev melihat panel Kelola User
+  (5 peran bisa dipilih), Manager melihat keterangan saja, menambah "Magang Agustus"
+  langsung masuk dropdown PIC & pemilih identitas, task untuknya hanya terlihat sesama
+  magang + semua Staff, magang ditolak saat mem-Done-kan task sendiri, dan Staff berhasil
+  menutupnya. Lencana peran: Manager/Leader/Staff/Magang/Dev tampil benar.
+
+---
+
 ## 1.54.0 — Komunikasi jadi kotak masuk pribadi + notifikasi hilang saat dibaca
 
 ### Cakupan tab Komunikasi

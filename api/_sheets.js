@@ -40,6 +40,7 @@ const CONFIG = {
   COLLAB_SHEET: 'COLLAB',
   COLLAB_STEP_SHEET: 'COLLAB_STEPS',
   NOTIF_SHEET: 'NOTIFICATIONS',
+  USERS_SHEET: 'USERS',
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
@@ -128,62 +129,156 @@ async function getSheets() {
   return _sheetsClient;
 }
 
-// Catatan: manajemen user & peran (sheet USERS) hanya ada di versi Apps Script
-// (lihat gas/Code.gs). Di versi ini peran tetap diatur lewat environment variable,
-// dan frontend otomatis memakai jalur lama karena bootstrap tidak mengirim meta.users.
-function getManagers() {
-  const raw = process.env.MANAGERS || 'Nynda';
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
-}
+/* ------------------------------------------------------------------ */
+/* PERAN PENGGUNA — sheet USERS, dengan CADANGAN environment variable   */
+/*                                                                      */
+/*  Dev     — super user; SATU-SATUNYA yang boleh kelola user & peran.  */
+/*  Manager — lihat semua task, set Done, setup kolaborasi, task lintas */
+/*            divisi, kelola dropdown.                                  */
+/*  Leader  — lihat semua task, set Done, setup kolaborasi.             */
+/*  Staff   — task miliknya + semua task magang; boleh menutup task     */
+/*            MAGANG, tapi task sendiri maksimal "Review PM".           */
+/*  Magang  — hanya task sesama magang; tak bisa menutup apa pun.       */
+/*  Lihat Saja — baca terbatas (task lintas divisi).                    */
+/*                                                                      */
+/*  Selama sheet USERS kosong/absen, peran diambil dari environment     */
+/*  variable persis seperti sebelumnya — instalasi lama tidak berubah.  */
+/* ------------------------------------------------------------------ */
+const ROLES = ['Dev', 'Manager', 'Leader', 'Staff', 'Magang', 'Lihat Saja'];
+const ROLE_DEFAULT = 'Staff';
 
 // Nama tanpa suffix "(...)" -> lowercase, untuk perbandingan yang toleran.
 function baseName(s) {
   return String(s || '').replace(/\s*\(.*?\)\s*$/, '').trim().toLowerCase();
 }
 
-// Apakah actor seorang manager? (daftar MANAGERS atau akun Dev). Dipakai untuk
-// menegakkan aturan: hanya manager yang boleh menetapkan status "Done".
+function envList(key, dflt) {
+  return String(process.env[key] || dflt).split(',').map(s => s.trim()).filter(Boolean);
+}
+
+// Cache daftar user. Fungsi peran sengaja tetap SINKRON supaya seluruh pemanggilnya
+// tak perlu diubah jadi async; yang asinkron hanya pemuatannya (loadUsers()).
+// rpc.js memanggil invalidateUsers() di awal tiap request agar tak memakai data basi
+// dari instance serverless yang masih hangat.
+let _users = null;
+function invalidateUsers() { _users = null; }
+function usersLoaded() { return Array.isArray(_users); }
+function usersConfigured() { return usersLoaded() && _users.length > 0; }
+function setUsersFromRows(rows) {
+  _users = (rows || [])
+    .map((r, i) => ({
+      row: i + 2,
+      name: String((r && r[0]) || '').trim(),
+      role: String((r && r[1]) || '').trim() || ROLE_DEFAULT,
+      active: (r && r[2] === '') ? true : !(r && String(r[2]).toLowerCase() === 'false'),
+    }))
+    .filter(u => u.name);
+  return _users;
+}
+async function loadUsers(pre) {
+  if (pre !== undefined) return setUsersFromRows(pre);
+  if (usersLoaded()) return _users;
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.USERS_SHEET}!A2:C`); } catch (e) { rows = []; }
+  return setUsersFromRows(rows);
+}
+
+function roleOfActor(name) {
+  const n = baseName(name);
+  if (!n) return '';
+  if (n === 'dev') return 'Dev';
+  if (!usersConfigured()) return '';
+  const hit = _users.find(u => baseName(u.name) === n);
+  if (!hit) return '';
+  return hit.active ? hit.role : 'Nonaktif';
+}
+function hasRole(name, role) { return String(roleOfActor(name)).toLowerCase() === role; }
+
+function getManagers() {
+  if (usersConfigured()) {
+    return _users.filter(u => u.active && String(u.role).toLowerCase() === 'manager').map(u => u.name);
+  }
+  return envList('MANAGERS', 'Nynda');
+}
+
+// Apakah actor seorang manager? (peran Manager, daftar MANAGERS, atau akun Dev).
 function isManagerActor(name) {
   const n = baseName(name);
   if (!n) return false;
   if (n === 'dev') return true;
-  return getManagers().some(m => baseName(m) === n);
+  if (usersConfigured()) return hasRole(name, 'manager');
+  return envList('MANAGERS', 'Nynda').some(m => baseName(m) === n);
 }
+function isLeaderActor(name) {
+  if (!baseName(name)) return false;
+  if (usersConfigured()) return hasRole(name, 'leader');
+  const n = baseName(name);
+  return envList('DONE_APPROVERS', 'Nynda,Dhea,Alya').some(a => baseName(a) === n) && !isManagerActor(name);
+}
+function isStaffActor(name) { return usersConfigured() && hasRole(name, 'staff'); }
+function isMagangActor(name) { return usersConfigured() && hasRole(name, 'magang'); }
 
-// Status "Done" bersifat final dan hanya boleh diset oleh "Done approver".
+// Status "Done" bersifat final dan hanya boleh diset oleh yang berwenang.
 function isDoneStatus(v) {
   return String(v || '').trim().toLowerCase() === 'done';
 }
 
-// Siapa yang boleh MENETAPKAN status "Done". Sengaja TERPISAH dari hak manager:
-// Dhea & Alya boleh meng-approve Done tanpa ikut jadi manager (tetap Member).
-// Manager (MANAGERS) & Dev selalu ikut boleh.
+// Daftar approver umum: peran Manager + Leader (atau env DONE_APPROVERS).
 function getDoneApprovers() {
-  const raw = process.env.DONE_APPROVERS || 'Nynda,Dhea,Alya';
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (usersConfigured()) {
+    return _users.filter(u => {
+      const r = String(u.role).toLowerCase();
+      return u.active && (r === 'manager' || r === 'leader');
+    }).map(u => u.name);
+  }
+  return envList('DONE_APPROVERS', 'Nynda,Dhea,Alya');
 }
-function canApproveDone(name) {
+
+// Boleh menutup task ke "Done"? Bergantung SIAPA PIC task itu:
+//   Manager/Leader/Dev -> task siapa pun · Staff -> hanya task MAGANG · Magang -> tidak.
+// taskPic boleh dikosongkan untuk pertanyaan umum "orang ini bisa Done sama sekali?".
+function canApproveDone(name, taskPic) {
   if (!baseName(name)) return false;
   if (isManagerActor(name)) return true;
+  if (usersConfigured()) {
+    if (isLeaderActor(name)) return true;
+    if (isMagangActor(name)) return false;
+    if (isStaffActor(name)) {
+      if (taskPic === undefined || taskPic === null || taskPic === '') return true;
+      return isMagangActor(taskPic);
+    }
+    return false;
+  }
   const n = baseName(name);
   return getDoneApprovers().some(a => baseName(a) === n);
 }
 
-// Siapa yang boleh MEMBUAT/MENGUBAH Task Kolaborasi (setup alur). Terpisah dari hak
-// manager: Dhea & Alya bisa menyusun task kolaborasi tanpa jadi manager penuh.
-// Manager (MANAGERS) & Dev selalu ikut boleh.
+// Siapa yang boleh MENYUSUN Task Kolaborasi: Manager, Leader, dan Dev.
 function getCollabManagers() {
-  const raw = process.env.COLLAB_MANAGERS || 'Nynda,Dhea,Alya';
-  return raw.split(',').map(s => s.trim()).filter(Boolean);
+  if (usersConfigured()) return getDoneApprovers();
+  return envList('COLLAB_MANAGERS', 'Nynda,Dhea,Alya');
 }
 function canManageCollabActor(name) {
   if (!baseName(name)) return false;
   if (isManagerActor(name)) return true;
+  if (usersConfigured()) return isLeaderActor(name);
   const n = baseName(name);
   return getCollabManagers().some(a => baseName(a) === n);
 }
-function doneDeniedMessage() {
-  return 'Hanya ' + getDoneApprovers().join(', ') + ' yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan.';
+
+// Kelola user & peran: HANYA Dev — satu pintu, supaya tak ada yang bisa menaikkan
+// haknya sendiri atau menambah akses tanpa sepengetahuan pemilik sistem.
+function canManageUsers(name) { return baseName(name) === 'dev'; }
+function usersDeniedMessage() {
+  return 'Hanya mode Dev yang bisa mengelola user & peran. Masuk lewat tekan-tahan logo ProductTrack, atau ubah langsung di sheet USERS.';
+}
+
+function doneDeniedMessage(taskPic) {
+  if (taskPic && isMagangActor(taskPic)) {
+    return 'Task anak magang hanya bisa ditutup ("Done") oleh karyawan — Staff, Leader, atau Manager. Magang sendiri maksimal "Review PM".';
+  }
+  const who = getDoneApprovers();
+  return 'Hanya ' + (who.length ? who.join(', ') : 'Manager/Leader') + ' yang bisa menandai task sebagai "Done". Set ke "Review PM" agar diteruskan.';
 }
 
 /* ------------------------------------------------------------------ */
@@ -442,8 +537,11 @@ async function saveTask(task) {
   // Perpindahan KE Done oleh yang tak berhak ditolak; task yang sudah Done boleh
   // tetap Done atau ditarik balik (bukan aksi "membuat Done").
   const oldStatus = (existingTask && existingTask.status) || '';
-  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !canApproveDone(actor)) {
-    return { success: false, message: doneDeniedMessage() };
+  // Izin Done bergantung PIC task-nya (Staff boleh menutup task anak magang).
+  await loadUsers();
+  const finalPic = String(task.pic || (existingTask && existingTask.pic) || '').trim();
+  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !canApproveDone(actor, finalPic)) {
+    return { success: false, message: doneDeniedMessage(finalPic) };
   }
 
   // Pastikan ID terisi. createdBy = pembuat task (di-set saat create, dipertahankan saat update).
@@ -514,11 +612,13 @@ async function quickUpdateField(taskId, field, value, actor) {
   // Gerbang "Done": yang bukan Done approver tak boleh memindahkan task KE Done.
   // Task yang sudah Done tetap boleh diubah (mis. ditarik balik) — yang dilarang
   // hanya aksi menetapkan Done. Baca status lama dulu untuk membedakannya.
-  if (f === 'status' && isDoneStatus(value) && !canApproveDone(actor)) {
+  // Izinnya bergantung PIC task — Staff boleh menutup task milik anak magang.
+  if (f === 'status' && isDoneStatus(value)) {
     const cur0 = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${row}:${CONFIG.LAST_COL_LETTER}${row}`);
     const existing = rowToTask(cur0[0] || [], row);
-    if (!isDoneStatus(existing.status)) {
-      return { success: false, message: doneDeniedMessage() };
+    await loadUsers();
+    if (!isDoneStatus(existing.status) && !canApproveDone(actor, existing.pic)) {
+      return { success: false, message: doneDeniedMessage(existing.pic) };
     }
   }
 
@@ -756,6 +856,7 @@ async function getTaskById(taskId) {
 //  - Ceklis task biasa: manager/Dev, atau PIC/Support task itu.
 async function canEditChecklist(taskId, actor) {
   if (parseCollabStep(taskId)) return !!baseName(actor);
+  await loadUsers();
   if (isManagerActor(actor)) return true;
   const task = await getTaskById(taskId);
   return ownsTaskActor(task, actor);
@@ -765,6 +866,7 @@ async function canEditChecklist(taskId, actor) {
 //  - Ceklis task biasa: manager/Dev SAJA (item dari PM tak boleh dihilangkan PIC).
 async function canDeleteChecklist(taskId, actor) {
   if (parseCollabStep(taskId)) return !!baseName(actor);
+  await loadUsers();
   if (isManagerActor(actor)) return true;
   return false;
 }
@@ -954,6 +1056,7 @@ async function deleteStepRowsForCollab(collabId) {
 
 async function saveCollab(payload, actor) {
   actor = String(actor || '').trim() || 'Unknown';
+  await loadUsers();
   if (!canManageCollabActor(actor)) return { success: false, message: 'Anda tak berhak membuat/mengubah task kolaborasi.' };
   const platform = String((payload && payload.platform) || '').trim();
   const title = String((payload && payload.title) || '').trim();
@@ -1021,6 +1124,7 @@ async function setCollabStepNote(collabId, order, note, actor) {
   }
   if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
   const pic = String((srows[idx] && srows[idx][3]) || '').trim();
+  await loadUsers();
   if (!isManagerActor(actor) && !canCheckStep(pic, actor)) {
     return { success: false, message: `Hanya ${pic || 'PIC proses ini'} atau manager yang bisa mengisi catatan.` };
   }
@@ -1032,6 +1136,7 @@ async function setCollabStepNote(collabId, order, note, actor) {
 // Ubah tipe task (dipakai drag antar kolom Kanban per-tipe). Manager/Dev saja.
 async function setCollabType(collabId, type, actor) {
   actor = String(actor || '').trim() || 'Unknown';
+  await loadUsers();
   if (!canManageCollabActor(actor)) return { success: false, message: 'Anda tak berhak mengubah tipe task.' };
   collabId = String(collabId || '').trim();
   await ensureCollabSheets();
@@ -1079,6 +1184,7 @@ async function setCollabStepDone(collabId, order, done, actor) {
 
 async function deleteCollab(id, actor) {
   actor = String(actor || '').trim() || 'Unknown';
+  await loadUsers();
   if (!canManageCollabActor(actor)) return { success: false, message: 'Anda tak berhak menghapus task kolaborasi.' };
   id = String(id || '').trim();
   await ensureCollabSheets();
@@ -1093,6 +1199,90 @@ async function deleteCollab(id, actor) {
   }
   await logActivity(actor, 'Collab Delete', id, '');
   return { success: true, message: 'Task kolaborasi dihapus.', collabs: await getCollabs() };
+}
+
+/* ------------------------------------------------------------------ */
+/* USERS (daftar anggota tim & perannya) — hanya Dev yang boleh kelola */
+/* ------------------------------------------------------------------ */
+
+async function ensureUsersSheet() {
+  await ensureSheetExists(CONFIG.USERS_SHEET);
+  const head = await valuesGet(`${CONFIG.USERS_SHEET}!A1:C1`);
+  if (!head.length || !head[0] || !head[0][0]) {
+    await valuesUpdate(`${CONFIG.USERS_SHEET}!A1:C1`, [['Nama', 'Peran', 'Aktif']]);
+  }
+}
+
+async function getUsers() {
+  await loadUsers();
+  return _users.map(u => ({ row: u.row, name: u.name, role: u.role, active: u.active }));
+}
+
+function normalizeRole(role) {
+  const r = String(role || '').trim().toLowerCase();
+  const hit = ROLES.find(x => x.toLowerCase() === r);
+  return hit || '';
+}
+
+// Tambah user baru / ubah peran & status aktifnya. Nama sekaligus didaftarkan ke
+// dropdown PIC & Support agar langsung bisa diberi task.
+async function saveUser(name, role, active, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  name = String(name || '').trim();
+  if (!canManageUsers(actor)) return { success: false, message: usersDeniedMessage() };
+  if (!name) return { success: false, message: 'Nama user tidak boleh kosong.' };
+  if (name.length > 40) return { success: false, message: 'Nama user terlalu panjang (maks 40 karakter).' };
+  if (baseName(name) === 'dev') return { success: false, message: '"Dev" adalah nama khusus mode Dev dan tidak bisa dipakai sebagai user.' };
+
+  const wanted = normalizeRole(role);
+  if (!wanted) return { success: false, message: 'Peran tidak valid. Pilih: ' + ROLES.join(', ') + '.' };
+
+  await ensureUsersSheet();
+  invalidateUsers();
+  await loadUsers();
+  const isActive = (active === undefined || active === null) ? true : !!active;
+  const found = _users.find(u => baseName(u.name) === baseName(name));
+
+  if (found) await valuesUpdate(`${CONFIG.USERS_SHEET}!A${found.row}:C${found.row}`, [[name, wanted, isActive ? 'TRUE' : 'FALSE']]);
+  else await valuesAppend(`${CONFIG.USERS_SHEET}!A:C`, [[name, wanted, isActive ? 'TRUE' : 'FALSE']]);
+  invalidateUsers();
+
+  // Daftarkan ke dropdown PIC & Support (abaikan untuk peran Lihat Saja).
+  let options = null;
+  if (wanted.toLowerCase() !== 'lihat saja') {
+    try { await saveOption('pic', name, ''); const r = await saveOption('support', name, ''); options = r.options; }
+    catch (e) { /* opsi tak wajib */ }
+  }
+  await logActivity(actor, found ? 'User Update' : 'User Add', '', `${name} → ${wanted}${isActive ? '' : ' (nonaktif)'}`);
+  return {
+    success: true,
+    message: found ? `Peran ${name} diperbarui jadi ${wanted}.` : `${name} ditambahkan sebagai ${wanted}.`,
+    users: await getUsers(),
+    options: options || await getOptions(),
+  };
+}
+
+async function deleteUser(name, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  name = String(name || '').trim();
+  if (!canManageUsers(actor)) return { success: false, message: usersDeniedMessage() };
+  if (!name) return { success: false, message: 'Nama user tidak boleh kosong.' };
+  if (baseName(name) === baseName(actor)) return { success: false, message: 'Tidak bisa menghapus diri sendiri.' };
+
+  invalidateUsers();
+  await loadUsers();
+  const found = _users.find(u => baseName(u.name) === baseName(name));
+  if (!found) return { success: false, message: 'User tidak ditemukan.' };
+
+  const meta = await getSheetMeta();
+  const sheetId = meta[CONFIG.USERS_SHEET] && meta[CONFIG.USERS_SHEET].sheetId;
+  if (sheetId == null) return { success: false, message: 'Sheet USERS tidak ditemukan.' };
+  await batchUpdate([{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: found.row - 1, endIndex: found.row } } }]);
+  invalidateUsers();
+
+  await logActivity(actor, 'User Delete', '', name);
+  try { await deleteUserPin(name); } catch (e) { /* PIN menggantung tak masalah */ }
+  return { success: true, message: `${name} dihapus dari daftar user.`, users: await getUsers() };
 }
 
 /* ------------------------------------------------------------------ */
@@ -1232,19 +1422,23 @@ async function getBootstrapData(opts) {
     tasks: CONFIG.TASK_SHEET, options: CONFIG.OPTIONS_SHEET, activity: CONFIG.ACTIVITY_SHEET,
     comments: CONFIG.COMMENTS_SHEET, auth: CONFIG.AUTH_SHEET, links: CONFIG.LINKS_SHEET,
     dashboards: CONFIG.DASHBOARDS_SHEET, notes: CONFIG.NOTES_SHEET, checklist: CONFIG.CHECKLIST_SHEET,
-    collab: CONFIG.COLLAB_SHEET, collabSteps: CONFIG.COLLAB_STEP_SHEET,
+    collab: CONFIG.COLLAB_SHEET, collabSteps: CONFIG.COLLAB_STEP_SHEET, users: CONFIG.USERS_SHEET,
   };
   const R = {
     tasks: MAIN_DATA_RANGE(), options: `${CONFIG.OPTIONS_SHEET}!A2:D`, activity: `${CONFIG.ACTIVITY_SHEET}!A2:E`,
     comments: `${CONFIG.COMMENTS_SHEET}!A2:D`, auth: `${CONFIG.AUTH_SHEET}!A2:B`, links: `${CONFIG.LINKS_SHEET}!A2:D`,
     dashboards: `${CONFIG.DASHBOARDS_SHEET}!A2:D`, notes: `${CONFIG.NOTES_SHEET}!A2:E`, checklist: `${CONFIG.CHECKLIST_SHEET}!A2:C`,
     collab: `${CONFIG.COLLAB_SHEET}!A2:I`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:I`,
+    users: `${CONFIG.USERS_SHEET}!A2:C`,
   };
   const present = Object.keys(R).filter(k => meta[sheetOf[k]]);
   let batch = null;
   if (present.length) { try { batch = await valuesBatchGet(present.map(k => R[k])); } catch (e) { batch = null; } }  // 1 read
   // pre(k): array (dari batch) bila sukses; [] bila sheet tak ada; undefined bila batch gagal -> fungsi baca sendiri.
   const pre = (k) => (batch === null ? undefined : (meta[sheetOf[k]] ? (batch[R[k]] || []) : []));
+
+  // Peran diambil dari batch yang sama -> tidak menambah kuota baca sama sekali.
+  await loadUsers(pre('users'));
 
   const [tasks, options, activity, commentsSummary, pinUsers, links, dashboards, notes, checklistSummary, collabs] = await Promise.all([
     getTasks(pre('tasks')),
@@ -1283,6 +1477,8 @@ async function getBootstrapData(opts) {
         managers: getManagers(),
         doneApprovers: getDoneApprovers(),
         collabManagers: getCollabManagers(),
+        users: await getUsers(),   // sumber peran untuk UI (Dev/Manager/Leader/Staff/Magang/Lihat Saja)
+        roles: ROLES,
         generatedAt: nowStamp(),
       },
     };
@@ -1303,6 +1499,8 @@ async function getBootstrapData(opts) {
       managers: getManagers(),
       doneApprovers: getDoneApprovers(),
       collabManagers: getCollabManagers(),
+      users: await getUsers(),   // sumber peran untuk UI (Dev/Manager/Leader/Staff/Magang/Lihat Saja)
+      roles: ROLES,
       generatedAt: nowStamp(),
     },
   };
@@ -1772,6 +1970,7 @@ async function setupTaskTracker() {
   await ensureCollabSheets();
   await ensureNotificationsSheet();
   await ensureActivitySheet();
+  await ensureUsersSheet();
   await ensureAuthSheet();
   await ensureLinksSheet();
   await ensureDashboardsSheet();
@@ -1823,6 +2022,8 @@ module.exports = {
   getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, setCollabType, deleteCollab,
   // notifikasi (tag @user)
   getNotifications, markNotificationsRead,
+  // user & peran (Dev saja)
+  getUsers, saveUser, deleteUser, invalidateUsers,
   // setup
   setupTaskTracker, assignMissingTaskIds,
   // auth (PIN)
@@ -1839,6 +2040,8 @@ module.exports = {
   // (exported for tests)
   _internals: { formatDate, toSheetDate, generateTaskId, rowToTask, taskToRow, findRowByTaskId, serialToDate, nowStamp,
     isManagerActor, canApproveDone, getDoneApprovers, getManagers, isDoneStatus,
+    isLeaderActor, isStaffActor, isMagangActor, canManageUsers, roleOfActor,
+    usersConfigured, invalidateUsers, setUsersFromRows, normalizeRole, ROLES,
     ownsTaskActor, isChecked, canCheckStep, genCollabId, parseCollabStep,
     canManageCollabActor, getCollabManagers },
 };

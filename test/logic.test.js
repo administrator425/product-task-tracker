@@ -150,4 +150,71 @@ ok('Ali tidak boleh setup collab', canManageCollabActor('Ali') === false);
 ok('Andika tidak boleh setup collab', canManageCollabActor('Andika') === false);
 ok('Dhea setup collab TAPI bukan manager penuh', isMgr('Dhea') === false);
 
+console.log('\nPeran dari sheet USERS (Dev/Manager/Leader/Staff/Magang):');
+const {
+  setUsersFromRows, invalidateUsers, usersConfigured, roleOfActor,
+  isLeaderActor, isStaffActor, isMagangActor, canManageUsers, normalizeRole, ROLES,
+  getDoneApprovers, getManagers,
+} = _internals;
+
+// Tanpa sheet USERS -> peran diambil dari environment variable (perilaku lama).
+ok('sebelum dimuat: belum terkonfigurasi', usersConfigured() === false);
+
+setUsersFromRows([
+  ['Nynda', 'Manager', 'TRUE'],
+  ['Dhea', 'Leader', 'TRUE'],
+  ['Alya', 'Leader', 'TRUE'],
+  ['Ali', 'Staff', 'TRUE'],
+  ['Uma', 'Staff', 'TRUE'],
+  ['Magang A', 'Magang', 'TRUE'],
+  ['Magang B', 'Magang', 'TRUE'],
+  ['Bilar', 'Staff', 'FALSE'],      // dinonaktifkan
+  ['Tamu', 'Lihat Saja', 'TRUE'],
+]);
+ok('setelah dimuat: terkonfigurasi', usersConfigured() === true);
+eq('daftar peran', ROLES.join(','), 'Dev,Manager,Leader,Staff,Magang,Lihat Saja');
+
+console.log('  -- pengenalan peran --');
+eq('Nynda -> Manager', roleOfActor('Nynda'), 'Manager');
+eq('Dhea -> Leader', roleOfActor('Dhea'), 'Leader');
+eq('Ali -> Staff', roleOfActor('Ali'), 'Staff');
+eq('Magang A -> Magang', roleOfActor('Magang A'), 'Magang');
+eq('Bilar nonaktif', roleOfActor('Bilar'), 'Nonaktif');
+eq('Dev selalu Dev', roleOfActor('Dev'), 'Dev');
+eq('orang tak terdaftar -> kosong', roleOfActor('Orang Luar'), '');
+ok('isManagerActor Nynda', isManagerActor('Nynda') === true);
+ok('isManagerActor Dhea = false (dia Leader)', isManagerActor('Dhea') === false);
+ok('isLeaderActor Dhea', isLeaderActor('Dhea') === true);
+ok('isStaffActor Ali', isStaffActor('Ali') === true);
+ok('isMagangActor Magang A', isMagangActor('Magang A') === true);
+ok('nama ber-suffix tetap cocok', roleOfActor('Ali (Data)') === 'Staff');
+
+console.log('  -- izin "Done" bergantung PIC task --');
+ok('Manager boleh Done task siapa pun', canApproveDone('Nynda', 'Ali') === true);
+ok('Leader boleh Done task siapa pun', canApproveDone('Dhea', 'Uma') === true);
+ok('Staff BOLEH Done task magang', canApproveDone('Ali', 'Magang A') === true);
+ok('Staff TIDAK boleh Done task karyawan lain', canApproveDone('Ali', 'Uma') === false);
+ok('Staff TIDAK boleh Done task sendiri', canApproveDone('Ali', 'Ali') === false);
+ok('Magang tidak boleh Done task sendiri', canApproveDone('Magang A', 'Magang A') === false);
+ok('Magang tidak boleh Done task sesama magang', canApproveDone('Magang A', 'Magang B') === false);
+ok('user nonaktif kehilangan hak', canApproveDone('Bilar', 'Magang A') === false);
+ok('Lihat Saja tidak boleh Done', canApproveDone('Tamu', 'Magang A') === false);
+ok('Dev boleh Done apa pun', canApproveDone('Dev', 'Uma') === true);
+
+console.log('  -- daftar turunan & kelola user --');
+eq('approver = Manager + Leader aktif', getDoneApprovers().join(','), 'Nynda,Dhea,Alya');
+eq('managers dari peran', getManagers().join(','), 'Nynda');
+ok('hanya Dev yang boleh kelola user', canManageUsers('Dev') === true);
+ok('Manager TIDAK boleh kelola user', canManageUsers('Nynda') === false);
+ok('Leader TIDAK boleh kelola user', canManageUsers('Dhea') === false);
+eq('normalizeRole toleran kapital', normalizeRole('mAgAnG'), 'Magang');
+eq('normalizeRole tolak yang tak dikenal', normalizeRole('Sultan'), '');
+
+console.log('  -- kembali ke cadangan environment variable --');
+invalidateUsers();
+ok('cache dibuang -> tak terkonfigurasi', usersConfigured() === false);
+ok('Dhea tetap boleh Done lewat env DONE_APPROVERS', canApproveDone('Dhea') === true);
+ok('Ali tetap tidak boleh Done', canApproveDone('Ali') === false);
+ok('roleOfActor kosong tanpa USERS', roleOfActor('Dhea') === '');
+
 console.log(`\n✅ Semua ${passed} assertion lulus.`);

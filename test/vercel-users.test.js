@@ -1,0 +1,246 @@
+/**
+ * Uji integrasi backend Vercel (api/_sheets.js) untuk sheet USERS & peran.
+ * googleapis diganti spreadsheet tiruan in-memory, jadi seluruh jalur nyata diuji:
+ * baca/tulis sheet, gerbang izin, bootstrap meta, dan CRUD user.
+ *
+ * Jalankan: node test/vercel-users.test.js
+ */
+const assert = require('assert');
+const path = require('path');
+const Module = require('module');
+const origLoad = Module._load;
+
+/* ---------------- Spreadsheet tiruan ---------------- */
+const SHEETS = {};                       // { nama: string[][] }  (indeks 0 = baris 1)
+function sheet(name) { if (!SHEETS[name]) SHEETS[name] = []; return SHEETS[name]; }
+function colIdx(letters) {
+  let n = 0;
+  for (const ch of String(letters).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+function parseRange(a1) {
+  const bang = a1.lastIndexOf('!');
+  const name = a1.slice(0, bang);
+  const ref = a1.slice(bang + 1).toUpperCase();
+  const m = ref.match(/^([A-Z]+)(\d*)(?::([A-Z]+)(\d*))?$/);
+  if (!m) throw new Error('range tidak dikenal: ' + a1);
+  return {
+    name,
+    c1: colIdx(m[1]), r1: m[2] ? +m[2] : 1,
+    c2: colIdx(m[3] || m[1]), r2: (m[3] ? (m[4] ? +m[4] : 0) : (m[2] ? +m[2] : 0)),
+  };
+}
+function readRange(a1) {
+  const p = parseRange(a1);
+  const rows = sheet(p.name);
+  const end = p.r2 || rows.length;
+  const out = [];
+  for (let r = p.r1; r <= end; r++) {
+    const row = rows[r - 1] || [];
+    const slice = [];
+    for (let c = p.c1; c <= p.c2; c++) slice.push(row[c] === undefined ? '' : row[c]);
+    out.push(slice);
+  }
+  while (out.length && out[out.length - 1].every(v => v === '' || v === null || v === undefined)) out.pop();
+  return out;
+}
+function writeRange(a1, values) {
+  const p = parseRange(a1);
+  const rows = sheet(p.name);
+  values.forEach((vals, i) => {
+    const r = p.r1 + i - 1;
+    if (!rows[r]) rows[r] = [];
+    vals.forEach((v, j) => { rows[r][p.c1 + j] = v; });
+  });
+}
+function appendRange(a1, values) {
+  const p = parseRange(a1);
+  const rows = sheet(p.name);
+  let last = 0;
+  rows.forEach((row, i) => { if (row && row.some(v => v !== '' && v !== undefined && v !== null)) last = i + 1; });
+  values.forEach((vals, i) => {
+    const r = last + i;
+    if (!rows[r]) rows[r] = [];
+    vals.forEach((v, j) => { rows[r][p.c1 + j] = v; });
+  });
+}
+function deleteRow(sheetName, rowNumber) { sheet(sheetName).splice(rowNumber - 1, 1); }
+
+const SHEET_IDS = {};
+let nextSheetId = 100;
+function ensureSheet(name) { if (!(name in SHEET_IDS)) SHEET_IDS[name] = nextSheetId++; sheet(name); }
+
+function fakeSheets() {
+  return {
+    spreadsheets: {
+      get: async () => ({
+        data: { sheets: Object.keys(SHEETS).map(t => ({ properties: { sheetId: SHEET_IDS[t], title: t, gridProperties: { rowCount: 1000 } } })) },
+      }),
+      values: {
+        get: async ({ range }) => ({ data: { values: readRange(range) } }),
+        batchGet: async ({ ranges }) => ({ data: { valueRanges: ranges.map(r => ({ values: readRange(r) })) } }),
+        update: async ({ range, requestBody }) => { writeRange(range, requestBody.values); return {}; },
+        append: async ({ range, requestBody }) => { appendRange(range, requestBody.values); return {}; },
+        batchUpdate: async ({ requestBody }) => { (requestBody.data || []).forEach(d => writeRange(d.range, d.values)); return {}; },
+      },
+      batchUpdate: async ({ requestBody }) => {
+        (requestBody.requests || []).forEach(req => {
+          if (req.addSheet) ensureSheet(req.addSheet.properties.title);
+          if (req.deleteDimension) {
+            const id = req.deleteDimension.range.sheetId;
+            const name = Object.keys(SHEET_IDS).find(k => SHEET_IDS[k] === id);
+            if (name) deleteRow(name, req.deleteDimension.range.startIndex + 1);
+          }
+        });
+        return {};
+      },
+    },
+  };
+}
+
+Module._load = function (request) {
+  if (request === 'googleapis') {
+    return { google: { auth: { GoogleAuth: class { getClient() { return {}; } } }, sheets: () => fakeSheets() } };
+  }
+  return origLoad.apply(this, arguments);
+};
+
+process.env.SPREADSHEET_ID = 'x';
+process.env.GOOGLE_SERVICE_ACCOUNT_JSON = JSON.stringify({ client_email: 'a@b.c', private_key: 'k' });
+
+const backend = require(path.join(__dirname, '..', 'api', '_sheets.js'));
+
+/* ---------------- Data awal ---------------- */
+ensureSheet('Main'); ensureSheet('OPTIONS'); ensureSheet('USERS'); ensureSheet('ACTIVITY');
+writeRange('Main!B3:V3', [[
+  'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority', 'Task Name', 'Stage', 'Platform',
+  'PIC', 'Support', 'Document', 'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi',
+  'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View']]);
+const T = (id, pic, status) => [id, '2026-07-01', '2026-08-01', status, 'Normal', 'Task ' + id, 'QC Konten', 'JadiASN', pic, '', '', '', '', '', '', '', '', '', '', 'Nynda', ''];
+writeRange('Main!B4:V7', [
+  T('TSK-001', 'Ali', 'In progress'),        // PIC karyawan (Staff)
+  T('TSK-002', 'Magang A', 'Review PM'),     // PIC anak magang
+  T('TSK-003', 'Magang B', 'In progress'),
+  T('TSK-004', 'Uma', 'In progress'),
+]);
+writeRange('USERS!A1:C1', [['Nama', 'Peran', 'Aktif']]);
+writeRange('USERS!A2:C8', [
+  ['Nynda', 'Manager', 'TRUE'],
+  ['Dhea', 'Leader', 'TRUE'],
+  ['Ali', 'Staff', 'TRUE'],
+  ['Uma', 'Staff', 'TRUE'],
+  ['Magang A', 'Magang', 'TRUE'],
+  ['Magang B', 'Magang', 'TRUE'],
+  ['Bilar', 'Staff', 'FALSE'],
+]);
+
+/* ---------------- Assertions ---------------- */
+let passed = 0;
+function ok(name, cond) { assert.ok(cond, name); console.log('  ✓ ' + name); passed++; }
+function eq(name, a, b) {
+  assert.strictEqual(a, b, `${name} (got=${JSON.stringify(a)} want=${JSON.stringify(b)})`);
+  console.log('  ✓ ' + name); passed++;
+}
+const fresh = () => backend.invalidateUsers();   // tiap request membuang cache
+// Task yang SUDAH Done boleh diubah siapa saja (aturan "tarik balik"), jadi tiap uji
+// gerbang Done harus dimulai dari status yang belum Done.
+function setStatus(id, st) {
+  const rows = readRange('Main!B4:V');
+  const i = rows.findIndex(r => r[0] === id);
+  if (i >= 0) writeRange(`Main!E${4 + i}`, [[st]]);
+}
+function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id => setStatus(id, 'In progress')); }
+
+(async () => {
+  console.log('Bootstrap mengirim daftar user & peran:');
+  fresh();
+  const boot = await backend.getBootstrapData({});
+  eq('7 user terkirim', boot.meta.users.length, 7);
+  eq('daftar peran terkirim', boot.meta.roles.join(','), 'Dev,Manager,Leader,Staff,Magang,Lihat Saja');
+  eq('managers dari peran', boot.meta.managers.join(','), 'Nynda');
+  eq('approver = Manager + Leader', boot.meta.doneApprovers.join(','), 'Nynda,Dhea');
+  ok('user nonaktif tetap terkirim (dgn flag)', boot.meta.users.some(u => u.name === 'Bilar' && u.active === false));
+  eq('4 task terbaca', boot.tasks.length, 4);
+
+  console.log('\nGerbang "Done" via quickUpdateField (bergantung PIC):');
+  resetAll(); fresh();
+  const staffOnMagang = await backend.quickUpdateField('TSK-002', 'status', 'Done', 'Ali');
+  eq('Staff BOLEH menutup task magang', staffOnMagang.success, true);
+  resetAll(); fresh();
+  const staffOnStaff = await backend.quickUpdateField('TSK-004', 'status', 'Done', 'Ali');
+  eq('Staff TIDAK boleh menutup task karyawan', staffOnStaff.success, false);
+  resetAll(); fresh();
+  const magangSelf = await backend.quickUpdateField('TSK-003', 'status', 'Done', 'Magang B');
+  eq('Magang tidak boleh menutup task sendiri', magangSelf.success, false);
+  ok('pesannya menjelaskan aturan magang', /anak magang/i.test(magangSelf.message));
+  resetAll(); fresh();
+  eq('Leader boleh menutup task karyawan', (await backend.quickUpdateField('TSK-004', 'status', 'Done', 'Dhea')).success, true);
+  resetAll(); fresh();
+  eq('Manager boleh menutup apa pun', (await backend.quickUpdateField('TSK-001', 'status', 'Done', 'Nynda')).success, true);
+  // Yang sudah Done boleh ditarik balik siapa saja — aturan lama harus tetap berlaku.
+  fresh();
+  eq('task Done boleh ditarik balik oleh Staff', (await backend.quickUpdateField('TSK-001', 'status', 'Revisi', 'Ali')).success, true);
+
+  console.log('\nGerbang "Done" via saveTask:');
+  resetAll(); fresh();
+  const saveByStaffMagang = await backend.saveTask({ id: 'TSK-003', taskName: 'Task TSK-003', pic: 'Magang B', status: 'Done', actor: 'Uma' });
+  eq('saveTask: Staff boleh menutup task magang', saveByStaffMagang.success, true);
+  resetAll(); fresh();
+  const saveByMagang = await backend.saveTask({ taskName: 'Task baru magang', pic: 'Magang A', status: 'Done', actor: 'Magang A' });
+  eq('saveTask: Magang tak boleh membuat task Done', saveByMagang.success, false);
+
+  console.log('\nKelola user — HANYA Dev:');
+  fresh();
+  eq('Manager tak boleh menambah user', (await backend.saveUser('Anak Magang Baru', 'Magang', true, 'Nynda')).success, false);
+  fresh();
+  eq('Leader tak boleh menambah user', (await backend.saveUser('Anak Magang Baru', 'Magang', true, 'Dhea')).success, false);
+  fresh();
+  eq('Staff tak boleh menambah user', (await backend.saveUser('Anak Magang Baru', 'Magang', true, 'Ali')).success, false);
+  fresh();
+  const added = await backend.saveUser('Anak Magang Baru', 'Magang', true, 'Dev');
+  eq('Dev BOLEH menambah user', added.success, true);
+  eq('daftar user bertambah', added.users.length, 8);
+  ok('user baru berperan Magang', added.users.some(u => u.name === 'Anak Magang Baru' && u.role === 'Magang'));
+  ok('user baru masuk dropdown PIC', (added.options.pic || []).includes('Anak Magang Baru'));
+  ok('tersimpan ke sheet USERS', readRange('USERS!A2:C').some(r => r[0] === 'Anak Magang Baru' && r[1] === 'Magang'));
+
+  console.log('\nPeran baru langsung berlaku:');
+  fresh();
+  eq('magang baru belum boleh Done', (await backend.quickUpdateField('TSK-003', 'status', 'Done', 'Anak Magang Baru')).success, false);
+  fresh();
+  eq('Dev menaikkan jadi Leader', (await backend.saveUser('Anak Magang Baru', 'Leader', true, 'Dev')).success, true);
+  resetAll(); fresh();
+  eq('setelah jadi Leader boleh Done', (await backend.quickUpdateField('TSK-003', 'status', 'Done', 'Anak Magang Baru')).success, true);
+
+  console.log('\nNonaktif & hapus:');
+  fresh();
+  eq('Dev menonaktifkan', (await backend.saveUser('Anak Magang Baru', 'Leader', false, 'Dev')).success, true);
+  fresh();
+  eq('user nonaktif kehilangan hak Done', (await backend.quickUpdateField('TSK-001', 'status', 'Done', 'Anak Magang Baru')).success, false);
+  fresh();
+  const bootAfter = await backend.getBootstrapData({});
+  ok('user nonaktif tak masuk approver', !bootAfter.meta.doneApprovers.includes('Anak Magang Baru'));
+  fresh();
+  eq('validasi peran tak dikenal', (await backend.saveUser('X', 'Sultan', true, 'Dev')).success, false);
+  fresh();
+  eq('nama "Dev" ditolak', (await backend.saveUser('Dev', 'Staff', true, 'Dev')).success, false);
+  fresh();
+  eq('Manager tak boleh menghapus', (await backend.deleteUser('Anak Magang Baru', 'Nynda')).success, false);
+  fresh();
+  const del = await backend.deleteUser('Anak Magang Baru', 'Dev');
+  eq('Dev boleh menghapus', del.success, true);
+  eq('daftar kembali 7 user', del.users.length, 7);
+  ok('baris hilang dari sheet USERS', !readRange('USERS!A2:C').some(r => r[0] === 'Anak Magang Baru'));
+
+  console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
+  SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
+  fresh();
+  const bootEmpty = await backend.getBootstrapData({});
+  eq('meta.users kosong', bootEmpty.meta.users.length, 0);
+  eq('managers dari env', bootEmpty.meta.managers.join(','), 'Nynda');
+  eq('approver dari env', bootEmpty.meta.doneApprovers.join(','), 'Nynda,Dhea,Alya');
+  fresh();
+  eq('Alya boleh Done lewat env', (await backend.quickUpdateField('TSK-004', 'status', 'Done', 'Alya')).success, true);
+
+  console.log(`\n✅ Semua ${passed} assertion lulus.`);
+})().catch(e => { console.error('\n❌ GAGAL:', e && e.stack ? e.stack : e); process.exit(1); });
