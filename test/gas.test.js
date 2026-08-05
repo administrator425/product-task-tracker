@@ -642,7 +642,29 @@ ok('penanda-terbaca memanggil markNotificationsRead', /markNotifsReadSilently\(\
 ok('notifikasi komentar task membuka chat-nya', /function openNotif\(refId\)[\s\S]{0,1500}?selectCommunicationTask\(t\.id\)/.test(commHtml));
 ok('komentar sendiri tak dihitung belum-dibaca (toleran)', /!same\(c\.user, state\.currentUser\)/.test(commHtml));
 
-console.log('\n=== 16d. Kelola User memuat SEMUA nama, bukan cuma yang terdaftar ===');
+console.log('\n=== 16d. Penanda "Giliran Anda" pada kartu kolaborasi ===');
+// Dulu cuma teks merah 11px di antara belasan baris proses — praktis tak terlihat.
+ok('teks kecil lama sudah dibuang', !/mt-1\.5 text-\[11px\] font-semibold text-rose-600 flex items-center gap-1"><span class="material-icons-round text-\[13px\]">notifications_active<\/span>Giliran Anda/.test(commHtml));
+// Lapis 1: pita solid penuh-lebar di puncak kartu.
+ok('ada pita giliran', /const turnRibbon = mineTurn \?/.test(commHtml));
+ok('pita berlatar solid rose + teks putih', /turnRibbon[\s\S]{0,300}?bg-rose-500 dark:bg-rose-600[\s\S]{0,60}?text-white/.test(commHtml));
+ok('pita memakai huruf tebal & kapital', /turnRibbon[\s\S]{0,500}?font-bold uppercase tracking-wide/.test(commHtml));
+ok('ikon pita berdenyut', /turnRibbon[\s\S]{0,400}?notifications_active<\/span>/.test(commHtml) && /animate-pulse/.test(commHtml));
+ok('pita menyebut proses mana yang menunggu', /myTurns\.length>1\?`\$\{myTurns\.length\} proses menunggu`:myTurns\[0\]\.name/.test(commHtml));
+ok('pita dipasang di puncak kartu', /hover:ring-indigo-200 transition">\s*\$\{turnRibbon\}/.test(commHtml));
+// Lapis 2: baris proses yang jadi giliran ikut disorot.
+ok('baris giliran diberi latar', /const box=turn\?'bg-rose-50 dark:bg-rose-900\/25/.test(commHtml));
+ok('baris giliran ditebalkan', /const txt=s\.done\?[\s\S]{0,80}?turn\?'text-rose-700 dark:text-rose-200 font-semibold'/.test(commHtml));
+ok('ikon baris giliran diperbesar', /turn\?'text-\[16px\]':'text-\[14px\]'/.test(commHtml));
+// Lapis 3: kartunya sendiri diberi cincin.
+ok('kartu bergiliran diberi cincin', /mineTurn\?'border-rose-300 dark:border-rose-800 ring-2 ring-rose-200/.test(commHtml));
+// Penentu terpenting: kartu bergiliran tak boleh terkubur di bawah kartu Selesai.
+ok('ada peringkat urutan kartu', /function collabRank\(c\)/.test(commHtml));
+ok('giliran Anda peringkat teratas', /function collabRank\(c\)[\s\S]{0,200}?isMyTurnStep\(c,s\)\)\) return 0/.test(commHtml));
+ok('yang Selesai jatuh ke bawah', /function collabRank\(c\)[\s\S]{0,250}?c\.status==='Selesai' \? 2 : 1/.test(commHtml));
+ok('filteredCollabs mengurutkan', /arr\.sort\(\(a,b\)=>collabRank\(a\)-collabRank\(b\)\)/.test(commHtml));
+
+console.log('\n=== 16e. Kelola User memuat SEMUA nama, bukan cuma yang terdaftar ===');
 const uaHtml = call('doGet', {})._html;
 // Masalah yang diperbaiki: begitu sheet USERS terisi, roleOf() mengembalikan '' untuk
 // nama yang belum tercatat — haknya hilang diam-diam DAN ia tak muncul di panel mana pun,

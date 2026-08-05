@@ -781,7 +781,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.59.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.60.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -2619,7 +2619,15 @@ function filteredCollabs(){
   if(f.pic) arr=arr.filter(c=>(c.steps||[]).some(s=>same(s.pic,f.pic)));
   if(f.status) arr=arr.filter(c=>c.status===f.status);
   if(f.mine) arr=arr.filter(c=>(c.steps||[]).some(s=>isMyTurnStep(c,s)));
+  // Yang jadi giliran Anda naik ke atas, lalu yang masih jalan, baru yang sudah Selesai.
+  // Tanpa ini kartu bergiliran bisa terkubur di bawah kartu Selesai dan tak pernah terlihat.
+  // sort() stabil di JS modern, jadi urutan asli di dalam tiap kelompok tetap terjaga.
+  arr.sort((a,b)=>collabRank(a)-collabRank(b));
   return arr;
+}
+function collabRank(c){
+  if((c.steps||[]).some(s=>isMyTurnStep(c,s))) return 0;
+  return c.status==='Selesai' ? 2 : 1;
 }
 function populateCollabFilters(){
   const t=document.getElementById('collabFilterType'); if(t){ const v=t.value; t.innerHTML='<option value="">Semua Tipe</option>'+COLLAB_TYPES.concat(['Tanpa Tipe']).map(x=>`<option value="${escapeAttr(x)}">${escapeHtml(x)}</option>`).join(''); t.value=v; }
@@ -2686,16 +2694,27 @@ function setCollabTypeUI(id, type){
 }
 function collabCard(c){
   const p=collabProgress(c);
-  const mineTurn=(c.steps||[]).some(s=>isMyTurnStep(c,s));
+  const myTurns=(c.steps||[]).filter(s=>isMyTurnStep(c,s));
+  const mineTurn=myTurns.length>0;
   const rows=(c.steps||[]).map(s=>{
     const mine=same(s.pic,state.currentUser);
     const turn=isMyTurnStep(c,s);
-    const icon=s.done?'check_circle':(turn?'radio_button_checked':'radio_button_unchecked');
+    const icon=s.done?'check_circle':(turn?'play_circle':'radio_button_unchecked');
     const ic=s.done?'text-emerald-500':(turn?'text-rose-500':'text-gray-300 dark:text-slate-600');
-    return `<div class="flex items-center gap-1.5 text-[12px] ${s.done?'text-gray-400':'text-gray-600 dark:text-slate-300'}"><span class="material-icons-round text-[14px] ${ic}">${icon}</span><span class="flex-1 min-w-0 truncate ${s.done?'line-through':''}">${escapeHtml(s.name)}</span><span class="text-[10px] ${mine?'font-bold text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span></div>`;
+    // Baris yang jadi giliran disorot: di antara belasan proses, titik merah kecil saja tenggelam.
+    const box=turn?'bg-rose-50 dark:bg-rose-900/25 rounded-md -mx-1.5 px-1.5 py-0.5 ring-1 ring-rose-200 dark:ring-rose-800':'';
+    const txt=s.done?'text-gray-400':(turn?'text-rose-700 dark:text-rose-200 font-semibold':'text-gray-600 dark:text-slate-300');
+    return `<div class="flex items-center gap-1.5 text-[12px] ${txt} ${box}"><span class="material-icons-round ${turn?'text-[16px]':'text-[14px]'} ${ic}">${icon}</span><span class="flex-1 min-w-0 truncate ${s.done?'line-through':''}">${escapeHtml(s.name)}</span><span class="text-[10px] ${turn?'font-bold text-rose-600 dark:text-rose-300':(mine?'font-bold text-indigo-600':'text-gray-400')}">${escapeHtml(s.pic||'—')}</span></div>`;
   }).join('');
+  // Pita penuh-lebar di puncak kartu — penanda utama, sekaligus menyebut proses mana yang menunggu.
+  const turnRibbon = mineTurn ? `<div class="mb-2.5 flex items-center gap-1.5 rounded-lg bg-rose-500 dark:bg-rose-600 px-2.5 py-1.5 text-white shadow-sm">
+      <span class="material-icons-round text-[16px] animate-pulse">notifications_active</span>
+      <span class="text-[11px] font-bold uppercase tracking-wide shrink-0">Giliran Anda</span>
+      <span class="ml-auto min-w-0 truncate text-[11px] font-medium text-rose-50">${escapeHtml(myTurns.length>1?`${myTurns.length} proses menunggu`:myTurns[0].name)}</span>
+    </div>` : '';
   const col=safeColor(c.color);
-  return `<div data-collab-id="${escapeAttr(c.id)}" onclick="openCollabModal('${escapeAttr(c.id)}')" style="${col?`border-left:4px solid ${col}`:''}" class="bg-white dark:bg-slate-800 rounded-xl border ${mineTurn?'border-rose-300 dark:border-rose-800':'border-gray-200 dark:border-slate-700'} p-4 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition">
+  return `<div data-collab-id="${escapeAttr(c.id)}" onclick="openCollabModal('${escapeAttr(c.id)}')" style="${col?`border-left:4px solid ${col}`:''}" class="bg-white dark:bg-slate-800 rounded-xl border ${mineTurn?'border-rose-300 dark:border-rose-800 ring-2 ring-rose-200 dark:ring-rose-900/50 shadow-md':'border-gray-200 dark:border-slate-700'} p-4 cursor-pointer hover:ring-2 hover:ring-indigo-200 transition">
+    ${turnRibbon}
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <div class="flex items-center flex-wrap gap-1"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${c.type?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">${escapeHtml(c.type)}</span>`:''}${String(c.platform||'').split(',').map(x=>x.trim()).filter(Boolean).map(pf=>`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(pf)}</span>`).join('')}</div>
@@ -2708,7 +2727,6 @@ function collabCard(c){
       <span class="text-[11px] font-semibold text-gray-500 dark:text-slate-400 shrink-0">${p.done}/${p.total}</span>
     </div>
     ${c.deadline?(function(){const od=c.status!=='Selesai'&&c.deadline<todayStr();return `<div class="mt-1.5 flex items-center gap-1 text-[11px] ${od?'text-rose-600 font-semibold':'text-gray-500 dark:text-slate-400'}"><span class="material-icons-round text-[13px]">event</span>Deadline ${escapeHtml(c.deadline)}${od?' • telat':''}</div>`;})():''}
-    ${mineTurn?`<div class="mt-1.5 text-[11px] font-semibold text-rose-600 flex items-center gap-1"><span class="material-icons-round text-[13px]">notifications_active</span>Giliran Anda</div>`:''}
     <div class="mt-2 space-y-1">${rows}</div>
   </div>`;
 }

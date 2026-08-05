@@ -10,6 +10,27 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.60.0 — Penanda "Giliran Anda" dibuat benar-benar terlihat
+
+### Tiga lapis penanda
+Sebelumnya cuma teks merah 11px di antara belasan baris proses — praktis tenggelam.
+Sekarang tiga lapis, dari yang paling menarik perhatian ke paling halus:
+
+1. **Pita solid di puncak kartu** — latar rose penuh lebar, teks putih tebal kapital,
+   ikon lonceng berdenyut. Menyebut **proses mana** yang menunggu (mis. *"QC Ali"*), atau
+   *"3 proses menunggu"* bila lebih dari satu — jadi langsung tahu harus mengerjakan apa
+   tanpa membuka kartunya.
+2. **Baris prosesnya disorot** — latar rose tipis, huruf tebal, ikon `play_circle` lebih
+   besar. Sebelumnya cuma titik merah kecil yang hilang di antara 12 baris.
+3. **Kartunya diberi cincin** rose + bayangan, supaya menonjol di antara grid kartu.
+
+**Kartu bergiliran juga dinaikkan ke urutan teratas.** Ini yang paling menentukan: di data
+nyata kartu bergiliran bisa berada di bawah kartu yang sudah **Selesai**, jadi sebagus apa
+pun pitanya tetap harus di-scroll dulu. Urutan sekarang: giliran Anda → masih jalan →
+Selesai, dengan urutan asli terjaga di dalam tiap kelompok.
+
+---
+
 ## 1.59.0 — Hapus user benar-benar mencabut dari PIC + tabel diurutkan per peran
 
 ### Hapus yang sungguh menghapus
