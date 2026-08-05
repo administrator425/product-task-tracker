@@ -1084,6 +1084,43 @@ function addChecklistItem(taskId, item, actor) {
   return { success: true, message: 'Item ceklis ditambahkan.', checklist: getChecklist(taskId) };
 }
 
+// Salin seluruh sub-ceklis satu proses ke proses lain. Dipakai saat beberapa proses
+// mengerjakan daftar yang sama (mis. Alya "Generate" 23 item, lalu Ali "QC" daftar itu juga).
+// Ditulis sekali jalan, bukan 23 panggilan terpisah, supaya cepat & tak putus di tengah.
+// Item selalu masuk dalam keadaan BELUM tercentang — status pengerjaan tidak ikut disalin.
+function copyChecklist(fromId, toIds, actor) {
+  fromId = String(fromId || '').trim();
+  actor = String(actor || '').trim() || 'Unknown';
+  var targets = (Object.prototype.toString.call(toIds) === '[object Array]' ? toIds : [toIds])
+    .map(function (x) { return String(x || '').trim(); })
+    .filter(function (x) { return x && x !== fromId; });
+  if (!fromId) return { success: false, message: 'Sumber ceklis tidak valid.' };
+  if (!targets.length) return { success: false, message: 'Pilih minimal satu proses tujuan.' };
+  if (!canEditChecklist_(fromId, actor)) return { success: false, message: 'Anda tidak berhak membaca ceklis sumber.' };
+
+  var source = getChecklist(fromId);
+  if (!source.length) return { success: false, message: 'Sub-ceklis sumber masih kosong — tidak ada yang disalin.' };
+
+  var rows = [], ditolak = 0;
+  targets.forEach(function (to) {
+    if (!canEditChecklist_(to, actor)) { ditolak++; return; }
+    source.forEach(function (it) { rows.push([to, it.item, 'FALSE', actor, '', '']); });
+  });
+  if (!rows.length) return { success: false, message: 'Anda tidak berhak menambah ceklis di proses tujuan.' };
+
+  ensureChecklistSheet_();
+  valuesAppend_(CONFIG.CHECKLIST_SHEET + '!A:F', rows);
+  var berhasil = targets.length - ditolak;
+  logActivity_(actor, 'Checklist Copy', fromId, source.length + ' item → ' + berhasil + ' proses');
+  return {
+    success: true,
+    message: source.length + ' sub-item disalin ke ' + berhasil + ' proses.' + (ditolak ? ' ' + ditolak + ' dilewati (tanpa izin).' : ''),
+    copied: source.length,
+    targets: berhasil,
+    checklistSummary: getChecklistSummary_(),
+  };
+}
+
 function setChecklistDone(taskId, row, done, actor) {
   taskId = String(taskId || '').trim();
   row = parseInt(row, 10);

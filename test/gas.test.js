@@ -338,6 +338,47 @@ const wrongPic = call('setCollabStepDone', 'COL-001', 3, true, 'Staff Soal');
 eq('PIC lain ditolak', wrongPic.success, false);
 ok('pesan sebut PIC yang berhak', /Staff QC/.test(wrongPic.message));
 
+console.log('\n=== 7b. Salin sub-ceklis ke proses lain ===');
+// Kasus nyata: satu orang menyusun daftar panjang, proses berikutnya meng-QC daftar sama.
+const sumberAwal = call('getChecklist', 'COL-001#2');          // 5 item, 2 tercentang
+eq('sumber punya 5 item (2 tercentang)', sumberAwal.length, 5);
+eq('tujuan COL-001#4 mula-mula kosong', call('getChecklist', 'COL-001#4').length, 0);
+const salin = call('copyChecklist', 'COL-001#2', ['COL-001#4'], 'Leader Konten');
+eq('salin berhasil', salin.success, true);
+eq('jumlah yang disalin dilaporkan', salin.copied, 5);
+eq('jumlah proses tujuan dilaporkan', salin.targets, 1);
+const hasil = call('getChecklist', 'COL-001#4');
+eq('tujuan kini berisi 5 item', hasil.length, 5);
+eq('teksnya sama persis', hasil.map(i => i.item).join('|'), sumberAwal.map(i => i.item).join('|'));
+// Status centang TIDAK ikut: pekerjaan di proses tujuan memang belum dikerjakan.
+eq('semua item masuk BELUM tercentang', hasil.filter(i => i.done).length, 0);
+eq('sumber tidak berubah', call('getChecklist', 'COL-001#2').length, 5);
+eq('centang sumber tetap 2', call('getChecklist', 'COL-001#2').filter(i => i.done).length, 2);
+
+// Beberapa tujuan sekaligus, satu kali tulis.
+const banyak = call('copyChecklist', 'COL-001#2', ['COL-001#5', 'COL-002#1'], 'Leader Konten');
+eq('salin ke 2 proses sekaligus', banyak.success, true);
+eq('dilaporkan 2 tujuan', banyak.targets, 2);
+eq('COL-001#5 terisi', call('getChecklist', 'COL-001#5').length, 5);
+eq('COL-002#1 terisi', call('getChecklist', 'COL-002#1').length, 5);
+
+// Menyalin MENAMBAH, bukan menimpa — sengaja, dan panelnya memberi tahu "sudah ada N".
+call('copyChecklist', 'COL-001#2', ['COL-001#4'], 'Leader Konten');
+eq('salin kedua menambah, bukan menimpa', call('getChecklist', 'COL-001#4').length, 10);
+
+// Penjagaan.
+eq('tujuan kosong ditolak', call('copyChecklist', 'COL-001#2', [], 'Leader Konten').success, false);
+eq('sumber = tujuan diabaikan', call('copyChecklist', 'COL-001#2', ['COL-001#2'], 'Leader Konten').success, false);
+const kosong = call('copyChecklist', 'COL-003#1', ['COL-001#6'], 'Leader Konten');
+eq('sumber kosong ditolak', kosong.success, false);
+ok('pesannya menjelaskan sumber kosong', /kosong/i.test(kosong.message));
+// Sub-ceklis kolaborasi memang SENGAJA fleksibel di server — canEditChecklist_() untuk id
+// "COL-xxx#N" mengembalikan true untuk siapa pun yang bernama, sama seperti addChecklistItem.
+// Gerbang mode lihat-saja ada di lapis lain: allowlist GUEST_ACTIONS di api/rpc.js (level
+// "view" hanya boleh getBootstrapData/getComments/addComment) + stepChecklistEditable() di UI.
+eq('konsisten dgn addChecklistItem: server fleksibel', call('copyChecklist', 'COL-001#2', ['COL-001#6'], 'Siapa Saja').success, true);
+eq('ringkasan ceklis ikut diperbarui', typeof salin.checklistSummary, 'object');
+
 console.log('\n=== 8. Gerbang status "Done" ===');
 const denied = call('quickUpdateField', 'TSK-028', 'status', 'Done', 'Staff Soal');
 eq('Staff Soal TIDAK boleh set Done', denied.success, false);
@@ -663,6 +704,21 @@ ok('ada peringkat urutan kartu', /function collabRank\(c\)/.test(commHtml));
 ok('giliran Anda peringkat teratas', /function collabRank\(c\)[\s\S]{0,200}?isMyTurnStep\(c,s\)\)\) return 0/.test(commHtml));
 ok('yang Selesai jatuh ke bawah', /function collabRank\(c\)[\s\S]{0,250}?c\.status==='Selesai' \? 2 : 1/.test(commHtml));
 ok('filteredCollabs mengurutkan', /arr\.sort\(\(a,b\)=>collabRank\(a\)-collabRank\(b\)\)/.test(commHtml));
+
+console.log('\n=== 16d-2. UI: salin sub-ceklis ke proses lain ===');
+ok('tombol salin ada di kepala sub-ceklis', /toggleCopyChecklistPanel\(\$\{order\}\)/.test(commHtml));
+ok('tombol hanya muncul bila ada proses lain', /editable&&otherStepsFor\(order\)\.length\?/.test(commHtml));
+ok('ada wadah panel salin', /id="collab-subck-copy-\$\{order\}"/.test(commHtml));
+ok('panel mendaftar proses selain sumber', /function otherStepsFor\(order\)[\s\S]{0,200}?s\.order!==order/.test(commHtml));
+ok('tiap tujuan menampilkan PIC-nya', /renderCopyChecklistPanel[\s\S]{0,1200}?escapeHtml\(s\.pic\|\|'—'\)/.test(commHtml));
+// Menyalin MENAMBAH, bukan menimpa — user harus tahu sebelum menekan tombol.
+ok('tujuan yang sudah berisi diberi tanda', /sudah ada \$\{punya\}/.test(commHtml));
+ok('diberi tahu item masuk belum tercentang', /item masuk belum tercentang/.test(commHtml));
+ok('tanpa tujuan terpilih ditolak di klien', /submitCopyChecklist\(order\)[\s\S]{0,300}?Pilih dulu proses tujuannya/.test(commHtml));
+ok('tombol dikunci selama menyalin', /submitCopyChecklist\(order\)[\s\S]{0,600}?btn\.disabled=true; btn\.textContent='Menyalin…'/.test(commHtml));
+ok('memanggil copyChecklist sekali utk semua tujuan', /\.copyChecklist\(collabStepTaskId\(order\), picked\.map\(o=>collabStepTaskId\(o\)\), state\.currentUser\)/.test(commHtml));
+ok('proses tujuan disegarkan setelah salin', /picked\.forEach\(o=>\{ if\(state\._collabExpanded&&state\._collabExpanded\[o\]\) loadStepChecklist\(o\); else syncStepMainCheckbox\(o\)/.test(commHtml));
+ok('copyChecklist terdaftar di BACKEND_ACTIONS', /'addChecklistItem','copyChecklist','setChecklistDone'/.test(commHtml));
 
 console.log('\n=== 16e. Kelola User memuat SEMUA nama, bukan cuma yang terdaftar ===');
 const uaHtml = call('doGet', {})._html;

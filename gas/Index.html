@@ -781,7 +781,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.60.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.61.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -870,7 +870,7 @@ function onGoogleCredential(resp){
       else { var e=document.getElementById('googleErr'); if(e){ e.textContent=(d&&d.message)||'Email tidak diizinkan.'; e.classList.remove('hide'); } }
     }).catch(function(){ var e=document.getElementById('googleErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','setCollabStepNote','setCollabType','deleteCollab','getNotifications','markNotificationsRead','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder','getUsers','saveUser','deleteUser'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','copyChecklist','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','setCollabStepNote','setCollabType','deleteCollab','getNotifications','markNotificationsRead','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder','getUsers','saveUser','deleteUser'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -2891,7 +2891,12 @@ function renderStepChecklist(order, items){
     <span class="flex-1 text-xs ${it.done?'line-through text-gray-400':'text-gray-600 dark:text-slate-300'}">${escapeHtml(it.item)}</span>
     ${editable?`<button type="button" onclick="deleteStepChecklist(${order},${it.row})" class="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[13px]">close</span></button>`:''}
   </div>`).join('');
-  box.innerHTML=(total?`<div class="text-[10px] text-gray-400 mb-1">${done}/${total} selesai</div>`:'')+(rows||(editable||total?'':'<div class="text-[11px] text-gray-400 px-1">Belum ada sub-item.</div>'))+
+  // Kepala: hitungan + tombol salin. Menyalin baru masuk akal kalau sumbernya sudah berisi.
+  const head = total ? `<div class="flex items-center gap-2 mb-1">
+      <span class="text-[10px] text-gray-400">${done}/${total} selesai</span>
+      ${editable&&otherStepsFor(order).length?`<button type="button" onclick="toggleCopyChecklistPanel(${order})" class="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"><span class="material-icons-round text-[12px]">content_copy</span>Salin ke proses lain</button>`:''}
+    </div><div id="collab-subck-copy-${order}" class="hide mb-2"></div>` : '';
+  box.innerHTML=head+(rows||(editable||total?'':'<div class="text-[11px] text-gray-400 px-1">Belum ada sub-item.</div>'))+
     (editable?`<div class="flex gap-1 mt-1"><input id="collab-subck-input-${order}" onkeydown="if(event.key==='Enter'){event.preventDefault();addStepChecklist(${order});}" class="flex-1 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none" placeholder="Tambah sub-item…"><button type="button" onclick="addStepChecklist(${order})" class="px-2 rounded bg-indigo-600 text-white text-xs font-semibold">+</button></div>`:'');
   state.checklistSummary=state.checklistSummary||{};
   if(total) state.checklistSummary[collabStepTaskId(order)]={done,total}; else delete state.checklistSummary[collabStepTaskId(order)];
@@ -2909,6 +2914,63 @@ function toggleStepChecklist(order, row, done){
 function deleteStepChecklist(order, row){
   GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menghapus', false); return; } renderStepChecklist(order, res.checklist||[]); })
      .withFailureHandler(err=>showToast(err.message||err,false)).deleteChecklistItem(collabStepTaskId(order), row, state.currentUser);
+}
+
+/* ---- Salin sub-ceklis ke proses lain ----
+   Kasus nyata: satu orang menyusun daftar panjang (mis. Alya "Generate" 23 item), lalu
+   proses berikutnya meng-QC daftar yang sama persis. Mengetik ulang 23 baris itu boros
+   sekaligus rawan isinya jadi beda. Status centang TIDAK ikut disalin — tujuannya mulai
+   dari nol, karena pekerjaannya memang belum dikerjakan. */
+function otherStepsFor(order){
+  const c=currentCollab(); if(!c) return [];
+  return (c.steps||[]).filter(s=>s.order!==order);
+}
+function stepSubTotal(order){ const s=(state.checklistSummary||{})[collabStepTaskId(order)]; return (s&&s.total)||0; }
+function toggleCopyChecklistPanel(order){
+  const box=document.getElementById('collab-subck-copy-'+order); if(!box) return;
+  if(box.classList.contains('hide')){ renderCopyChecklistPanel(order); box.classList.remove('hide'); }
+  else box.classList.add('hide');
+}
+function renderCopyChecklistPanel(order){
+  const box=document.getElementById('collab-subck-copy-'+order); if(!box) return;
+  const total=stepSubTotal(order);
+  const rows=otherStepsFor(order).map(s=>{
+    const punya=stepSubTotal(s.order);
+    // Diberitahu di depan: menyalin MENAMBAH, tidak menimpa. Tanpa ini isinya bisa dobel diam-diam.
+    const nota=punya?`<span class="shrink-0 text-[9px] font-semibold text-amber-600 dark:text-amber-400">sudah ada ${punya}</span>`:'';
+    return `<label class="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-white/70 dark:hover:bg-slate-800/50 rounded px-1">
+      <input type="checkbox" value="${s.order}" data-copy-src="${order}" class="w-3.5 h-3.5 shrink-0 accent-indigo-600 cursor-pointer">
+      <span class="flex-1 min-w-0 truncate text-[11px] text-gray-700 dark:text-slate-300">${s.order}. ${escapeHtml(s.name||'(tanpa nama)')}</span>
+      <span class="shrink-0 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">${escapeHtml(s.pic||'—')}</span>${nota}
+    </label>`;
+  }).join('');
+  box.innerHTML=`<div class="rounded-lg border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/70 dark:bg-indigo-900/20 p-2">
+    <div class="text-[10px] font-bold uppercase tracking-wide text-indigo-700 dark:text-indigo-300 mb-1">Salin ${total} sub-item ke proses:</div>
+    <div class="max-h-40 overflow-y-auto">${rows||'<div class="text-[11px] text-gray-400 px-1">Tidak ada proses lain.</div>'}</div>
+    <div class="flex items-center gap-1.5 mt-1.5">
+      <button type="button" id="collab-subck-copybtn-${order}" onclick="submitCopyChecklist(${order})" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold disabled:opacity-60">Salin</button>
+      <button type="button" onclick="toggleCopyChecklistPanel(${order})" class="px-2 py-1 rounded text-[11px] font-medium text-gray-500 hover:text-gray-700 dark:text-slate-400">Batal</button>
+      <span class="ml-auto text-[9px] text-gray-400">item masuk belum tercentang</span>
+    </div>
+  </div>`;
+}
+function submitCopyChecklist(order){
+  const picked=Array.from(document.querySelectorAll(`input[data-copy-src="${order}"]:checked`)).map(el=>parseInt(el.value,10)).filter(n=>!isNaN(n));
+  if(!picked.length){ showToast('Pilih dulu proses tujuannya.', false); return; }
+  const btn=document.getElementById('collab-subck-copybtn-'+order);
+  const pulih=()=>{ if(btn){ btn.disabled=false; btn.textContent='Salin'; } };
+  if(btn){ btn.disabled=true; btn.textContent='Menyalin…'; }
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyalin', false); pulih(); return; }
+    if(res.checklistSummary) state.checklistSummary=res.checklistSummary;
+    showToast(res.message);
+    const box=document.getElementById('collab-subck-copy-'+order); if(box) box.classList.add('hide');
+    pulih();
+    // Proses tujuan yang sedang terbuka dimuat ulang; yang tertutup cukup disegarkan kuncinya.
+    picked.forEach(o=>{ if(state._collabExpanded&&state._collabExpanded[o]) loadStepChecklist(o); else syncStepMainCheckbox(o); });
+    renderCollab();
+  }).withFailureHandler(err=>{ showToast(err.message||err,false); pulih(); })
+   .copyChecklist(collabStepTaskId(order), picked.map(o=>collabStepTaskId(o)), state.currentUser);
 }
 function toggleCollabStep(order, done){
   const id=state._collabId; if(!id) return;

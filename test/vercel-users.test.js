@@ -325,6 +325,42 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   const penuh = await backend.getBootstrapData({});
   ok('karyawan tetap menerima semua task', penuh.tasks.length > mA.tasks.length);
 
+  console.log('\nSalin sub-ceklis antar proses kolaborasi:');
+  fresh();
+  await backend.addChecklistItem('COL-001#1', 'Latsol TWK - Nasionalisme', 'Alya');
+  await backend.addChecklistItem('COL-001#1', 'Latsol TIU - Verbal Analogi', 'Alya');
+  await backend.addChecklistItem('COL-001#1', 'Latsol TKP - Sosial Budaya', 'Alya');
+  fresh();
+  await backend.setChecklistDone('COL-001#1', 2, true, 'Alya');    // sumber punya centang
+  fresh();
+  const src = await backend.getChecklist('COL-001#1');
+  eq('sumber 3 item', src.length, 3);
+  eq('sumber ada yang tercentang', src.filter(i => i.done).length, 1);
+  eq('tujuan mula-mula kosong', (await backend.getChecklist('COL-001#3')).length, 0);
+  fresh();
+  const cp = await backend.copyChecklist('COL-001#1', ['COL-001#3'], 'Ali');
+  eq('salin berhasil', cp.success, true);
+  eq('3 item dilaporkan', cp.copied, 3);
+  const dst = await backend.getChecklist('COL-001#3');
+  eq('tujuan berisi 3 item', dst.length, 3);
+  eq('urut & teks sama persis', dst.map(i => i.item).join('|'), src.map(i => i.item).join('|'));
+  eq('status centang TIDAK ikut disalin', dst.filter(i => i.done).length, 0);
+  fresh();
+  eq('sumber tak berubah', (await backend.getChecklist('COL-001#1')).length, 3);
+  fresh();
+  const cpMulti = await backend.copyChecklist('COL-001#1', ['COL-001#4', 'COL-002#1'], 'Ali');
+  eq('dua tujuan sekaligus', cpMulti.targets, 2);
+  fresh();
+  eq('COL-002#1 ikut terisi', (await backend.getChecklist('COL-002#1')).length, 3);
+  fresh();
+  eq('tujuan kosong ditolak', (await backend.copyChecklist('COL-001#1', [], 'Ali')).success, false);
+  fresh();
+  eq('sumber = tujuan diabaikan', (await backend.copyChecklist('COL-001#1', ['COL-001#1'], 'Ali')).success, false);
+  fresh();
+  const srcKosong = await backend.copyChecklist('COL-009#9', ['COL-001#7'], 'Ali');
+  eq('sumber kosong ditolak', srcKosong.success, false);
+  ok('pesannya menjelaskan sumber kosong', /kosong/i.test(srcKosong.message));
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();

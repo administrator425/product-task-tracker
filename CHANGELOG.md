@@ -10,6 +10,33 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.61.0 — Salin sub-ceklis ke proses lain
+
+Saat satu proses menyusun daftar panjang (mis. Alya "Generate" dengan 23 sub-item), proses
+berikutnya sering mengerjakan daftar yang **sama persis** — Ali meng-QC 23 item itu juga.
+Sebelumnya harus diketik ulang satu per satu: boros, dan rawan isinya jadi beda.
+
+### Cara pakai
+Di kepala sub-ceklis muncul **"Salin ke proses lain"** (hanya bila sudah ada isinya).
+Panelnya mendaftar semua proses lain di kolaborasi itu lengkap dengan **PIC**-nya, bisa
+dicentang lebih dari satu, lalu **Salin**.
+
+### Keputusan rancangan
+- **Status centang tidak ikut disalin.** Item masuk dalam keadaan kosong — pekerjaan di
+  proses tujuan memang belum dikerjakan. Ini ditulis juga di panelnya.
+- **Menambah, bukan menimpa.** Tujuan yang sudah berisi diberi tanda *"sudah ada N"*
+  sebelum tombol ditekan, supaya tidak dobel tanpa disadari.
+- **Satu kali tulis, bukan N panggilan.** Aksi baru `copyChecklist(fromId, toIds, actor)`
+  menulis semua baris sekaligus. Menyalin 23 item ke 2 proses = 1 permintaan, bukan 46 —
+  jauh lebih cepat dan tak bisa putus separuh jalan.
+- Izinnya mengikuti `addChecklistItem` yang sudah ada: sub-ceklis kolaborasi memang
+  fleksibel. Mode lihat-saja tetap tertutup lewat allowlist `GUEST_ACTIONS` di
+  `api/rpc.js` dan `stepChecklistEditable()` di UI.
+
+Tersedia di kedua backend (`api/_sheets.js` dan `gas/Code.gs`).
+
+---
+
 ## 1.60.0 — Penanda "Giliran Anda" dibuat benar-benar terlihat
 
 ### Tiga lapis penanda

@@ -53,6 +53,7 @@ const HANDLERS = {
   addComment: (payload) => backend.addComment(payload),
   getChecklist: (taskId) => backend.getChecklist(taskId),
   addChecklistItem: (taskId, item, actor) => backend.addChecklistItem(taskId, item, actor),
+  copyChecklist: (fromId, toIds, actor) => backend.copyChecklist(fromId, toIds, actor),
   setChecklistDone: (taskId, row, done, actor) => backend.setChecklistDone(taskId, row, done, actor),
   deleteChecklistItem: (taskId, row, actor) => backend.deleteChecklistItem(taskId, row, actor),
 

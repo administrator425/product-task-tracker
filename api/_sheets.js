@@ -902,6 +902,45 @@ async function addChecklistItem(taskId, item, actor) {
   return { success: true, message: 'Item ceklis ditambahkan.', checklist: await getChecklist(taskId) };
 }
 
+// Salin seluruh sub-ceklis satu proses ke proses lain. Dipakai saat beberapa proses
+// mengerjakan daftar yang sama (mis. Alya "Generate" 23 item, lalu Ali "QC" daftar itu juga).
+// Ditulis sekali jalan, bukan 23 panggilan terpisah, supaya cepat & tak putus di tengah.
+// Item selalu masuk dalam keadaan BELUM tercentang — status pengerjaan tidak ikut disalin.
+async function copyChecklist(fromId, toIds, actor) {
+  fromId = String(fromId || '').trim();
+  actor = String(actor || '').trim() || 'Unknown';
+  const targets = (Array.isArray(toIds) ? toIds : [toIds]).map(x => String(x || '').trim())
+    .filter(x => x && x !== fromId);
+  if (!fromId) return { success: false, message: 'Sumber ceklis tidak valid.' };
+  if (!targets.length) return { success: false, message: 'Pilih minimal satu proses tujuan.' };
+  if (!(await canEditChecklist(fromId, actor))) {
+    return { success: false, message: 'Anda tidak berhak membaca ceklis sumber.' };
+  }
+
+  const source = await getChecklist(fromId);
+  if (!source.length) return { success: false, message: 'Sub-ceklis sumber masih kosong — tidak ada yang disalin.' };
+
+  const rows = [];
+  const ditolak = [];
+  for (const to of targets) {
+    if (!(await canEditChecklist(to, actor))) { ditolak.push(to); continue; }
+    source.forEach(it => rows.push([to, it.item, 'FALSE', actor, '', '']));
+  }
+  if (!rows.length) return { success: false, message: 'Anda tidak berhak menambah ceklis di proses tujuan.' };
+
+  await ensureChecklistSheet();
+  await valuesAppend(`${CONFIG.CHECKLIST_SHEET}!A:F`, rows);
+  const berhasil = targets.length - ditolak.length;
+  await logActivity(actor, 'Checklist Copy', fromId, `${source.length} item → ${berhasil} proses`);
+  return {
+    success: true,
+    message: `${source.length} sub-item disalin ke ${berhasil} proses.` + (ditolak.length ? ` ${ditolak.length} dilewati (tanpa izin).` : ''),
+    copied: source.length,
+    targets: berhasil,
+    checklistSummary: await getChecklistSummary(),
+  };
+}
+
 async function setChecklistDone(taskId, row, done, actor) {
   taskId = String(taskId || '').trim();
   row = parseInt(row, 10);
@@ -2104,7 +2143,7 @@ module.exports = {
   saveTask, deleteTask, quickUpdateField, quickUpdateDates,
   addComment, saveOption, deleteOption, editOption,
   // ceklis per task (PM menyusun, PIC mencentang)
-  getChecklist, addChecklistItem, setChecklistDone, deleteChecklistItem,
+  getChecklist, addChecklistItem, copyChecklist, setChecklistDone, deleteChecklistItem,
   // task kolaborasi (alur beruntun antar-PIC)
   getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, setCollabType, deleteCollab,
   // notifikasi (tag @user)
