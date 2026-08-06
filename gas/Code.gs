@@ -107,7 +107,7 @@ SHEET_HEADERS[CONFIG.LINKS_SHEET] = ['User', 'Title', 'URL', 'Folder'];
 SHEET_HEADERS[CONFIG.DASHBOARDS_SHEET] = ['Title', 'Desc', 'Icon', 'URL'];
 SHEET_HEADERS[CONFIG.NOTES_SHEET] = ['User', 'Title', 'Body', 'UpdatedAt', 'Folder'];
 SHEET_HEADERS[CONFIG.CHECKLIST_SHEET] = ['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At'];
-SHEET_HEADERS[CONFIG.COLLAB_SHEET] = ['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color'];
+SHEET_HEADERS[CONFIG.COLLAB_SHEET] = ['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color', 'Stage'];
 SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET] = ['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note'];
 SHEET_HEADERS[CONFIG.NOTIF_SHEET] = ['ID', 'For User', 'Type', 'Ref ID', 'From', 'Text', 'Created At', 'Read'];
 SHEET_HEADERS[CONFIG.USERS_SHEET] = ['Nama', 'Peran', 'Aktif'];
@@ -1136,7 +1136,32 @@ function setChecklistDone(taskId, row, done, actor) {
   if (owner !== taskId) return { success: false, message: 'Item ceklis tidak cocok dengan task ini. Muat ulang.' };
   valuesUpdate_(CONFIG.CHECKLIST_SHEET + '!C' + row + ':F' + row,
     [[val ? 'TRUE' : 'FALSE', String((cur[0] && cur[0][1]) || ''), val ? actor : '', val ? nowStamp_() : '']]);
-  return { success: true, message: val ? 'Item dicentang.' : 'Centang dibatalkan.', checklist: getChecklist(taskId) };
+  var list = getChecklist(taskId);
+  var out = { success: true, message: val ? 'Item dicentang.' : 'Centang dibatalkan.', checklist: list };
+  if (restampCollabStep_(taskId, list, actor)) { out.collabs = getCollabs(); out.stepRestamped = true; }
+  return out;
+}
+
+// Proses yang punya sub-ceklis baru benar-benar rampung saat sub-ceklisnya tuntas. Jadi bila
+// sub-item ditambahkan setelah prosesnya dicentang (sub jadi 5/6), lalu item terakhir itu
+// dicentang, tanggal selesai prosesnya ikut diperbarui — tanpa perlu buka-tutup centang utama.
+// Hanya berlaku untuk proses yang SUDAH dicentang; yang belum tetap butuh tindakan PIC-nya.
+function restampCollabStep_(taskId, list, actor) {
+  var ref = parseCollabStep_(taskId);
+  if (!ref || !list.length) return false;
+  for (var k = 0; k < list.length; k++) if (!list[k].done) return false;
+  var srows = [];
+  try { srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:H'); } catch (e) { return false; }
+  var idx = -1;
+  for (var i = 0; i < srows.length; i++) {
+    var r = srows[i];
+    if (String((r && r[0]) || '').trim() === ref.collabId && Number((r && r[1]) || 0) === ref.order) { idx = i; break; }
+  }
+  if (idx < 0) return false;
+  if (!isChecked_(srows[idx] && srows[idx][5])) return false;   // hanya proses yang sudah dicentang
+  valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!H' + (idx + 2), [[nowStamp_()]]);
+  logActivity_(actor, 'Collab Step Restamp', ref.collabId, 'Proses ' + ref.order + ': tanggal selesai diperbarui (sub-ceklis tuntas)');
+  return true;
 }
 
 function deleteChecklistItem(taskId, row, actor) {
@@ -1188,9 +1213,12 @@ function genCollabId_(ids) {
   return 'COL-' + ('00' + (max + 1)).slice(-3);
 }
 
-// Boleh mencentang proses ini? Hanya PIC proses tsb, atau Dev (super-user).
-function canCheckStep_(stepPic, actor) {
+// Mencentang = mengklaim pekerjaan itu selesai, jadi tetap khusus PIC proses (+ Dev).
+// MEMBATALKAN centang adalah tindakan koreksi, bukan klaim — Manager boleh, supaya salah
+// centang tak perlu menunggu orangnya. Argumen `undo` true = permintaan membatalkan.
+function canCheckStep_(stepPic, actor, undo) {
   if (baseName_(actor) === 'dev') return true;
+  if (undo && isManagerActor_(actor)) return true;
   var p = baseName_(stepPic);
   return !!p && p === baseName_(actor);
 }
@@ -1200,7 +1228,7 @@ function getCollabs(preC, preS) {
   if (preC !== undefined) { crows = preC || []; srows = preS || []; }
   else {
     try {
-      crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:I');
+      crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:J');
       srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:I');
     } catch (e) { return []; }
   }
@@ -1240,6 +1268,7 @@ function getCollabs(preC, preS) {
       deadline: (r && r[6] !== null && r[6] !== undefined && r[6] !== '') ? formatDate_(r[6], false) : '',
       type: String((r && r[7]) || '').trim(),
       color: String((r && r[8]) || '').trim(),
+      stage: String((r && r[9]) || '').trim(),   // OPSIONAL — sheet lama tanpa kolom J terbaca ''
       steps: list,
       done: done,
       total: list.length,
@@ -1268,6 +1297,7 @@ function saveCollab(payload, actor) {
   var deadline = String((payload && payload.deadline) || '').trim();  // deadline project keseluruhan
   var type = String((payload && payload.type) || '').trim();          // tipe task (Kanban per-tipe)
   var color = String((payload && payload.color) || '').trim();        // warna kartu
+  var stage = String((payload && payload.stage) || '').trim();        // stage/tahapan — OPSIONAL
   var steps = (payload && Object.prototype.toString.call(payload.steps) === '[object Array]') ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
 
@@ -1285,7 +1315,7 @@ function saveCollab(payload, actor) {
 
   ensureCollabSheets_();
   var crows = [];
-  try { crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:I'); } catch (e) { crows = []; }
+  try { crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:J'); } catch (e) { crows = []; }
   var ids = crows.map(function (r) { return String((r && r[0]) || '').trim(); });
   var id = String((payload && payload.id) || '').trim();
   var isUpdate = !!(id && ids.indexOf(id) >= 0);
@@ -1304,11 +1334,11 @@ function saveCollab(payload, actor) {
     var rn = ids.indexOf(id) + 2;
     var keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
     var keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp_());
-    valuesUpdate_(CONFIG.COLLAB_SHEET + '!A' + rn + ':I' + rn, [[id, platform, title, description, keepBy, keepAt, dl, type, color]]);
+    valuesUpdate_(CONFIG.COLLAB_SHEET + '!A' + rn + ':J' + rn, [[id, platform, title, description, keepBy, keepAt, dl, type, color, stage]]);
     deleteStepRowsForCollab_(id);
   } else {
     id = genCollabId_(ids);
-    valuesAppend_(CONFIG.COLLAB_SHEET + '!A:I', [[id, platform, title, description, actor, nowStamp_(), dl, type, color]]);
+    valuesAppend_(CONFIG.COLLAB_SHEET + '!A:J', [[id, platform, title, description, actor, nowStamp_(), dl, type, color, stage]]);
   }
 
   var stepRows = clean.map(function (s, i) {
@@ -1379,8 +1409,10 @@ function setCollabStepDone(collabId, order, done, actor) {
   var idx = findStepRow_(srows, collabId, order);
   if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
   var pic = String((srows[idx] && srows[idx][3]) || '').trim();
-  if (!canCheckStep_(pic, actor)) {
-    return { success: false, message: 'Hanya ' + (pic || 'PIC proses ini') + ' yang bisa mencentang proses ini.' };
+  if (!canCheckStep_(pic, actor, !val)) {
+    return { success: false, message: val
+      ? 'Hanya ' + (pic || 'PIC proses ini') + ' yang bisa mencentang proses ini.'
+      : 'Hanya ' + (pic || 'PIC proses ini') + ' atau Manager yang bisa membatalkan centang ini.' };
   }
   // Main-ceklis proses tak boleh dicentang selama sub-ceklisnya belum tuntas
   // (membatalkan centang selalu boleh).
@@ -1732,13 +1764,14 @@ function ensureChecklistSheet_() {
 
 function ensureCollabSheets_() {
   sheet_(CONFIG.COLLAB_SHEET, true);
-  var head = valuesGet_(CONFIG.COLLAB_SHEET + '!A1:I1');
+  var head = valuesGet_(CONFIG.COLLAB_SHEET + '!A1:J1');
   var h0 = head[0] || [];
-  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!A1:I1', [SHEET_HEADERS[CONFIG.COLLAB_SHEET]]);
+  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!A1:J1', [SHEET_HEADERS[CONFIG.COLLAB_SHEET]]);
   else {
     if (!h0[6]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!G1', [['Deadline']]);
     if (!h0[7]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!H1', [['Type']]);
     if (!h0[8]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!I1', [['Color']]);
+    if (!h0[9]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!J1', [['Stage']]);   // stage/tahapan — OPSIONAL
   }
   sheet_(CONFIG.COLLAB_STEP_SHEET, true);
   head = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A1:I1');

@@ -379,6 +379,75 @@ ok('pesannya menjelaskan sumber kosong', /kosong/i.test(kosong.message));
 eq('konsisten dgn addChecklistItem: server fleksibel', call('copyChecklist', 'COL-001#2', ['COL-001#6'], 'Siapa Saja').success, true);
 eq('ringkasan ceklis ikut diperbarui', typeof salin.checklistSummary, 'object');
 
+console.log('\n=== 7c. Tanggal centang, penanggalan ulang, & Manager boleh membatalkan ===');
+// Tanggal centang: dicatat tiap kali dicentang, dikosongkan saat dibatalkan.
+const stepAwal = call('getCollabs').find(c => c.id === 'COL-005').steps.find(s => s.order === 2);
+ok('proses yang dicentang punya doneAt', !!stepAwal.doneAt);
+ok('doneAt berformat tanggal rapi', /^\d{4}-\d{2}-\d{2}/.test(stepAwal.doneAt));
+call('setCollabStepDone', 'COL-005', 2, false, 'Leader Sistem');
+const stepUndo = call('getCollabs').find(c => c.id === 'COL-005').steps.find(s => s.order === 2);
+eq('batal centang mengosongkan doneAt', stepUndo.doneAt, '');
+eq('batal centang mengosongkan doneBy', stepUndo.doneBy, '');
+call('setCollabStepDone', 'COL-005', 2, true, 'Leader Sistem');
+const stepUlang = call('getCollabs').find(c => c.id === 'COL-005').steps.find(s => s.order === 2);
+ok('centang ulang mengisi doneAt lagi', /^\d{4}-\d{2}-\d{2}/.test(stepUlang.doneAt));
+eq('centang ulang mencatat pencentangnya', stepUlang.doneBy, 'Leader Sistem');
+
+// Penanggalan ulang: sub-item ditambahkan SETELAH proses dicentang, lalu dituntaskan.
+const cek = call('getChecklist', 'COL-002#4');                   // 4/4 selesai
+eq('COL-002#4 sub-ceklis tuntas', cek.filter(i => i.done).length, 4);
+call('setCollabStepDone', 'COL-002', 4, true, 'Staff QC');
+const sebelum = call('getCollabs').find(c => c.id === 'COL-002').steps.find(s => s.order === 4);
+ok('proses tercentang', sebelum.done);
+call('addChecklistItem', 'COL-002#4', 'Item susulan', 'Staff QC');
+const belum = call('getChecklist', 'COL-002#4');
+eq('sub jadi 4/5 (ada yang belum)', belum.filter(i => !i.done).length, 1);
+const barisBaru = belum.filter(i => !i.done)[0].row;
+const tuntas = call('setChecklistDone', 'COL-002#4', barisBaru, true, 'Staff QC');
+eq('item susulan dicentang', tuntas.success, true);
+ok('backend menandai penanggalan ulang', tuntas.stepRestamped === true);
+ok('collabs ikut dikirim balik', Array.isArray(tuntas.collabs));
+const sesudah = tuntas.collabs.find(c => c.id === 'COL-002').steps.find(s => s.order === 4);
+ok('doneAt proses diperbarui', /^\d{4}-\d{2}-\d{2}/.test(sesudah.doneAt));
+eq('prosesnya tetap tercentang', sesudah.done, true);
+// Proses yang BELUM dicentang tidak ikut ditandai — mencentang tetap tindakan PIC-nya.
+call('setCollabStepDone', 'COL-002', 4, false, 'Staff QC');
+const tanpa = call('setChecklistDone', 'COL-002#4', barisBaru, false, 'Staff QC');
+const tanpa2 = call('setChecklistDone', 'COL-002#4', barisBaru, true, 'Staff QC');
+ok('proses belum dicentang tidak ditanggali', !tanpa2.stepRestamped);
+ok('sub-ceklis biasa (task non-collab) aman', !call('setChecklistDone', 'TSK-001', 2, true, 'Manager').stepRestamped);
+
+// Manager boleh MEMBATALKAN centang, tapi tidak boleh mencentang milik orang lain.
+call('setCollabStepDone', 'COL-005', 2, true, 'Leader Sistem');
+const mgrUndo = call('setCollabStepDone', 'COL-005', 2, false, 'Manager');
+eq('Manager BOLEH membatalkan centang', mgrUndo.success, true);
+const mgrCheck = call('setCollabStepDone', 'COL-005', 2, true, 'Manager');
+eq('Manager TIDAK boleh mencentang milik orang lain', mgrCheck.success, false);
+ok('pesannya menyebut PIC yang berhak', /Leader Sistem/.test(mgrCheck.message));
+const staffUndo = call('setCollabStepDone', 'COL-001', 1, false, 'Staff Soal');
+eq('Staff tetap tak boleh membatalkan punya orang lain', staffUndo.success, false);
+ok('pesan batal menyebut Manager', /Manager/.test(staffUndo.message));
+
+console.log('\n=== 7d. Stage OPSIONAL di task kolaborasi ===');
+const colStage = call('saveCollab', { title: 'Uji Stage', platform: 'JadiASN', stage: 'QC Konten',
+  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal' }] }, 'Manager');
+eq('simpan dgn stage berhasil', colStage.success, true);
+const dgnStage = call('getCollabs').find(c => c.title === 'Uji Stage');
+eq('stage tersimpan', dgnStage.stage, 'QC Konten');
+const colTanpa = call('saveCollab', { title: 'Uji Tanpa Stage', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal' }] }, 'Manager');
+eq('simpan tanpa stage juga berhasil', colTanpa.success, true);
+eq('stage kosong = string kosong, bukan error', call('getCollabs').find(c => c.title === 'Uji Tanpa Stage').stage, '');
+// Collab lama (di-seed sebelum kolom J ada) tetap terbaca.
+eq('collab lama tanpa kolom stage aman', call('getCollabs').find(c => c.id === 'COL-001').stage, '');
+const ubah = call('saveCollab', { id: dgnStage.id, title: 'Uji Stage', platform: 'JadiASN', stage: '',
+  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal' }] }, 'Manager');
+eq('stage boleh dikosongkan lagi', ubah.success, true);
+eq('stage kembali kosong', call('getCollabs').find(c => c.title === 'Uji Stage').stage, '');
+ok('header sheet COLLAB memuat Stage', SS.getSheetByName('COLLAB').getRange(1, 10, 1, 1).getValues()[0][0] === 'Stage');
+call('deleteCollab', dgnStage.id, 'Manager');
+call('deleteCollab', call('getCollabs').find(c => c.title === 'Uji Tanpa Stage').id, 'Manager');
+
 console.log('\n=== 8. Gerbang status "Done" ===');
 const denied = call('quickUpdateField', 'TSK-028', 'status', 'Done', 'Staff Soal');
 eq('Staff Soal TIDAK boleh set Done', denied.success, false);
@@ -704,6 +773,26 @@ ok('ada peringkat urutan kartu', /function collabRank\(c\)/.test(commHtml));
 ok('giliran Anda peringkat teratas', /function collabRank\(c\)[\s\S]{0,200}?isMyTurnStep\(c,s\)\)\) return 0/.test(commHtml));
 ok('yang Selesai jatuh ke bawah', /function collabRank\(c\)[\s\S]{0,250}?c\.status==='Selesai' \? 2 : 1/.test(commHtml));
 ok('filteredCollabs mengurutkan', /arr\.sort\(\(a,b\)=>collabRank\(a\)-collabRank\(b\)\)/.test(commHtml));
+
+console.log('\n=== 16d-1. UI: tanggal centang, stage opsional, Manager membatalkan ===');
+// Tanggal centang tampil di baris proses, lengkap dgn putusan tepat waktu / telat.
+ok('ada penampil tanggal centang', /function stepDoneStamp\(s\)/.test(commHtml));
+ok('dipasang di baris proses', /\$\{stepDoneStamp\(s\)\}/.test(commHtml));
+ok('membandingkan doneAt dgn deadline proses', /const telat = tgl > s\.deadline/.test(commHtml));
+ok('menandai telat & tepat waktu', /telat\?'\(telat\)':'\(tepat waktu\)'/.test(commHtml));
+ok('tanpa deadline tetap tampilkan tanggalnya', /if\(!s\.deadline\) return/.test(commHtml));
+ok('doneAt kacau tidak dirender', /if\(!\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(tgl\)\) return ''/.test(commHtml));
+// Stage OPSIONAL.
+ok('ada input stage di modal collab', /id="collabStage"/.test(commHtml));
+ok('stage ditandai opsional', /Stage <span class="font-normal text-gray-400">\(opsional\)<\/span>/.test(commHtml));
+ok('ada pilihan tanpa stage', /\(Tanpa stage\)/.test(commHtml));
+ok('memakai daftar stage task biasa', /state\.options&&state\.options\.stage\)\|\|\[\]/.test(commHtml));
+ok('stage lama di luar dropdown tetap ditawarkan', /daftar\.includes\(nilai\)\|\|!nilai\?daftar:daftar\.concat\(\[nilai\]\)/.test(commHtml));
+ok('stage ikut dikirim saat simpan', /stage:getVal\('collabStage'\)/.test(commHtml));
+ok('stage tampil di kartu', /c\.stage\?`<span[^`]*?Stage">\$\{escapeHtml\(c\.stage\)\}/.test(commHtml));
+// Manager boleh membatalkan centang.
+ok('Manager boleh batalkan centang di klien', /if\(s && s\.done && isManager\(state\.currentUser\)\) return true/.test(commHtml));
+ok('mencentang tetap khusus PIC', /return !!s && same\(s\.pic, state\.currentUser\)/.test(commHtml));
 
 console.log('\n=== 16d-2. UI: salin sub-ceklis ke proses lain ===');
 ok('tombol salin ada di kepala sub-ceklis', /toggleCopyChecklistPanel\(\$\{order\}\)/.test(commHtml));

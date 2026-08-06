@@ -361,6 +361,79 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   eq('sumber kosong ditolak', srcKosong.success, false);
   ok('pesannya menjelaskan sumber kosong', /kosong/i.test(srcKosong.message));
 
+  console.log('\nTanggal centang, penanggalan ulang, stage opsional, Manager membatalkan:');
+  fresh();
+  // Proses diuji pada order 2: order 1/3/4/7 sudah dititipi sub-ceklis oleh blok tes salin
+  // di atas (collab pertama otomatis ber-id COL-001), jadi order 2 yang masih bersih.
+  const mk = await backend.saveCollab({ title: 'Uji Proses', platform: 'JadiASN', stage: 'QC Konten',
+    steps: [{ order: 1, name: 'Langkah 1', pic: 'Uma' },
+            { order: 2, name: 'Langkah 2', pic: 'Ali', deadline: '2026-08-01' }] }, 'Nynda');
+  eq('collab dgn stage tersimpan', mk.success, true);
+  const stepDua = (cs, id) => cs.find(c => c.id === id).steps.find(s => s.order === 2);
+  fresh();
+  const col = (await backend.getCollabs()).find(c => c.title === 'Uji Proses');
+  eq('stage terbaca', col.stage, 'QC Konten');
+  fresh();
+  const mkKosong = await backend.saveCollab({ title: 'Tanpa Stage', platform: 'JadiASN',
+    steps: [{ order: 1, name: 'L1', pic: 'Ali' }] }, 'Nynda');
+  eq('tanpa stage tetap boleh', mkKosong.success, true);
+  fresh();
+  eq('stage kosong terbaca sbg ""', (await backend.getCollabs()).find(c => c.title === 'Tanpa Stage').stage, '');
+
+  // Tanggal centang dicatat & dikosongkan saat dibatalkan.
+  const SUB = `${col.id}#2`;
+  fresh();
+  eq('PIC mencentang', (await backend.setCollabStepDone(col.id, 2, true, 'Ali')).success, true);
+  fresh();
+  const s1 = stepDua(await backend.getCollabs(), col.id);
+  ok('doneAt tercatat', /^\d{4}-\d{2}-\d{2}/.test(s1.doneAt));
+  eq('doneBy tercatat', s1.doneBy, 'Ali');
+  fresh();
+  await backend.setCollabStepDone(col.id, 2, false, 'Ali');
+  fresh();
+  eq('batal centang mengosongkan doneAt', stepDua(await backend.getCollabs(), col.id).doneAt, '');
+
+  // Manager boleh MEMBATALKAN, tapi tidak boleh mencentang milik orang lain.
+  fresh();
+  await backend.setCollabStepDone(col.id, 2, true, 'Ali');
+  fresh();
+  eq('Manager boleh membatalkan centang', (await backend.setCollabStepDone(col.id, 2, false, 'Nynda')).success, true);
+  fresh();
+  const mgrCek = await backend.setCollabStepDone(col.id, 2, true, 'Nynda');
+  eq('Manager tak boleh mencentang milik orang lain', mgrCek.success, false);
+  ok('pesannya menyebut PIC', /Ali/.test(mgrCek.message));
+  fresh();
+  const staffBatal = await backend.setCollabStepDone(col.id, 2, false, 'Uma');
+  eq('Staff lain tak boleh membatalkan', staffBatal.success, false);
+  ok('pesan batal menyebut Manager', /Manager/.test(staffBatal.message));
+
+  // Sub-item susulan dituntaskan -> tanggal proses diperbarui.
+  fresh();
+  await backend.addChecklistItem(SUB, 'Sub A', 'Ali');
+  fresh();
+  const subs = await backend.getChecklist(SUB);
+  await backend.setChecklistDone(SUB, subs[0].row, true, 'Ali');
+  fresh();
+  await backend.setCollabStepDone(col.id, 2, true, 'Ali');
+  fresh();
+  await backend.addChecklistItem(SUB, 'Sub susulan', 'Ali');
+  fresh();
+  const subs2 = await backend.getChecklist(SUB);
+  const barisBaru = subs2.filter(i => !i.done)[0].row;
+  const restamp = await backend.setChecklistDone(SUB, barisBaru, true, 'Ali');
+  ok('backend menandai penanggalan ulang', restamp.stepRestamped === true);
+  ok('collabs ikut dikirim balik', Array.isArray(restamp.collabs));
+  ok('doneAt proses terisi', /^\d{4}-\d{2}-\d{2}/.test(stepDua(restamp.collabs, col.id).doneAt));
+  // Proses yang belum dicentang tidak ikut ditanggali.
+  fresh();
+  await backend.setCollabStepDone(col.id, 2, false, 'Ali');
+  fresh();
+  await backend.setChecklistDone(SUB, barisBaru, false, 'Ali');
+  fresh();
+  ok('proses belum dicentang tidak ditanggali', !(await backend.setChecklistDone(SUB, barisBaru, true, 'Ali')).stepRestamped);
+  fresh();
+  ok('ceklis task biasa tidak terpengaruh', !(await backend.setChecklistDone('TSK-001', 2, true, 'Ali')).stepRestamped);
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();

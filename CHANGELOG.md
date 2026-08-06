@@ -10,6 +10,41 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.62.0 — Tanggal centang, stage opsional, & Manager boleh membatalkan centang
+
+### Tanggal centang, bukan cuma deadline
+Baris proses dulu hanya memuat deadline, jadi tak ada cara tahu sebuah proses selesai
+lebih cepat atau lewat tenggat. Sekarang tanggal pencentangan ikut tampil dengan
+putusannya: **✔ 2026-08-04 (tepat waktu)** hijau, atau **✔ 2026-08-07 (telat)** merah.
+Tanpa deadline, tanggalnya tetap ditampilkan tanpa putusan.
+
+Datanya (`doneAt`) sebenarnya **sudah lama tersimpan** — hanya tidak pernah ditampilkan.
+Begitu pula permintaan "uncheck lalu centang lagi harus memperbarui tanggal": itu memang
+sudah berlaku sejak dulu (`setCollabStepDone` menulis `nowStamp()` tiap kali dicentang dan
+mengosongkannya saat dibatalkan), cuma tak terlihat.
+
+### Penanggalan ulang saat sub-ceklis tuntas
+Proses bersub-ceklis baru benar-benar rampung ketika sub-ceklisnya tuntas. Jadi bila
+sub-item **ditambahkan setelah** prosesnya dicentang (sub jadi 5/6), lalu item terakhir itu
+dicentang, tanggal selesai prosesnya ikut diperbarui — tanpa perlu buka-tutup centang utama.
+Hanya berlaku untuk proses yang **sudah** dicentang; yang belum tetap butuh tindakan PIC-nya,
+karena mencentang adalah klaim bahwa pekerjaan selesai.
+
+### Manager boleh membatalkan centang
+Mencentang = mengklaim pekerjaan selesai → tetap khusus PIC proses (+ Dev). **Membatalkan**
+centang adalah koreksi, bukan klaim — jadi Manager boleh, supaya salah centang tidak
+menyandera proses berikutnya sampai orangnya sempat membetulkan sendiri. Leader dan Staff
+lain tetap tidak bisa. Ditegakkan di server, bukan cuma disembunyikan tombolnya.
+
+### Stage opsional di Task Kolaborasi
+Kolom **Stage** baru di sheet `COLLAB` (kolom J), memakai daftar stage yang sama dengan task
+biasa plus pilihan **(Tanpa stage)**. Boleh dikosongkan. Tampil sebagai lencana biru di
+kartu, di samping tipe dan platform. Sheet lama tanpa kolom J tetap terbaca (stage = `''`),
+dan stage lama yang sudah tak ada di dropdown tetap ditawarkan supaya tidak hilang saat
+disimpan ulang.
+
+---
+
 ## 1.61.0 — Salin sub-ceklis ke proses lain
 
 Saat satu proses menyusun daftar panjang (mis. Alya "Generate" dengan 23 sub-item), proses
