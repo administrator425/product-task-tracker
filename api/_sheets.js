@@ -405,6 +405,16 @@ function toSheetDate(value) {
   return s;
 }
 
+// Stempel waktu yang kita TULIS sebagai teks ("2026-08-07 10:00:00") diterima Sheets dengan
+// valueInputOption USER_ENTERED, jadi dikenali sebagai nilai tanggal — dan saat dibaca lagi
+// (UNFORMATTED_VALUE + SERIAL_NUMBER) yang kembali adalah ANGKA SERIAL, bukan teks tadi.
+// Dibaca mentah, "2026-08-07 10:00" berubah jadi "46241.4166…". Padanan stampStr_() di gas/Code.gs.
+function stampStr(v) {
+  if (v === null || v === undefined || v === '') return '';
+  if (typeof v === 'number') return formatDate(v, true);
+  return String(v).trim();
+}
+
 function nowStamp() {
   const offsetMin = parseInt(process.env.TIMEZONE_OFFSET_MINUTES || '420', 10);
   const local = new Date(Date.now() + offsetMin * 60000);
@@ -882,7 +892,7 @@ async function getChecklist(taskId) {
       done: isChecked(r && r[2]),
       createdBy: String((r && r[3]) || '').trim(),
       checkedBy: String((r && r[4]) || '').trim(),
-      checkedAt: String((r && r[5]) || '').trim(),
+      checkedAt: stampStr(r && r[5]),
     }))
     .filter(c => c.taskId === String(taskId || '').trim() && c.item);
 }
@@ -1081,7 +1091,7 @@ async function getCollabs(preC, preS) {
       deadline: (r && r[4] != null && r[4] !== '') ? formatDate(r[4], false) : '',
       done: isChecked(r && r[5]),
       doneBy: String((r && r[6]) || '').trim(),
-      doneAt: String((r && r[7]) || '').trim(),
+      doneAt: stampStr(r && r[7]),
       note: String((r && r[8]) || '').trim(),
     });
   });
@@ -1096,7 +1106,7 @@ async function getCollabs(preC, preS) {
       title: String((r && r[2]) || '').trim(),
       description: String((r && r[3]) || '').trim(),
       createdBy: String((r && r[4]) || '').trim(),
-      createdAt: String((r && r[5]) || '').trim(),
+      createdAt: stampStr(r && r[5]),
       deadline: (r && r[6] != null && r[6] !== '') ? formatDate(r[6], false) : '',
       type: String((r && r[7]) || '').trim(),
       color: String((r && r[8]) || '').trim(),
@@ -1421,7 +1431,7 @@ async function getNotifications(user) {
     .map((r, i) => ({
       row: i + 2, id: String((r && r[0]) || ''), forUser: String((r && r[1]) || ''),
       type: String((r && r[2]) || ''), refId: String((r && r[3]) || ''), from: String((r && r[4]) || ''),
-      text: String((r && r[5]) || ''), createdAt: String((r && r[6]) || ''), read: isChecked(r && r[7]),
+      text: String((r && r[5]) || ''), createdAt: stampStr(r && r[6]), read: isChecked(r && r[7]),
     }))
     .filter(n => baseName(n.forUser) === u)
     .reverse(); // terbaru dulu
@@ -2044,7 +2054,7 @@ async function getAllNotes(pre) {
   if (pre !== undefined) rows = pre;
   else { try { rows = await valuesGet(`${CONFIG.NOTES_SHEET}!A2:E`); } catch (e) { return []; } }
   return rows
-    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), body: String((r && r[2]) || '').trim(), updatedAt: String((r && r[3]) || '').trim(), folder: String((r && r[4]) || '').trim() }))
+    .map((r, i) => ({ row: i + 2, user: String((r && r[0]) || '').trim(), title: String((r && r[1]) || '').trim(), body: String((r && r[2]) || '').trim(), updatedAt: stampStr(r && r[3]), folder: String((r && r[4]) || '').trim() }))
     .filter(n => n.user && (n.title || n.body));
 }
 async function addNote(user, title, body, folder) {

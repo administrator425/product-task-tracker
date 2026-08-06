@@ -434,6 +434,29 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   fresh();
   ok('ceklis task biasa tidak terpengaruh', !(await backend.setChecklistDone('TSK-001', 2, true, 'Ali')).stepRestamped);
 
+  // Stempel waktu ditulis sebagai teks tapi Sheets menyimpannya sebagai NILAI TANGGAL, jadi
+  // saat dibaca (UNFORMATTED_VALUE + SERIAL_NUMBER) yang kembali adalah ANGKA SERIAL.
+  // Dibaca mentah, tanggalnya jadi "46241.4166…" — persis bug yang membuat tanggal centang
+  // tak muncul di produksi. Spreadsheet tiruan tidak meniru pemaksaan tipe itu, jadi serialnya
+  // disuntikkan langsung ke sini.
+  fresh();
+  await backend.setCollabStepDone(col.id, 2, true, 'Ali');
+  fresh();
+  const serial = (Date.UTC(2026, 7, 7, 10, 12) - Date.UTC(1899, 11, 30)) / 86400000;
+  const barisStep = readRange('COLLAB_STEPS!A2:B').findIndex(r => String(r[0]) === col.id && Number(r[1]) === 2) + 2;
+  ok('baris proses ketemu di sheet', barisStep >= 2);
+  writeRange(`COLLAB_STEPS!H${barisStep}`, [[serial]]);
+  fresh();
+  const stepSerial = stepDua(await backend.getCollabs(), col.id);
+  eq('serial dibaca jadi tanggal terbaca', String(stepSerial.doneAt).slice(0, 10), '2026-08-07');
+  ok('bukan angka mentah', !/^\d+\.\d+/.test(String(stepSerial.doneAt)));
+  // Ceklis & catatan memakai jalur baca yang sama.
+  fresh();
+  const ckRow = (await backend.getChecklist(SUB))[0].row;
+  writeRange(`CHECKLIST!F${ckRow}`, [[serial]]);
+  fresh();
+  eq('checkedAt ceklis juga terbaca', String((await backend.getChecklist(SUB))[0].checkedAt).slice(0, 10), '2026-08-07');
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();

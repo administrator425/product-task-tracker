@@ -10,6 +10,30 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.62.1 — Perbaikan: tanggal centang tidak muncul di Vercel
+
+Tanggal centang yang ditambahkan di 1.62.0 tidak pernah tampil di produksi. Penyebabnya
+bukan di penampilnya, tapi di pembacaan data.
+
+Stempel waktu **ditulis** sebagai teks (`"2026-08-07 10:00:00"`), tapi Sheets menerimanya
+dengan `valueInputOption: USER_ENTERED` sehingga dikenali sebagai **nilai tanggal**. Saat
+dibaca lagi dengan `UNFORMATTED_VALUE` + `SERIAL_NUMBER`, yang kembali adalah **angka
+serial** (`46241.4166…`), bukan teks yang tadi ditulis. `api/_sheets.js` membacanya mentah
+lewat `String(r[7])`, jadi nilainya bukan tanggal — penampilnya menolak dan hasilnya kosong.
+Nama pencentang tetap muncul karena itu memang teks biasa.
+
+Sisi Apps Script sudah benar sejak dulu (`stampStr_`); yang tertinggal hanya sisi Vercel.
+Ditambahkan `stampStr()` sebagai padanannya, dipasang pada **lima** pembacaan yang bernasib
+sama: `doneAt` proses, `checkedAt` ceklis, `createdAt` kolaborasi, `createdAt` notifikasi,
+dan `updatedAt` catatan. Komentar & log aktivitas sudah aman karena memakai `formatDate()`.
+
+**Kenapa tes tidak menangkapnya:** spreadsheet tiruan di tes menyimpan apa adanya, tidak
+meniru pemaksaan tipe Sheets, jadi seluruh jalur ini terlihat sehat. Ditambahkan tes yang
+menyuntikkan angka serial langsung ke sheet dan menuntut hasil bacanya berupa tanggal
+terbaca — kelas bug ini tidak akan lolos lagi.
+
+---
+
 ## 1.62.0 — Tanggal centang, stage opsional, & Manager boleh membatalkan centang
 
 ### Tanggal centang, bukan cuma deadline
