@@ -1035,20 +1035,22 @@ async function getChecklistSummary(pre) {
 async function ensureCollabSheets() {
   if (_ensured.has('collab')) return;
   await ensureSheetExists(CONFIG.COLLAB_SHEET);
-  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:J1`);
+  let head = await valuesGet(`${CONFIG.COLLAB_SHEET}!A1:I1`);
   let h0 = head[0] || [];
-  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:J1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color', 'Stage']]);
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A1:I1`, [['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color']]);
   else {
     if (!h0[6]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!G1`, [['Deadline']]);   // deadline project keseluruhan
     if (!h0[7]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!H1`, [['Type']]);        // tipe task (untuk Kanban per-tipe)
     if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!I1`, [['Color']]);       // warna kartu (grid & kanban)
-    if (!h0[9]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!J1`, [['Stage']]);       // stage/tahapan — OPSIONAL, boleh kosong
   }
   await ensureSheetExists(CONFIG.COLLAB_STEP_SHEET);
-  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`);
+  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:J1`);
   h0 = head[0] || [];
-  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:I1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note']]);
-  else if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I1`, [['Note']]);   // catatan per proses (PIC note)
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:J1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note', 'Stage']]);
+  else {
+    if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I1`, [['Note']]);    // catatan per proses (PIC note)
+    if (!h0[9]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!J1`, [['Stage']]);   // stage per proses — OPSIONAL
+  }
   _ensured.add('collab');
 }
 function parseCollabStep(taskId) { const m = String(taskId || '').match(/^(COL-\d+)#(\d+)$/); return m ? { collabId: m[1], order: Number(m[2]) } : null; }
@@ -1075,9 +1077,9 @@ async function getCollabs(preC, preS) {
   if (preC !== undefined) { crows = preC || []; srows = preS || []; }
   else {
     try {
-      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:J`, `${CONFIG.COLLAB_STEP_SHEET}!A2:I`]);
-      crows = b[`${CONFIG.COLLAB_SHEET}!A2:J`] || [];
-      srows = b[`${CONFIG.COLLAB_STEP_SHEET}!A2:I`] || [];
+      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:I`, `${CONFIG.COLLAB_STEP_SHEET}!A2:J`]);
+      crows = b[`${CONFIG.COLLAB_SHEET}!A2:I`] || [];
+      srows = b[`${CONFIG.COLLAB_STEP_SHEET}!A2:J`] || [];
     } catch (e) { return []; }
   }
   const steps = {};
@@ -1093,6 +1095,7 @@ async function getCollabs(preC, preS) {
       doneBy: String((r && r[6]) || '').trim(),
       doneAt: stampStr(r && r[7]),
       note: String((r && r[8]) || '').trim(),
+      stage: String((r && r[9]) || '').trim(),   // OPSIONAL — baris lama tanpa kolom J terbaca ''
     });
   });
   Object.values(steps).forEach(list => list.sort((a, b) => a.order - b.order));
@@ -1110,7 +1113,6 @@ async function getCollabs(preC, preS) {
       deadline: (r && r[6] != null && r[6] !== '') ? formatDate(r[6], false) : '',
       type: String((r && r[7]) || '').trim(),
       color: String((r && r[8]) || '').trim(),
-      stage: String((r && r[9]) || '').trim(),   // OPSIONAL — kolom lama tanpa J tetap terbaca sbg ''
       steps: list, done, total: list.length,
       status: (list.length && done >= list.length) ? 'Selesai' : 'Aktif',
     };
@@ -1142,18 +1144,17 @@ async function saveCollab(payload, actor) {
   const deadline = String((payload && payload.deadline) || '').trim();   // deadline project keseluruhan
   const type = String((payload && payload.type) || '').trim();           // tipe task (Kanban per-tipe)
   const color = String((payload && payload.color) || '').trim();         // warna kartu (grid & kanban)
-  const stage = String((payload && payload.stage) || '').trim();         // stage/tahapan — OPSIONAL, boleh kosong
   const steps = Array.isArray(payload && payload.steps) ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
   // srcOrder = urutan asli proses saat form dibuka; dipakai agar status done/catatan
   // tetap ikut prosesnya saat urutan diubah (bukan mengikuti posisi). 0 = proses baru.
-  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim(), srcOrder: Number((s && s.srcOrder) || 0) }))
+  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim(), stage: String((s && s.stage) || '').trim(), srcOrder: Number((s && s.srcOrder) || 0) }))
     .filter(s => s.name);
   if (!clean.length) return { success: false, message: 'Minimal 1 proses (nama proses wajib diisi).' };
 
   await ensureCollabSheets();
   let crows = [];
-  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:J`); } catch (e) { crows = []; }
+  try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:I`); } catch (e) { crows = []; }
   const ids = crows.map(r => String((r && r[0]) || '').trim());
   let id = String((payload && payload.id) || '').trim();
   const isUpdate = id && ids.includes(id);
@@ -1170,19 +1171,19 @@ async function saveCollab(payload, actor) {
     const rn = ids.indexOf(id) + 2;
     const keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
     const keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp());
-    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:J${rn}`, [[id, platform, title, description, keepBy, keepAt, dl, type, color, stage]]);
+    await valuesUpdate(`${CONFIG.COLLAB_SHEET}!A${rn}:I${rn}`, [[id, platform, title, description, keepBy, keepAt, dl, type, color]]);
     await deleteStepRowsForCollab(id);
   } else {
     id = genCollabId(ids);
-    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:J`, [[id, platform, title, description, actor, nowStamp(), dl, type, color, stage]]);
+    await valuesAppend(`${CONFIG.COLLAB_SHEET}!A:I`, [[id, platform, title, description, actor, nowStamp(), dl, type, color]]);
   }
 
   const stepRows = clean.map((s, i) => {
     const order = i + 1;
     const pd = prevStep[s.srcOrder] || {};   // bawa done/catatan dari proses asalnya (tahan reorder)
-    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || ''];
+    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim()];
   });
-  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:I`, stepRows);
+  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:J`, stepRows);
 
   await logActivity(actor, isUpdate ? 'Collab Update' : 'Collab Create', id, `${title} • ${clean.length} proses`);
   return { success: true, message: isUpdate ? 'Task kolaborasi diperbarui.' : 'Task kolaborasi dibuat.', collabs: await getCollabs() };
@@ -1195,7 +1196,7 @@ async function setCollabStepNote(collabId, order, note, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   await ensureCollabSheets();
   let srows = [];
-  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:I`); } catch (e) { srows = []; }
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:J`); } catch (e) { srows = []; }
   let idx = -1;
   for (let i = 0; i < srows.length; i++) {
     const r = srows[i];
@@ -1562,7 +1563,7 @@ async function getBootstrapData(opts) {
     tasks: MAIN_DATA_RANGE(), options: `${CONFIG.OPTIONS_SHEET}!A2:D`, activity: `${CONFIG.ACTIVITY_SHEET}!A2:E`,
     comments: `${CONFIG.COMMENTS_SHEET}!A2:D`, auth: `${CONFIG.AUTH_SHEET}!A2:B`, links: `${CONFIG.LINKS_SHEET}!A2:D`,
     dashboards: `${CONFIG.DASHBOARDS_SHEET}!A2:D`, notes: `${CONFIG.NOTES_SHEET}!A2:E`, checklist: `${CONFIG.CHECKLIST_SHEET}!A2:C`,
-    collab: `${CONFIG.COLLAB_SHEET}!A2:J`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:I`,
+    collab: `${CONFIG.COLLAB_SHEET}!A2:I`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:J`,
     users: `${CONFIG.USERS_SHEET}!A2:C`,
   };
   const present = Object.keys(R).filter(k => meta[sheetOf[k]]);

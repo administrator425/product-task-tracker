@@ -428,25 +428,27 @@ const staffUndo = call('setCollabStepDone', 'COL-001', 1, false, 'Staff Soal');
 eq('Staff tetap tak boleh membatalkan punya orang lain', staffUndo.success, false);
 ok('pesan batal menyebut Manager', /Manager/.test(staffUndo.message));
 
-console.log('\n=== 7d. Stage OPSIONAL di task kolaborasi ===');
-const colStage = call('saveCollab', { title: 'Uji Stage', platform: 'JadiASN', stage: 'QC Konten',
-  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal' }] }, 'Manager');
-eq('simpan dgn stage berhasil', colStage.success, true);
+console.log('\n=== 7d. Stage OPSIONAL per PROSES (bukan per kartu) ===');
+// Satu kolaborasi bisa memuat proses ber-stage berbeda; sebagian boleh tanpa stage.
+const colStage = call('saveCollab', { title: 'Uji Stage', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal', stage: 'QC Konten' },
+          { order: 2, name: 'Langkah 2', pic: 'Staff QC', stage: 'Input Soal' },
+          { order: 3, name: 'Langkah 3', pic: 'Staff Soal' }] }, 'Manager');
+eq('simpan dgn stage per proses berhasil', colStage.success, true);
 const dgnStage = call('getCollabs').find(c => c.title === 'Uji Stage');
-eq('stage tersimpan', dgnStage.stage, 'QC Konten');
-const colTanpa = call('saveCollab', { title: 'Uji Tanpa Stage', platform: 'JadiASN',
-  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal' }] }, 'Manager');
-eq('simpan tanpa stage juga berhasil', colTanpa.success, true);
-eq('stage kosong = string kosong, bukan error', call('getCollabs').find(c => c.title === 'Uji Tanpa Stage').stage, '');
-// Collab lama (di-seed sebelum kolom J ada) tetap terbaca.
-eq('collab lama tanpa kolom stage aman', call('getCollabs').find(c => c.id === 'COL-001').stage, '');
-const ubah = call('saveCollab', { id: dgnStage.id, title: 'Uji Stage', platform: 'JadiASN', stage: '',
-  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal' }] }, 'Manager');
+eq('stage proses 1 tersimpan', dgnStage.steps.find(s => s.order === 1).stage, 'QC Konten');
+eq('stage proses 2 berbeda & tersimpan', dgnStage.steps.find(s => s.order === 2).stage, 'Input Soal');
+eq('proses tanpa stage = string kosong', dgnStage.steps.find(s => s.order === 3).stage, '');
+ok('stage TIDAK lagi di level kartu', dgnStage.stage === undefined);
+// Proses lama (di-seed sebelum kolom J ada) tetap terbaca.
+eq('proses lama tanpa kolom stage aman', call('getCollabs').find(c => c.id === 'COL-001').steps[0].stage, '');
+const ubah = call('saveCollab', { id: dgnStage.id, title: 'Uji Stage', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Langkah 1', pic: 'Staff Soal', stage: '' }] }, 'Manager');
 eq('stage boleh dikosongkan lagi', ubah.success, true);
-eq('stage kembali kosong', call('getCollabs').find(c => c.title === 'Uji Stage').stage, '');
-ok('header sheet COLLAB memuat Stage', SS.getSheetByName('COLLAB').getRange(1, 10, 1, 1).getValues()[0][0] === 'Stage');
+eq('stage kembali kosong', call('getCollabs').find(c => c.title === 'Uji Stage').steps[0].stage, '');
+ok('header sheet COLLAB_STEPS memuat Stage', SS.getSheetByName('COLLAB_STEPS').getRange(1, 10, 1, 1).getValues()[0][0] === 'Stage');
+ok('header sheet COLLAB TIDAK lagi punya Stage', SS.getSheetByName('COLLAB').getRange(1, 10, 1, 1).getValues()[0][0] !== 'Stage');
 call('deleteCollab', dgnStage.id, 'Manager');
-call('deleteCollab', call('getCollabs').find(c => c.title === 'Uji Tanpa Stage').id, 'Manager');
 
 console.log('\n=== 8. Gerbang status "Done" ===');
 const denied = call('quickUpdateField', 'TSK-028', 'status', 'Done', 'Staff Soal');
@@ -782,17 +784,29 @@ ok('membandingkan doneAt dgn deadline proses', /const telat = tgl > s\.deadline/
 ok('menandai telat & tepat waktu', /telat\?'\(telat\)':'\(tepat waktu\)'/.test(commHtml));
 ok('tanpa deadline tetap tampilkan tanggalnya', /if\(!s\.deadline\) return/.test(commHtml));
 ok('doneAt kacau tidak dirender', /if\(!\/\^\\d\{4\}-\\d\{2\}-\\d\{2\}\$\/\.test\(tgl\)\) return ''/.test(commHtml));
-// Stage OPSIONAL.
-ok('ada input stage di modal collab', /id="collabStage"/.test(commHtml));
-ok('stage ditandai opsional', /Stage <span class="font-normal text-gray-400">\(opsional\)<\/span>/.test(commHtml));
-ok('ada pilihan tanpa stage', /\(Tanpa stage\)/.test(commHtml));
-ok('memakai daftar stage task biasa', /state\.options&&state\.options\.stage\)\|\|\[\]/.test(commHtml));
-ok('stage lama di luar dropdown tetap ditawarkan', /daftar\.includes\(nilai\)\|\|!nilai\?daftar:daftar\.concat\(\[nilai\]\)/.test(commHtml));
-ok('stage ikut dikirim saat simpan', /stage:getVal\('collabStage'\)/.test(commHtml));
-ok('stage tampil di kartu', /c\.stage\?`<span[^`]*?Stage">\$\{escapeHtml\(c\.stage\)\}/.test(commHtml));
+// Stage OPSIONAL — melekat pada PROSES, bukan pada kartunya.
+ok('stage TIDAK lagi di kepala kartu', !/id="collabStage"/.test(commHtml));
+ok('ada pemilih stage per proses', /class="cs-stage/.test(commHtml));
+ok('memakai pembangun opsi stage', /\$\{collabStageOptions\(s\.stage\)\}/.test(commHtml));
+ok('ada pilihan tanpa stage', /\(tanpa stage\)/.test(commHtml));
+ok('memakai daftar stage task biasa', /function collabStageOptions\(sel\)[\s\S]{0,300}?state\.options&&state\.options\.stage\)\|\|\[\]/.test(commHtml));
+ok('stage lama di luar dropdown tetap ditawarkan', /\(!v\|\|daftar\.includes\(v\)\)\?daftar:daftar\.concat\(\[v\]\)/.test(commHtml));
+ok('stage ikut dibaca dari baris proses', /stage:\(row\.querySelector\('\.cs-stage'\)\|\|\{\}\)\.value\|\|''/.test(commHtml));
+ok('draft proses baru menyertakan stage', /\{name:'',pic:'',deadline:'',stage:'',srcOrder:0\}/.test(commHtml));
+ok('stage tampil di baris proses', /s\.stage\?`<span[^`]*?Stage">\$\{escapeHtml\(s\.stage\)\}/.test(commHtml));
 // Manager boleh membatalkan centang.
 ok('Manager boleh batalkan centang di klien', /if\(s && s\.done && isManager\(state\.currentUser\)\) return true/.test(commHtml));
 ok('mencentang tetap khusus PIC', /return !!s && same\(s\.pic, state\.currentUser\)/.test(commHtml));
+
+// Sidebar bisa disembunyikan supaya area task lebih lebar.
+ok('ada tombol sembunyikan sidebar', /id="sidebarToggle"/.test(commHtml));
+ok('tombol hanya utk layar lebar', /id="sidebarToggle"[^>]*hidden md:inline-flex/.test(commHtml));
+ok('ada fungsi toggle sidebar', /function toggleSidebar\(\)/.test(commHtml));
+ok('pilihan disimpan di localStorage', /LS\.set\('tt_sidebar_hidden'/.test(commHtml) && /LS\.get\('tt_sidebar_hidden'\)==='1'/.test(commHtml));
+ok('sidebar disembunyikan lewat class, bukan dihapus', /el\.classList\.toggle\('md:hidden', sembunyi\)/.test(commHtml));
+ok('ikon tombol ikut berubah', /ic\.textContent=sembunyi\?'menu':'menu_open'/.test(commHtml));
+ok('grafik digambar ulang setelah lebar berubah', /function toggleSidebar\(\)[\s\S]{0,300}?renderAll\(\)/.test(commHtml));
+ok('kondisi sidebar dipulihkan saat muat', /renderAppVersion\(\); applySidebar\(\)/.test(commHtml));
 
 console.log('\n=== 16d-2. UI: salin sub-ceklis ke proses lain ===');
 ok('tombol salin ada di kepala sub-ceklis', /toggleCopyChecklistPanel\(\$\{order\}\)/.test(commHtml));

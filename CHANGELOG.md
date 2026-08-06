@@ -10,6 +10,33 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.63.0 — Stage pindah ke tiap proses + menu samping bisa disembunyikan
+
+### Stage melekat pada PROSES, bukan pada kartunya
+Di 1.62.0 stage salah tempat: ada satu di kepala kartu. Sekarang **tiap proses di "Proses
+Beruntun" punya stage-nya sendiri** — satu kolaborasi bisa memuat proses ber-stage berbeda
+(mis. proses 1 *Input Soal*, proses 8 *QC Konten*), dan sebagian boleh tanpa stage.
+
+Pemilihnya ada di baris proses saat mode **Edit**, di antara PIC dan deadline. Di mode baca,
+stage tampil sebagai lencana biru di sebelah nama PIC. Pilihan **(tanpa stage)** selalu
+tersedia, memakai daftar stage yang sama dengan task biasa. Stage lama yang sudah tak ada
+di dropdown tetap ditawarkan supaya tidak terhapus diam-diam saat disimpan ulang.
+
+Kolom `Stage` kini di sheet **`COLLAB_STEPS` kolom J** (bukan lagi `COLLAB`). Baris lama
+tanpa kolom itu tetap terbaca sebagai kosong. Stage di level kartu dicabut seluruhnya —
+dua tempat untuk hal yang sama hanya membingungkan.
+
+### Menu samping bisa disembunyikan
+Tombol baru di kiri judul halaman menyembunyikan menu samping supaya area task jauh lebih
+lebar — terukur **1180 → 1440 px pada layar 1440** (bertambah 260 px). Paling terasa di
+Kanban dan Task List. Pilihannya diingat, jadi tak perlu diulang tiap buka.
+
+Sidebar disembunyikan lewat class, bukan dihapus dari DOM, supaya semua tombol nav, badge
+notifikasi, dan kotak Mode User di dalamnya tetap hidup. Grafik digambar ulang setelah
+lebarnya berubah karena Chart.js & Gantt mengukur lebar induknya saat dibuat.
+
+---
+
 ## 1.62.1 — Perbaikan: tanggal centang tidak muncul di Vercel
 
 Tanggal centang yang ditambahkan di 1.62.0 tidak pernah tampil di produksi. Penyebabnya

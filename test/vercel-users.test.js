@@ -365,20 +365,26 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   fresh();
   // Proses diuji pada order 2: order 1/3/4/7 sudah dititipi sub-ceklis oleh blok tes salin
   // di atas (collab pertama otomatis ber-id COL-001), jadi order 2 yang masih bersih.
-  const mk = await backend.saveCollab({ title: 'Uji Proses', platform: 'JadiASN', stage: 'QC Konten',
-    steps: [{ order: 1, name: 'Langkah 1', pic: 'Uma' },
-            { order: 2, name: 'Langkah 2', pic: 'Ali', deadline: '2026-08-01' }] }, 'Nynda');
-  eq('collab dgn stage tersimpan', mk.success, true);
+  // Stage melekat pada PROSES, bukan pada kartunya: satu kolaborasi bisa memuat
+  // proses ber-stage berbeda-beda, dan sebagian boleh tanpa stage sama sekali.
+  const mk = await backend.saveCollab({ title: 'Uji Proses', platform: 'JadiASN',
+    steps: [{ order: 1, name: 'Langkah 1', pic: 'Uma', stage: 'Input Soal' },
+            { order: 2, name: 'Langkah 2', pic: 'Ali', deadline: '2026-08-01', stage: 'QC Konten' },
+            { order: 3, name: 'Langkah 3', pic: 'Uma' }] }, 'Nynda');
+  eq('collab dgn stage per proses tersimpan', mk.success, true);
   const stepDua = (cs, id) => cs.find(c => c.id === id).steps.find(s => s.order === 2);
   fresh();
   const col = (await backend.getCollabs()).find(c => c.title === 'Uji Proses');
-  eq('stage terbaca', col.stage, 'QC Konten');
+  eq('stage proses 1 terbaca', col.steps.find(s => s.order === 1).stage, 'Input Soal');
+  eq('stage proses 2 terbaca', col.steps.find(s => s.order === 2).stage, 'QC Konten');
+  eq('proses tanpa stage = string kosong', col.steps.find(s => s.order === 3).stage, '');
+  ok('stage TIDAK lagi di level kartu', col.stage === undefined);
   fresh();
   const mkKosong = await backend.saveCollab({ title: 'Tanpa Stage', platform: 'JadiASN',
     steps: [{ order: 1, name: 'L1', pic: 'Ali' }] }, 'Nynda');
-  eq('tanpa stage tetap boleh', mkKosong.success, true);
+  eq('semua proses tanpa stage tetap boleh', mkKosong.success, true);
   fresh();
-  eq('stage kosong terbaca sbg ""', (await backend.getCollabs()).find(c => c.title === 'Tanpa Stage').stage, '');
+  eq('stage kosong terbaca sbg ""', (await backend.getCollabs()).find(c => c.title === 'Tanpa Stage').steps[0].stage, '');
 
   // Tanggal centang dicatat & dikosongkan saat dibatalkan.
   const SUB = `${col.id}#2`;

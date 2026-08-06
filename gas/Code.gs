@@ -107,8 +107,8 @@ SHEET_HEADERS[CONFIG.LINKS_SHEET] = ['User', 'Title', 'URL', 'Folder'];
 SHEET_HEADERS[CONFIG.DASHBOARDS_SHEET] = ['Title', 'Desc', 'Icon', 'URL'];
 SHEET_HEADERS[CONFIG.NOTES_SHEET] = ['User', 'Title', 'Body', 'UpdatedAt', 'Folder'];
 SHEET_HEADERS[CONFIG.CHECKLIST_SHEET] = ['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At'];
-SHEET_HEADERS[CONFIG.COLLAB_SHEET] = ['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color', 'Stage'];
-SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET] = ['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note'];
+SHEET_HEADERS[CONFIG.COLLAB_SHEET] = ['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color'];
+SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET] = ['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note', 'Stage'];
 SHEET_HEADERS[CONFIG.NOTIF_SHEET] = ['ID', 'For User', 'Type', 'Ref ID', 'From', 'Text', 'Created At', 'Read'];
 SHEET_HEADERS[CONFIG.USERS_SHEET] = ['Nama', 'Peran', 'Aktif'];
 
@@ -1228,8 +1228,8 @@ function getCollabs(preC, preS) {
   if (preC !== undefined) { crows = preC || []; srows = preS || []; }
   else {
     try {
-      crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:J');
-      srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:I');
+      crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:I');
+      srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:J');
     } catch (e) { return []; }
   }
   var steps = {};
@@ -1246,7 +1246,8 @@ function getCollabs(preC, preS) {
       done: isChecked_(r && r[5]),
       doneBy: String((r && r[6]) || '').trim(),
       doneAt: stampStr_(r && r[7]),
-      note: String((r && r[8]) || '').trim()
+      note: String((r && r[8]) || '').trim(),
+      stage: String((r && r[9]) || '').trim()   // OPSIONAL — baris lama tanpa kolom J terbaca ''
     });
   });
   Object.keys(steps).forEach(function (k) {
@@ -1268,7 +1269,6 @@ function getCollabs(preC, preS) {
       deadline: (r && r[6] !== null && r[6] !== undefined && r[6] !== '') ? formatDate_(r[6], false) : '',
       type: String((r && r[7]) || '').trim(),
       color: String((r && r[8]) || '').trim(),
-      stage: String((r && r[9]) || '').trim(),   // OPSIONAL — sheet lama tanpa kolom J terbaca ''
       steps: list,
       done: done,
       total: list.length,
@@ -1297,7 +1297,6 @@ function saveCollab(payload, actor) {
   var deadline = String((payload && payload.deadline) || '').trim();  // deadline project keseluruhan
   var type = String((payload && payload.type) || '').trim();          // tipe task (Kanban per-tipe)
   var color = String((payload && payload.color) || '').trim();        // warna kartu
-  var stage = String((payload && payload.stage) || '').trim();        // stage/tahapan — OPSIONAL
   var steps = (payload && Object.prototype.toString.call(payload.steps) === '[object Array]') ? payload.steps : [];
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
 
@@ -1308,6 +1307,7 @@ function saveCollab(payload, actor) {
       name: String((s && s.name) || '').trim(),
       pic: String((s && s.pic) || '').trim(),
       deadline: String((s && s.deadline) || '').trim(),
+      stage: String((s && s.stage) || '').trim(),
       srcOrder: Number((s && s.srcOrder) || 0)
     };
   }).filter(function (s) { return s.name; });
@@ -1315,7 +1315,7 @@ function saveCollab(payload, actor) {
 
   ensureCollabSheets_();
   var crows = [];
-  try { crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:J'); } catch (e) { crows = []; }
+  try { crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:I'); } catch (e) { crows = []; }
   var ids = crows.map(function (r) { return String((r && r[0]) || '').trim(); });
   var id = String((payload && payload.id) || '').trim();
   var isUpdate = !!(id && ids.indexOf(id) >= 0);
@@ -1334,20 +1334,20 @@ function saveCollab(payload, actor) {
     var rn = ids.indexOf(id) + 2;
     var keepBy = String((crows[rn - 2] && crows[rn - 2][4]) || actor);
     var keepAt = String((crows[rn - 2] && crows[rn - 2][5]) || nowStamp_());
-    valuesUpdate_(CONFIG.COLLAB_SHEET + '!A' + rn + ':J' + rn, [[id, platform, title, description, keepBy, keepAt, dl, type, color, stage]]);
+    valuesUpdate_(CONFIG.COLLAB_SHEET + '!A' + rn + ':I' + rn, [[id, platform, title, description, keepBy, keepAt, dl, type, color]]);
     deleteStepRowsForCollab_(id);
   } else {
     id = genCollabId_(ids);
-    valuesAppend_(CONFIG.COLLAB_SHEET + '!A:J', [[id, platform, title, description, actor, nowStamp_(), dl, type, color, stage]]);
+    valuesAppend_(CONFIG.COLLAB_SHEET + '!A:I', [[id, platform, title, description, actor, nowStamp_(), dl, type, color]]);
   }
 
   var stepRows = clean.map(function (s, i) {
     var order = i + 1;
     var pd = prevStep[s.srcOrder] || {};   // bawa done/catatan dari proses asalnya (tahan reorder)
     return [id, order, s.name, s.pic, s.deadline ? toSheetDate_(s.deadline) : '',
-      pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || ''];
+      pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim()];
   });
-  if (stepRows.length) valuesAppend_(CONFIG.COLLAB_STEP_SHEET + '!A:I', stepRows);
+  if (stepRows.length) valuesAppend_(CONFIG.COLLAB_STEP_SHEET + '!A:J', stepRows);
 
   logActivity_(actor, isUpdate ? 'Collab Update' : 'Collab Create', id, title + ' • ' + clean.length + ' proses');
   return { success: true, message: isUpdate ? 'Task kolaborasi diperbarui.' : 'Task kolaborasi dibuat.', collabs: getCollabs() };
@@ -1368,7 +1368,7 @@ function setCollabStepNote(collabId, order, note, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   ensureCollabSheets_();
   var srows = [];
-  try { srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:I'); } catch (e) { srows = []; }
+  try { srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:J'); } catch (e) { srows = []; }
   var idx = findStepRow_(srows, collabId, order);
   if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
   var pic = String((srows[idx] && srows[idx][3]) || '').trim();
@@ -1764,20 +1764,22 @@ function ensureChecklistSheet_() {
 
 function ensureCollabSheets_() {
   sheet_(CONFIG.COLLAB_SHEET, true);
-  var head = valuesGet_(CONFIG.COLLAB_SHEET + '!A1:J1');
+  var head = valuesGet_(CONFIG.COLLAB_SHEET + '!A1:I1');
   var h0 = head[0] || [];
-  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!A1:J1', [SHEET_HEADERS[CONFIG.COLLAB_SHEET]]);
+  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!A1:I1', [SHEET_HEADERS[CONFIG.COLLAB_SHEET]]);
   else {
     if (!h0[6]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!G1', [['Deadline']]);
     if (!h0[7]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!H1', [['Type']]);
     if (!h0[8]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!I1', [['Color']]);
-    if (!h0[9]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!J1', [['Stage']]);   // stage/tahapan — OPSIONAL
   }
   sheet_(CONFIG.COLLAB_STEP_SHEET, true);
-  head = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A1:I1');
+  head = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A1:J1');
   h0 = head[0] || [];
-  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!A1:I1', [SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET]]);
-  else if (!h0[8]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!I1', [['Note']]);
+  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!A1:J1', [SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET]]);
+  else {
+    if (!h0[8]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!I1', [['Note']]);
+    if (!h0[9]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!J1', [['Stage']]);   // stage per proses — OPSIONAL
+  }
 }
 
 function ensureNotificationsSheet_() {

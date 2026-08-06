@@ -269,6 +269,9 @@
           <button onclick="toggleMobileSidebar()" class="md:hidden w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
             <span class="material-icons-round text-[20px]">menu</span>
           </button>
+          <button id="sidebarToggle" onclick="toggleSidebar()" title="Sembunyikan menu samping (lebih lebar untuk task)" class="hidden md:inline-flex w-9 h-9 rounded-lg bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 items-center justify-center text-gray-500 dark:text-slate-300 shrink-0">
+            <span id="sidebarToggleIcon" class="material-icons-round text-[20px]">menu_open</span>
+          </button>
           <span id="pageIcon" class="hidden sm:inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 shrink-0"><span class="material-icons-round text-[18px]">space_dashboard</span></span>
           <div class="min-w-0">
             <h1 id="pageTitle" class="text-lg md:text-xl font-semibold tracking-tight text-gray-900 dark:text-white truncate">Dashboard</h1>
@@ -733,9 +736,6 @@
             <div class="md:col-span-1"><label class="form-label">Tipe Task</label><select id="collabType" class="form-control"></select></div>
             <div class="md:col-span-1"><label class="form-label">Deadline Project</label><input type="date" id="collabDeadline" class="form-control"><div id="collabDeadlineView" class="hide text-xs mt-1"></div></div>
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div class="md:col-span-2"><label class="form-label">Stage <span class="font-normal text-gray-400">(opsional)</span></label><select id="collabStage" class="form-control"></select><p class="text-[11px] text-gray-400 mt-1">Boleh dikosongkan — memakai daftar stage yang sama dengan task biasa.</p></div>
-          </div>
           <div id="collabColorRow"><label class="form-label">Warna Kartu</label><div id="collabColorPicker" class="flex flex-wrap items-center gap-1.5"></div></div>
 
           <div class="border border-gray-200 dark:border-slate-800 rounded-xl overflow-hidden">
@@ -784,7 +784,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.62.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.63.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -975,7 +975,7 @@ function afterLoad() {
   // (mis. library CDN diblokir jaringan kantor), aplikasi tetap bisa dipakai dan
   // pesan errornya ditampilkan — bukan layar loading yang menggantung selamanya.
   try {
-    renderAppVersion();
+    renderAppVersion(); applySidebar();
     populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad(); loadNotifications(); if(needIdentityPick()) showIdentityGate();
     if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); document.addEventListener('click', notifOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); }); document.addEventListener('keydown', e=>{ if(e.key==='Escape' && state.activeView==='communication' && state.selectedTaskId && document.getElementById('taskModal').classList.contains('hide')){ closeCommChat(); } });}
   } catch(e) {
@@ -1208,6 +1208,27 @@ function applyTheme(){
 function toggleTheme(){LS.set('theme', document.documentElement.classList.contains('dark')?'light':'dark'); applyTheme(); renderAll();}
 function openMobileSidebar(){const s=document.getElementById('sidebar'); s.classList.remove('hidden'); s.classList.add('absolute','z-[80]','h-full','top-0','left-0','shadow-2xl'); const bd=document.getElementById('mobileBackdrop'); if(bd) bd.classList.remove('hide');}
 function closeMobileSidebar(){const s=document.getElementById('sidebar'); s.classList.add('hidden'); s.classList.remove('absolute','z-[80]','h-full','top-0','left-0','shadow-2xl'); const bd=document.getElementById('mobileBackdrop'); if(bd) bd.classList.add('hide');}
+/* Sembunyikan menu samping supaya area task jauh lebih lebar (Kanban & Task List paling
+   terasa). Hanya untuk layar >= md; di ponsel sidebar memang sudah tersembunyi dan diatur
+   toggleMobileSidebar(). Pilihannya diingat lewat localStorage, jadi tidak perlu diulang
+   tiap buka. Sengaja memakai class 'hidden' — bukan menghapus elemen — supaya semua
+   tombol nav, badge, dan kotak Mode User di dalamnya tetap hidup dan bisa dirender. */
+function sidebarHidden(){ return LS.get('tt_sidebar_hidden')==='1'; }
+function applySidebar(){
+  const el=document.getElementById('sidebar'); if(!el) return;
+  const sembunyi=sidebarHidden();
+  el.classList.toggle('md:flex', !sembunyi);
+  el.classList.toggle('md:hidden', sembunyi);
+  const ic=document.getElementById('sidebarToggleIcon'); if(ic) ic.textContent=sembunyi?'menu':'menu_open';
+  const btn=document.getElementById('sidebarToggle');
+  if(btn) btn.title=sembunyi?'Tampilkan menu samping':'Sembunyikan menu samping (lebih lebar untuk task)';
+}
+function toggleSidebar(){
+  LS.set('tt_sidebar_hidden', sidebarHidden()?'0':'1');
+  applySidebar();
+  // Chart & Gantt mengukur lebar induknya saat dibuat, jadi harus digambar ulang.
+  try{ renderAll(); }catch(e){}
+}
 function toggleMobileSidebar(){const s=document.getElementById('sidebar'); if(s.classList.contains('hidden')) openMobileSidebar(); else closeMobileSidebar();}
 function showToast(msg, ok=true){const el=document.getElementById('toast');el.textContent=msg;el.className='fixed right-5 bottom-5 z-[120] px-4 py-2.5 rounded-xl shadow-lg text-white text-sm font-medium '+(ok?'bg-emerald-600':'bg-rose-600');setTimeout(()=>el.classList.add('hide'),3000);}
 function renderDeadlineReminder(){
@@ -2598,6 +2619,15 @@ function myTurnSteps(){ const out=[]; (state.collabs||[]).forEach(c=>(c.steps||[
 function updateCollabTurnBadge(){ const n=myTurnSteps().length; const b=document.getElementById('collabTurnBadge'); if(b){ b.textContent=n; b.classList.toggle('hide', n===0); } }
 function currentCollab(){ return (state.collabs||[]).find(c=>c.id===state._collabId)||null; }
 function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeAttr(p)}" ${same(p,sel)?'selected':''}>${escapeHtml(p)}</option>`).join(''); }
+/* Stage per proses — OPSIONAL, memakai daftar stage yang sama dengan task biasa.
+   Stage lama yang sudah tak ada di dropdown tetap ditawarkan supaya tidak terhapus
+   diam-diam saat prosesnya disimpan ulang. */
+function collabStageOptions(sel){
+  const v=String(sel||'').trim();
+  const daftar=(state.options&&state.options.stage)||[];
+  const opsi=(!v||daftar.includes(v))?daftar:daftar.concat([v]);
+  return '<option value="">(tanpa stage)</option>'+opsi.map(t=>`<option value="${escapeAttr(t)}" ${same(t,v)?'selected':''}>${escapeHtml(t)}</option>`).join('');
+}
 
 const COLLAB_TYPES=['Course','Tryout/Latsol','Liveclass','Drilling','Journey'];
 const COLLAB_COLORS=[
@@ -2728,7 +2758,7 @@ function collabCard(c){
     ${turnRibbon}
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
-        <div class="flex items-center flex-wrap gap-1"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${c.type?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">${escapeHtml(c.type)}</span>`:''}${c.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(c.stage)}</span>`:''}${String(c.platform||'').split(',').map(x=>x.trim()).filter(Boolean).map(pf=>`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(pf)}</span>`).join('')}</div>
+        <div class="flex items-center flex-wrap gap-1"><span class="text-[10px] font-mono text-gray-400">${escapeHtml(c.id)}</span>${c.type?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">${escapeHtml(c.type)}</span>`:''}${String(c.platform||'').split(',').map(x=>x.trim()).filter(Boolean).map(pf=>`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300">${escapeHtml(pf)}</span>`).join('')}</div>
         <div class="font-semibold text-sm text-gray-900 dark:text-white mt-0.5 line-clamp-2">${escapeHtml(c.title)}</div>
       </div>
       <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${c.status==='Selesai'?'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300':'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300'}">${escapeHtml(c.status)}</span>
@@ -2749,7 +2779,7 @@ function openCollabModal(id=''){
   if(isNew && !manage){ showToast('Hanya manager/Dev yang bisa membuat task kolaborasi.', false); return; }
   state._collabId=c?c.id:null;
   state._collabEdit=isNew;                         // task baru langsung mode edit
-  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',srcOrder:0}]:[];
+  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]:[];
   document.getElementById('collabModal').classList.remove('hide');
   document.getElementById('collabModalTitle').textContent=isNew?'Task Kolaborasi Baru':(manage?'Kelola Task Kolaborasi':'Detail Task Kolaborasi');
   document.getElementById('collabModalSub').textContent=c?(c.id+' • dibuat oleh '+(c.createdBy||'—')):'Cukup platform + judul + daftar proses (tiap proses punya PIC & deadline).';
@@ -2760,20 +2790,10 @@ function openCollabModal(id=''){
   const typeSel=document.getElementById('collabType');
   typeSel.innerHTML='<option value="">(Tanpa tipe)</option>'+COLLAB_TYPES.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
   typeSel.value=c?(c.type||''):'';
-  // Stage OPSIONAL: memakai daftar stage yang sama dengan task biasa, plus pilihan kosong.
-  const stageSel=document.getElementById('collabStage');
-  if(stageSel){
-    const daftar=(state.options&&state.options.stage)||[];
-    const nilai=c?String(c.stage||''):'';
-    // Stage lama yang sudah tak ada di dropdown tetap ditawarkan supaya tidak hilang saat disimpan.
-    const opsi=daftar.includes(nilai)||!nilai?daftar:daftar.concat([nilai]);
-    stageSel.innerHTML='<option value="">(Tanpa stage)</option>'+opsi.map(t=>`<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
-    stageSel.value=nilai;
-  }
   state._collabColor=c?safeColor(c.color):''; renderCollabColorPicker();
   setVal('collabTitle', c?c.title:''); setVal('collabDesc', c?c.description:''); setVal('collabDeadline', c?c.deadline:'');
   const roHead=!manage;
-  plat.disabled=roHead; typeSel.disabled=roHead; if(stageSel) stageSel.disabled=roHead; document.getElementById('collabTitle').disabled=roHead; document.getElementById('collabDesc').disabled=roHead; document.getElementById('collabDeadline').disabled=roHead;
+  plat.disabled=roHead; typeSel.disabled=roHead; document.getElementById('collabTitle').disabled=roHead; document.getElementById('collabDesc').disabled=roHead; document.getElementById('collabDeadline').disabled=roHead;
   // Deadline project: tampilkan versi teks (dengan flag telat) untuk non-manager.
   const dv=document.getElementById('collabDeadlineView'); const dfield=document.getElementById('collabDeadline');
   if(dv && dfield){ if(roHead){ dfield.classList.add('hide'); dv.classList.remove('hide'); const od=c&&c.deadline&&c.status!=='Selesai'&&c.deadline<todayStr(); dv.innerHTML=c&&c.deadline?`<span class="${od?'text-rose-600 font-semibold':'text-gray-600 dark:text-slate-300'}">${escapeHtml(c.deadline)}${od?' (telat)':''}</span>`:'<span class="text-gray-400">—</span>'; } else { dfield.classList.remove('hide'); dv.classList.add('hide'); } }
@@ -2785,10 +2805,10 @@ function openCollabModal(id=''){
 }
 function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); const mm=document.getElementById('collabMentionMenu'); if(mm) mm.classList.add('hide'); state._collabId=null; state._collabEdit=false; if(state.activeView==='collab') renderCollab(); }
 function notifOutsideClose(e){ const bell=document.getElementById('notifBell'), menu=document.getElementById('notifMenu'); if(!menu||menu.classList.contains('hide')) return; if(bell&&bell.contains(e.target)) return; if(menu.contains(e.target)) return; menu.classList.add('hide'); }
-function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,srcOrder:s.order})):[{name:'',pic:'',deadline:'',srcOrder:0}]); renderCollabSteps(c); }
-function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, srcOrder:Number(row.dataset.srcOrder||0) })); }
-function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
-function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
+function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,stage:s.stage||'',srcOrder:s.order})):[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]); renderCollabSteps(c); }
+function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, stage:(row.querySelector('.cs-stage')||{}).value||'', srcOrder:Number(row.dataset.srcOrder||0) })); }
+function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
+function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
 // Atur urutan proses (tombol naik/turun). srcOrder ikut berpindah bersama prosesnya.
 function collabMoveStep(i, dir){ const d=collabReadStepInputs(); const j=i+dir; if(j<0||j>=d.length) return; const t=d[i]; d[i]=d[j]; d[j]=t; state._collabDraft=d; renderCollabSteps(currentCollab()); }
 
@@ -2807,6 +2827,7 @@ function renderCollabSteps(c){
       <span class="text-[10px] font-mono text-gray-400 w-4 text-center shrink-0">${i+1}</span>
       <input class="cs-name flex-1 min-w-0 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-sm outline-none" placeholder="Nama proses (mis. Membuat kurikulum)" value="${escapeAttr(s.name||'')}">
       <select class="cs-pic shrink-0 w-24 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none">${collabPicOptions(s.pic)}</select>
+      <select class="cs-stage shrink-0 w-28 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" title="Stage (opsional)">${collabStageOptions(s.stage)}</select>
       <input type="date" class="cs-deadline shrink-0 w-[120px] rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" value="${escapeAttr(s.deadline||'')}">
       <span class="shrink-0 flex flex-col -space-y-1">
         <button type="button" onclick="collabMoveStep(${i},-1)" title="Naik" ${i===0?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===0?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_up</span></button>
@@ -2835,7 +2856,7 @@ function renderCollabSteps(c){
         <span class="w-5 text-center text-[10px] font-mono text-gray-400 shrink-0">${s.order}</span>
         <div class="flex-1 min-w-0">
           <div class="text-sm ${s.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(s.name)}</div>
-          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${stepSubBadge(s.order,s.done)}</span></div>
+          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${stepSubBadge(s.order,s.done)}</span></div>
         </div>
         ${turn?'<span class="shrink-0 text-[10px] font-bold text-rose-600">GILIRAN</span>':(s.done?'<span class="material-icons-round text-emerald-500 text-[18px] shrink-0">check_circle</span>':'')}
         <button type="button" onclick="toggleStepExpand(${s.order})" title="Catatan & sub-ceklis" class="shrink-0 text-gray-300 hover:text-indigo-600"><span id="collab-chev-${s.order}" class="material-icons-round text-[18px]">${expanded?'expand_less':'expand_more'}</span></button>
@@ -3030,7 +3051,7 @@ function saveCollabFromModal(){
   if(!title){ showToast('Judul task wajib diisi.', false); return; }
   if(!steps.length){ showToast('Minimal 1 proses (isi nama proses).', false); return; }
   const platform=[...document.getElementById('collabPlatform').selectedOptions].map(o=>o.value).join(', ');
-  const payload={ id: state._collabId||'', platform, type:getVal('collabType'), stage:getVal('collabStage'), color:safeColor(state._collabColor), title, description:getVal('collabDesc').trim(), deadline:getVal('collabDeadline'), steps };
+  const payload={ id: state._collabId||'', platform, type:getVal('collabType'), color:safeColor(state._collabColor), title, description:getVal('collabDesc').trim(), deadline:getVal('collabDeadline'), steps };
   document.getElementById('loading').classList.remove('hide');
   GAS.withSuccessHandler(res=>{
     document.getElementById('loading').classList.add('hide');
