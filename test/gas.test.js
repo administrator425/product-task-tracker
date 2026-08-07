@@ -798,6 +798,29 @@ ok('stage tampil di baris proses', /s\.stage\?`<span[^`]*?Stage">\$\{escapeHtml\
 ok('Manager boleh batalkan centang di klien', /if\(s && s\.done && isManager\(state\.currentUser\)\) return true/.test(commHtml));
 ok('mencentang tetap khusus PIC', /return !!s && same\(s\.pic, state\.currentUser\)/.test(commHtml));
 
+// Urutan status: "Revisi" SEBELUM "Review PM" (alur kerjanya memang begitu),
+// dan satu sumber dipakai bersama supaya kolom Kanban, tombol pindah, dan legenda
+// Timeline/Calendar tidak melenceng satu sama lain.
+ok('ada satu daftar urutan status', /const STATUS_ORDER = \['Tanpa Status', 'Todo', 'In progress', 'Revisi', 'Review PM', 'Done', 'Hold'\]/.test(commHtml));
+ok('Revisi diurutkan sebelum Review PM', (() => {
+  const m = commHtml.match(/const STATUS_ORDER = \[([^\]]+)\]/);
+  if (!m) return false;
+  const arr = m[1].split(',').map(x => x.trim().replace(/^'|'$/g, ''));
+  return arr.indexOf('Revisi') < arr.indexOf('Review PM');
+})());
+ok('ada pemeringkat status bersama', /function statusRank\(s\)/.test(commHtml));
+ok('status tak dikenal jatuh ke paling kanan', /return i<0 \? 99 : i/.test(commHtml));
+ok('kolom Kanban memakai peringkat itu', /statuses\.sort\(\(a,b\)=>statusRank\(a\)-statusRank\(b\)\)/.test(commHtml));
+ok('tombol pindah-status memakainya juga', /const KO=STATUS_ORDER\.filter\(s=>!same\(s,'Tanpa Status'\)\)/.test(commHtml));
+ok('legenda Timeline/Calendar memakainya juga', /present\.sort\(\(a,b\)=>statusRank\(a\)-statusRank\(b\)\)/.test(commHtml));
+ok('tak ada lagi daftar urutan yang terduplikat', !/KANBAN_ORDER=|const ORDER=\['Tanpa Status'/.test(commHtml));
+
+// Modal kolaborasi memuat dua panel sekaligus, jadi 1024px (max-w-5xl) terlalu sempit.
+ok('modal kolaborasi diperlebar', /id="collabModal"[\s\S]{0,400}?max-w-\[1600px\]/.test(commHtml));
+ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.test(commHtml));
+// Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
+ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
+
 // Sidebar bisa disembunyikan supaya area task lebih lebar.
 ok('ada tombol sembunyikan sidebar', /id="sidebarToggle"/.test(commHtml));
 ok('tombol hanya utk layar lebar', /id="sidebarToggle"[^>]*hidden md:inline-flex/.test(commHtml));

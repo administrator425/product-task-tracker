@@ -10,6 +10,36 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.63.2 — Modal Task Kolaborasi diperlebar + teks panjang tak lagi terpotong
+
+Modal "Kelola Task Kolaborasi" memuat dua panel sekaligus — form & Proses Beruntun di kiri,
+Komentar & Aktivitas di kanan — jadi `max-w-5xl` (1024 px) terlalu sempit. Sekarang
+**1600 px**: panel kiri 960 px, panel kanan 640 px (dari 1024 → naik 576 px).
+
+Selain lebar, ada sebab kedua yang membuat isi "tidak terlihat": gelembung komentar di panel
+ini memakai `inline-block` **tanpa** pematah kata, sehingga teks panjang tanpa spasi (mis.
+tautan Google Drive) terpotong begitu saja — berbeda dari gelembung chat di Komunikasi yang
+sudah punya `break-words`. Ditambahkan `whitespace-pre-wrap`, `break-words`, dan
+`overflow-wrap: anywhere`, jadi URL panjang membungkus rapi dan terbaca sampai akhir.
+
+---
+
+## 1.63.1 — Urutan Kanban: "Revisi" sebelum "Review PM"
+
+Kolom Kanban kini berurutan **Todo → In progress → Revisi → Review PM → Done → Hold**,
+mengikuti alur kerja sebenarnya: hasil revisi dikembalikan dulu, baru naik ke review PM.
+
+Urutan itu ternyata ditulis **terpisah di tiga tempat** — kolom Kanban, tombol pindah-status
+pada mode "Pilih Banyak", dan legenda warna Timeline/Calendar — dan sudah mulai melenceng
+(`Done`/`Hold` tertukar di daftar tombol). Ketiganya sekarang memakai satu konstanta
+`STATUS_ORDER` lewat `statusRank()`, jadi tidak bisa lagi berbeda satu sama lain. Status di
+luar daftar tetap jatuh ke paling kanan.
+
+Urutannya diatur di kode, bukan dari urutan baris sheet `OPTIONS` — menambah atau menyusun
+ulang opsi status di spreadsheet tidak akan mengacaukannya.
+
+---
+
 ## 1.63.0 — Stage pindah ke tiap proses + menu samping bisa disembunyikan
 
 ### Stage melekat pada PROSES, bukan pada kartunya

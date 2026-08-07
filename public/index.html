@@ -715,7 +715,9 @@
 
   <!-- ===== Modal Task Kolaborasi (2 kolom: alur+sub-ceklis kiri, komentar/aktivitas kanan) ===== -->
   <div id="collabModal" class="hide fixed inset-0 z-[90] bg-gray-900/50 flex items-start justify-center overflow-y-auto p-4">
-    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-5xl my-6 shadow-2xl flex flex-col lg:max-h-[calc(100vh-3rem)]" onclick="event.stopPropagation()">
+    <!-- Modal terlebar di aplikasi: memuat dua panel sekaligus (form + proses beruntun di kiri,
+         komentar & aktivitas di kanan), jadi 1024px terlalu sempit dan isinya terpotong. -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-[1600px] my-6 shadow-2xl flex flex-col lg:max-h-[calc(100vh-3rem)]" onclick="event.stopPropagation()">
       <div class="shrink-0 px-5 py-4 border-b border-gray-100 dark:border-slate-800 flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h3 id="collabModalTitle" class="text-lg font-bold text-gray-900 dark:text-white">Task Kolaborasi</h3>
@@ -784,7 +786,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.63.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.63.2'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -908,6 +910,14 @@ let state = {
   selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabViz: 'grid', _collabFilter: {q:'',type:'',pic:'',status:'',mine:false}, notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
+
+/* Urutan tampil status — SATU sumber untuk kolom Kanban, tombol pindah-status, dan legenda
+   Timeline/Calendar. Sebelumnya ditulis terpisah di tiga tempat dan sudah mulai melenceng
+   (Done/Hold sempat tertukar di daftar tombol).
+   "Revisi" diletakkan SEBELUM "Review PM" karena alur kerjanya memang begitu: hasil revisi
+   dikembalikan dulu, baru naik ke review PM. Status di luar daftar ini jatuh ke paling kanan. */
+const STATUS_ORDER = ['Tanpa Status', 'Todo', 'In progress', 'Revisi', 'Review PM', 'Done', 'Hold'];
+function statusRank(s){ const i=STATUS_ORDER.findIndex(o=>same(o,s)); return i<0 ? 99 : i; }
 
 const dummyOptions = {
   status:['Todo','In progress','Review PM','Hold','Done'], priority:['Urgent','High','Normal','Low'],
@@ -1958,8 +1968,7 @@ function kanbanStatuses(tasks){
   tasks=tasks||viewTasksAll();
   let statuses=[...(state.options.status||[])];
   if(tasks.some(t=>!t.status || !statuses.some(s=>same(s,t.status))) && !statuses.some(s=>same(s,'Tanpa Status'))) statuses.push('Tanpa Status');
-  const KANBAN_ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
-  statuses.sort((a,b)=>{const ia=KANBAN_ORDER.findIndex(o=>same(o,a)),ib=KANBAN_ORDER.findIndex(o=>same(o,b));return (ia<0?99:ia)-(ib<0?99:ib);});
+  statuses.sort((a,b)=>statusRank(a)-statusRank(b));
   return statuses;
 }
 function onKanbanCardClick(ev, id){
@@ -2018,7 +2027,7 @@ function renderKanbanToolbar(){
     return;
   }
   const n=state.selected.length;
-  const KO=['Todo','In progress','Review PM','Revisi','Hold','Done'];
+  const KO=STATUS_ORDER.filter(s=>!same(s,'Tanpa Status'));
   const statuses=KO.filter(s=>(state.options.status||[]).some(o=>same(o,s)));
   const moveBtns=n?statuses.map(s=>{
     // Tombol "Done" hanya nonaktif bila TAK SATU pun task terpilih boleh ditutup —
@@ -3083,7 +3092,7 @@ function renderCollabFeed(id, comments){
   const all=cms.concat(acts).sort((a,b)=>a.ts.localeCompare(b.ts));
   if(!all.length){ box.innerHTML=emptyState('Belum ada komentar atau aktivitas.'); return; }
   box.innerHTML=all.map(x=> x.kind==='comment'
-    ? `<div class="flex gap-2"><span class="w-7 h-7 rounded-full shrink-0 inline-flex items-center justify-center text-[10px] font-semibold" style="background:${avatarBg(x.who)};color:${avatarFg(x.who)}">${initials(x.who)}</span><div class="min-w-0"><div class="text-[11px] text-gray-400">${escapeHtml(x.who||'—')} • ${escapeHtml(x.ts)}</div><div class="text-sm text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 mt-0.5 inline-block">${highlightMentions(x.text)}</div></div></div>`
+    ? `<div class="flex gap-2"><span class="w-7 h-7 rounded-full shrink-0 inline-flex items-center justify-center text-[10px] font-semibold" style="background:${avatarBg(x.who)};color:${avatarFg(x.who)}">${initials(x.who)}</span><div class="min-w-0"><div class="text-[11px] text-gray-400">${escapeHtml(x.who||'—')} • ${escapeHtml(x.ts)}</div><div class="text-sm text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-800 rounded-lg px-3 py-1.5 mt-0.5 inline-block max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere]">${highlightMentions(x.text)}</div></div></div>`
     : `<div class="flex items-center gap-1.5 text-[11px] text-gray-400 pl-1"><span class="material-icons-round text-[14px]">bolt</span><span>${escapeHtml(x.text)} • ${escapeHtml(x.ts)}</span></div>`
   ).join('');
   box.scrollTop=box.scrollHeight;
@@ -3968,9 +3977,8 @@ function statusHex(s){
 function statusMeta(s){return {dot:statusHex(s)};}
 // Legend warna (status) untuk Timeline & Calendar — hanya menampilkan status yang ada di tampilan.
 function statusLegendHtml(tasks){
-  const ORDER=['Tanpa Status','Todo','In progress','Review PM','Revisi','Done','Hold'];
   const present=[...new Set((tasks||[]).map(t=>String(t.status||'').trim()||'Tanpa Status'))];
-  present.sort((a,b)=>{const ia=ORDER.findIndex(o=>o.toLowerCase()===a.toLowerCase()),ib=ORDER.findIndex(o=>o.toLowerCase()===b.toLowerCase());return (ia<0?99:ia)-(ib<0?99:ib);});
+  present.sort((a,b)=>statusRank(a)-statusRank(b));
   if(!present.length) return '';
   return `<div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 px-3 py-2"><span class="text-[11px] font-semibold text-gray-500 flex items-center gap-1"><span class="material-icons-round text-[15px]">palette</span>Arti warna (status):</span>${present.map(s=>`<span class="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 dark:text-slate-300"><span class="w-3 h-3 rounded-full shrink-0" style="background:${statusHex(s)}"></span>${escapeHtml(s)}</span>`).join('')}</div>`;
 }
