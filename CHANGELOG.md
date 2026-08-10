@@ -10,6 +10,37 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.64.0 — Perbaikan: sub-ceklis tidak ikut saat proses disusun ulang
+
+Menyusun ulang proses di Task Kolaborasi membuat **sub-ceklisnya tertinggal** dan menempel
+ke proses yang salah. Ini merusak data, bukan sekadar tampilan.
+
+### Sebabnya
+Sub-ceklis disimpan di sheet `CHECKLIST` dengan kunci **`COL-xxx#<urutan>`**, sedangkan
+urutan proses **dihitung ulang** tiap kali disimpan (`order = i + 1`). Status centang,
+pencentang, tanggal, dan catatan sudah ikut berpindah lewat `srcOrder` — tapi baris
+`CHECKLIST` tidak pernah dipetakan ulang. Jadi memindahkan proses C ke posisi 1 membuat
+sub-ceklis milik A yang muncul di sana.
+
+### Perbaikannya
+`saveCollab` kini memetakan ulang kunci sub-ceklis mengikuti perpindahan prosesnya. Semua
+nilai baru dihitung dari nilai **lama** sebelum satu pun ditulis, jadi pertukaran urutan
+(mis. 2 ↔ 3) tidak saling menimpa.
+
+Proses yang **dihapus**: sub-ceklisnya ikut dibuang. Kalau dibiarkan menggantung, proses
+baru yang kebetulan menempati nomor itu akan mewarisi sub-ceklis milik orang lain — persis
+kelas bug yang sama, hanya muncul belakangan.
+
+Berlaku di kedua backend (`api/_sheets.js` dan `gas/Code.gs`), dengan tes yang lebih dulu
+memperlihatkan bug-nya sebelum diperbaiki.
+
+> **Perlu dicek:** kalau Anda sudah pernah menyusun ulang proses sebelum versi ini, sebagian
+> sub-ceklis mungkin sudah menempel di proses yang keliru. Perbaikan ini mencegah kejadian
+> berikutnya, tapi tidak bisa menebak pasangan yang benar dari data yang sudah tertukar —
+> silakan periksa kolaborasi yang pernah diurutkan ulang.
+
+---
+
 ## 1.63.2 — Modal Task Kolaborasi diperlebar + teks panjang tak lagi terpotong
 
 Modal "Kelola Task Kolaborasi" memuat dua panel sekaligus — form & Proses Beruntun di kiri,

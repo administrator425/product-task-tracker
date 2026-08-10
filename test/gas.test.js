@@ -450,6 +450,42 @@ ok('header sheet COLLAB_STEPS memuat Stage', SS.getSheetByName('COLLAB_STEPS').g
 ok('header sheet COLLAB TIDAK lagi punya Stage', SS.getSheetByName('COLLAB').getRange(1, 10, 1, 1).getValues()[0][0] !== 'Stage');
 call('deleteCollab', dgnStage.id, 'Manager');
 
+console.log('\n=== 7e. Sub-ceklis ikut pindah saat proses disusun ulang ===');
+// Sub-ceklis dikunci ke "COL-xxx#<urutan>", sedangkan urutan dihitung ulang tiap simpan.
+// Tanpa pemetaan ulang, memindahkan proses membuat sub-ceklisnya tertinggal di nomor lama
+// dan menempel ke proses yang SALAH — inilah yang dilaporkan user.
+const ru = call('saveCollab', { title: 'Uji Urutan', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses A', pic: 'Staff Soal' },
+  { order: 2, name: 'Proses B', pic: 'Staff QC' },
+  { order: 3, name: 'Proses C', pic: 'Staff Data' }] }, 'Manager');
+eq('collab uji dibuat', ru.success, true);
+const RU = call('getCollabs').find(c => c.title === 'Uji Urutan').id;
+call('addChecklistItem', RU + '#1', 'sub milik A', 'Staff Soal');
+call('addChecklistItem', RU + '#2', 'sub milik B', 'Staff QC');
+call('addChecklistItem', RU + '#3', 'sub milik C', 'Staff Data');
+eq('tiap proses punya 1 sub-item', call('getChecklist', RU + '#2').length, 1);
+
+// Susun ulang: C naik ke posisi 1, A ke 2, B ke 3. srcOrder menandai asalnya.
+call('saveCollab', { id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses C', pic: 'Staff Data', srcOrder: 3 },
+  { order: 2, name: 'Proses A', pic: 'Staff Soal', srcOrder: 1 },
+  { order: 3, name: 'Proses B', pic: 'Staff QC', srcOrder: 2 }] }, 'Manager');
+const su = call('getCollabs').find(c => c.id === RU);
+eq('urutan proses berubah', su.steps.map(s => s.name).join('>'), 'Proses C>Proses A>Proses B');
+eq('sub-ceklis ikut ke posisi 1', call('getChecklist', RU + '#1').map(i => i.item).join(), 'sub milik C');
+eq('sub-ceklis ikut ke posisi 2', call('getChecklist', RU + '#2').map(i => i.item).join(), 'sub milik A');
+eq('sub-ceklis ikut ke posisi 3', call('getChecklist', RU + '#3').map(i => i.item).join(), 'sub milik B');
+
+// Proses dihapus: sub-ceklisnya ikut dibuang, tak boleh diwarisi proses baru di nomor itu.
+call('saveCollab', { id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses C', pic: 'Staff Data', srcOrder: 1 },
+  { order: 2, name: 'Proses Baru', pic: 'Staff QC', srcOrder: 0 }] }, 'Manager');
+eq('proses tersisa 2', call('getCollabs').find(c => c.id === RU).steps.length, 2);
+eq('sub-ceklis proses bertahan ikut', call('getChecklist', RU + '#1').map(i => i.item).join(), 'sub milik C');
+eq('proses BARU tidak mewarisi sub-ceklis orang lain', call('getChecklist', RU + '#2').length, 0);
+eq('sisa sub-ceklis proses terhapus dibuang', call('getChecklist', RU + '#3').length, 0);
+call('deleteCollab', RU, 'Manager');
+
 console.log('\n=== 8. Gerbang status "Done" ===');
 const denied = call('quickUpdateField', 'TSK-028', 'status', 'Done', 'Staff Soal');
 eq('Staff Soal TIDAK boleh set Done', denied.success, false);

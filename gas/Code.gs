@@ -1287,6 +1287,29 @@ function deleteStepRowsForCollab_(collabId) {
   deleteRows_(CONFIG.COLLAB_STEP_SHEET, rowsToDelete);
 }
 
+// Sub-ceklis proses dikunci ke id "COL-xxx#<urutan>", sedangkan urutan dihitung ulang tiap
+// kali disimpan. Jadi saat proses disusun ulang, kunci itu WAJIB ikut dipetakan — kalau tidak,
+// sub-ceklis tertinggal di nomor lama dan menempel ke proses yang salah.
+// Proses yang dihapus: sub-ceklisnya ikut dibuang, supaya tidak diwarisi proses baru yang
+// kebetulan menempati nomor itu.
+function remapCollabChecklists_(collabId, orderMap) {
+  var rows = [];
+  try { rows = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A2:A'); } catch (e) { return; }
+  var re = new RegExp('^' + collabId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '#(\\d+)$');
+  var updates = [], deletes = [];
+  rows.forEach(function (r, i) {
+    var m = re.exec(String((r && r[0]) || '').trim());
+    if (!m) return;
+    var rn = i + 2, lama = Number(m[1]), baru = orderMap[lama];
+    if (!baru) { deletes.push(rn); return; }
+    if (baru !== lama) updates.push({ row: rn, val: collabId + '#' + baru });
+  });
+  // Semua nilai baru dihitung dari nilai LAMA sebelum satu pun ditulis, jadi pertukaran
+  // urutan (mis. 2 <-> 3) tidak saling menimpa.
+  updates.forEach(function (u) { valuesUpdate_(CONFIG.CHECKLIST_SHEET + '!A' + u.row, [[u.val]]); });
+  if (deletes.length) deleteRows_(CONFIG.CHECKLIST_SHEET, deletes);
+}
+
 function saveCollab(payload, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   if (!canManageCollabActor_(actor)) return { success: false, message: 'Anda tak berhak membuat/mengubah task kolaborasi.' };
@@ -1348,6 +1371,13 @@ function saveCollab(payload, actor) {
       pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim()];
   });
   if (stepRows.length) valuesAppend_(CONFIG.COLLAB_STEP_SHEET + '!A:J', stepRows);
+
+  // Sub-ceklis harus ikut berpindah bersama prosesnya (lihat remapCollabChecklists_).
+  if (isUpdate) {
+    var orderMap = {};
+    clean.forEach(function (s, i) { if (s.srcOrder > 0) orderMap[s.srcOrder] = i + 1; });
+    remapCollabChecklists_(id, orderMap);
+  }
 
   logActivity_(actor, isUpdate ? 'Collab Update' : 'Collab Create', id, title + ' • ' + clean.length + ' proses');
   return { success: true, message: isUpdate ? 'Task kolaborasi diperbarui.' : 'Task kolaborasi dibuat.', collabs: getCollabs() };

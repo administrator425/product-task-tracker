@@ -463,6 +463,48 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   fresh();
   eq('checkedAt ceklis juga terbaca', String((await backend.getChecklist(SUB))[0].checkedAt).slice(0, 10), '2026-08-07');
 
+  console.log('\nSub-ceklis ikut pindah saat proses disusun ulang:');
+  // Sub-ceklis dikunci ke "COL-xxx#<urutan>" sementara urutan dihitung ulang tiap simpan.
+  // Tanpa pemetaan ulang, memindahkan proses membuat sub-ceklisnya menempel ke proses SALAH.
+  fresh();
+  await backend.saveCollab({ title: 'Uji Urutan', platform: 'JadiASN', steps: [
+    { order: 1, name: 'Proses A', pic: 'Ali' },
+    { order: 2, name: 'Proses B', pic: 'Uma' },
+    { order: 3, name: 'Proses C', pic: 'Dhea' }] }, 'Nynda');
+  fresh();
+  const RU = (await backend.getCollabs()).find(c => c.title === 'Uji Urutan').id;
+  await backend.addChecklistItem(`${RU}#1`, 'sub milik A', 'Ali');
+  fresh();
+  await backend.addChecklistItem(`${RU}#2`, 'sub milik B', 'Uma');
+  fresh();
+  await backend.addChecklistItem(`${RU}#3`, 'sub milik C', 'Dhea');
+  fresh();
+  eq('tiap proses punya 1 sub-item', (await backend.getChecklist(`${RU}#2`)).length, 1);
+  fresh();
+  await backend.saveCollab({ id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
+    { order: 1, name: 'Proses C', pic: 'Dhea', srcOrder: 3 },
+    { order: 2, name: 'Proses A', pic: 'Ali', srcOrder: 1 },
+    { order: 3, name: 'Proses B', pic: 'Uma', srcOrder: 2 }] }, 'Nynda');
+  fresh();
+  eq('urutan proses berubah', (await backend.getCollabs()).find(c => c.id === RU).steps.map(s => s.name).join('>'), 'Proses C>Proses A>Proses B');
+  fresh();
+  eq('sub-ceklis ikut ke posisi 1', (await backend.getChecklist(`${RU}#1`)).map(i => i.item).join(), 'sub milik C');
+  fresh();
+  eq('sub-ceklis ikut ke posisi 2', (await backend.getChecklist(`${RU}#2`)).map(i => i.item).join(), 'sub milik A');
+  fresh();
+  eq('sub-ceklis ikut ke posisi 3', (await backend.getChecklist(`${RU}#3`)).map(i => i.item).join(), 'sub milik B');
+  // Proses dihapus -> sub-ceklisnya dibuang, tak boleh diwarisi proses baru senomor.
+  fresh();
+  await backend.saveCollab({ id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
+    { order: 1, name: 'Proses C', pic: 'Dhea', srcOrder: 1 },
+    { order: 2, name: 'Proses Baru', pic: 'Uma', srcOrder: 0 }] }, 'Nynda');
+  fresh();
+  eq('sub-ceklis yang bertahan ikut', (await backend.getChecklist(`${RU}#1`)).map(i => i.item).join(), 'sub milik C');
+  fresh();
+  eq('proses BARU tidak mewarisi sub-ceklis orang lain', (await backend.getChecklist(`${RU}#2`)).length, 0);
+  fresh();
+  eq('sisa sub-ceklis proses terhapus dibuang', (await backend.getChecklist(`${RU}#3`)).length, 0);
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();

@@ -1134,6 +1134,42 @@ async function deleteStepRowsForCollab(collabId) {
   await batchUpdate(reqs);
 }
 
+// Sub-ceklis proses dikunci ke id "COL-xxx#<urutan>", sedangkan urutan dihitung ulang tiap
+// kali disimpan. Jadi saat proses disusun ulang, kunci itu WAJIB ikut dipetakan — kalau tidak,
+// sub-ceklis tertinggal di nomor lama dan menempel ke proses yang salah.
+// Proses yang dihapus: sub-ceklisnya ikut dibuang, supaya tidak diwarisi proses baru yang
+// kebetulan menempati nomor itu.
+async function remapCollabChecklists(collabId, orderMap) {
+  let rows = [];
+  try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:A`); } catch (e) { return; }
+  const re = new RegExp('^' + collabId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '#(\\d+)$');
+  const updates = [], deletes = [];
+  rows.forEach((r, i) => {
+    const m = re.exec(String((r && r[0]) || '').trim());
+    if (!m) return;
+    const rn = i + 2, lama = Number(m[1]), baru = orderMap[lama];
+    if (!baru) { deletes.push(rn); return; }
+    if (baru !== lama) updates.push({ range: `${CONFIG.CHECKLIST_SHEET}!A${rn}`, values: [[`${collabId}#${baru}`]] });
+  });
+  // Semua nilai baru dihitung dari nilai LAMA sebelum satu pun ditulis, jadi pertukaran
+  // urutan (mis. 2 <-> 3) tidak saling menimpa.
+  if (updates.length) {
+    const sheets = await getSheets();
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: getSpreadsheetId(),
+      requestBody: { valueInputOption: 'RAW', data: updates },
+    });
+  }
+  if (deletes.length) {
+    const meta = await getSheetMeta();
+    const sid = meta[CONFIG.CHECKLIST_SHEET] && meta[CONFIG.CHECKLIST_SHEET].sheetId;
+    if (sid != null) {
+      await batchUpdate(deletes.sort((a, b) => b - a)
+        .map(rn => ({ deleteDimension: { range: { sheetId: sid, dimension: 'ROWS', startIndex: rn - 1, endIndex: rn } } })));
+    }
+  }
+}
+
 async function saveCollab(payload, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   await loadUsers();
@@ -1184,6 +1220,13 @@ async function saveCollab(payload, actor) {
     return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim()];
   });
   if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:J`, stepRows);
+
+  // Sub-ceklis harus ikut berpindah bersama prosesnya (lihat remapCollabChecklists).
+  if (isUpdate) {
+    const orderMap = {};
+    clean.forEach((s, i) => { if (s.srcOrder > 0) orderMap[s.srcOrder] = i + 1; });
+    await remapCollabChecklists(id, orderMap);
+  }
 
   await logActivity(actor, isUpdate ? 'Collab Update' : 'Collab Create', id, `${title} • ${clean.length} proses`);
   return { success: true, message: isUpdate ? 'Task kolaborasi diperbarui.' : 'Task kolaborasi dibuat.', collabs: await getCollabs() };
