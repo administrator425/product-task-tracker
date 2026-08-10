@@ -1502,25 +1502,71 @@ async function markNotificationsRead(user, refId) {
 // Parse @Nama pada pesan komentar -> buat notifikasi untuk tiap user valid yang di-tag.
 // @everyone / @semua / @all -> tag SEMUA user (kecuali penulis & user lihat-saja).
 const MENTION_ALL = ['everyone', 'semua', 'all'];
+// @peran -> tag semua user AKTIF dengan peran itu (mis. @staff, @magang).
+// "Dev" & "Lihat Saja" sengaja tidak ikut: yang pertama akun teknis, yang kedua tamu baca.
+const MENTION_ROLES = ['manager', 'leader', 'staff', 'magang'];
+
 async function createMentionNotifications(refId, author, message) {
   const msg = String(message || '');
-  const raw = (msg.match(/@([A-Za-z][\w.\-]*)/g) || []).map(s => s.slice(1));
-  if (!raw.length) return;
+  if (msg.indexOf('@') < 0) return;
   let pics = [];
   try { pics = (await getOptions()).pic || []; } catch (e) { pics = []; }
   const validPics = pics.filter(p => baseName(p) !== 'lintas divisi');   // hindari user lihat-saja
-  const targets = new Set();
-  const tagAll = raw.some(n => MENTION_ALL.includes(baseName(n)));
-  if (tagAll) {
-    validPics.forEach(p => { if (baseName(p) !== baseName(author)) targets.add(p); });
-  }
-  raw.forEach(n => {
-    const nb = baseName(n);
-    if (MENTION_ALL.includes(nb)) return;
-    const match = validPics.find(p => baseName(p) === nb || baseName(p).split(' ')[0] === nb);
-    if (match && baseName(match) !== baseName(author)) targets.add(match);
+  try { await loadUsers(); } catch (e) { /* peran tak wajib */ }
+  // Kumpulan nama = dropdown PIC + baris USERS. Kalau hanya PIC, nama yang belum masuk
+  // dropdown gagal dicocokkan lalu JATUH ke tag peran — "@Magang A" berubah jadi "@magang"
+  // dan menotifikasi seluruh anak magang. Nama harus selalu menang atas peran.
+  const namaSah = validPics.slice();
+  (_users || []).forEach(u => {
+    if (u.active === false) return;
+    if (baseName(u.name) === 'lintas divisi') return;
+    if (!namaSah.some(p => baseName(p) === baseName(u.name))) namaSah.push(u.name);
   });
-  const text = tagAll ? `${author} men-tag semua: "${msg.slice(0, 90)}"` : `${author} men-tag Anda: "${msg.slice(0, 90)}"`;
+  // Cocokkan nama TERPANJANG dulu supaya nama ber-spasi ("Staff Data") tidak tertukar
+  // dengan nama lain yang kata depannya sama ("Staff Soal").
+  const sorted = namaSah.slice().sort((a, b) => String(b).length - String(a).length);
+
+  const targets = new Set();
+  const peranDitag = new Set();
+  let tagAll = false;
+  const lower = msg.toLowerCase();
+  const batasKata = ch => !ch || !/[A-Za-z0-9]/.test(ch);
+
+  for (let i = 0; i < msg.length; i++) {
+    if (msg.charAt(i) !== '@') continue;
+    const rest = lower.substring(i + 1);
+    // 1) Nama user (boleh mengandung spasi). Nama menang atas peran karena lebih spesifik.
+    let matched = false;
+    for (const p of sorted) {
+      const nm = baseName(p);
+      if (!nm || rest.indexOf(nm) !== 0) continue;
+      if (!batasKata(rest.charAt(nm.length))) continue;   // "@Staff" jangan cocok ke tengah kata
+      if (baseName(p) !== baseName(author)) targets.add(p);
+      matched = true; break;
+    }
+    if (matched) continue;
+    // 2) @everyone / @semua / @all
+    if (MENTION_ALL.some(kw => rest.indexOf(kw) === 0 && batasKata(rest.charAt(kw.length)))) { tagAll = true; continue; }
+    // 3) @peran
+    for (const r of MENTION_ROLES) {
+      if (rest.indexOf(r) === 0 && batasKata(rest.charAt(r.length))) { peranDitag.add(r); break; }
+    }
+  }
+
+  if (tagAll) validPics.forEach(p => { if (baseName(p) !== baseName(author)) targets.add(p); });
+  if (peranDitag.size && usersConfigured()) {
+    (_users || []).forEach(u => {
+      if (u.active === false) return;
+      if (!peranDitag.has(String(u.role || '').trim().toLowerCase())) return;
+      if (baseName(u.name) === baseName(author)) return;
+      targets.add(u.name);
+    });
+  }
+  if (!targets.size) return;
+
+  const sasaran = tagAll ? 'semua'
+    : (peranDitag.size ? Array.from(peranDitag).join('/') : 'Anda');
+  const text = `${author} men-tag ${sasaran}: "${msg.slice(0, 90)}"`;
   for (const t of targets) {
     await addNotification(t, 'mention', refId, author, text);
   }

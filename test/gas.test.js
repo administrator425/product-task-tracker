@@ -613,9 +613,51 @@ eq('@Staff Data hanya kena Staff Data', mentionOf('cek ini @Staff Data ya').join
 eq('@Staff Soal hanya kena Staff Soal', mentionOf('tolong @Staff Soal').join('|'), 'Staff Soal');
 eq('@Leader Konten kena Leader Konten', mentionOf('@Leader Konten mohon review').join('|'), 'Leader Konten');
 eq('dua tag sekaligus', mentionOf('@Staff QC dan @Staff Data tolong').join('|'), 'Staff Data|Staff QC');
-eq('@Staff saja (ambigu) tidak menotifikasi siapa pun', mentionOf('halo @Staff tolong cek').join('|'), '');
+// PERUBAHAN PERILAKU (v1.65.0): "@Staff" dulu tak mengenai siapa pun karena ambigu antara
+// "Staff Soal"/"Staff Data"/"Staff QC". Sekarang itu TAG PERAN — mengenai semua yang berperan
+// Staff. Nama lengkap ber-spasi tetap menang karena lebih spesifik (diuji di bagian 14c).
+eq('@Staff kini tag peran, bukan lagi ambigu', mentionOf('halo @Staff tolong cek').join('|'), 'Staff Data|Staff QC|Staff Soal');
 ok('@everyone kena banyak orang', mentionOf('@everyone rapat sore').length >= 4);
 eq('penulis tak menotifikasi dirinya', mentionOf('@Staff Data catat ya', 'Staff Data').join('|'), '');
+
+console.log('\n=== 14c. Tag per PERAN (@staff, @magang, ...) ===');
+const peranDari = {};
+call('getUsers').forEach(u => { peranDari[u.name] = String(u.role || '').toLowerCase(); });
+const kenaSiapa = (msg, author) => {
+  const semua = Object.keys(peranDari);
+  const before = {};
+  semua.forEach(u => before[u] = call('getNotifications', u).length);
+  call('addComment', { taskId: 'TSK-001', author: author || 'Manager', message: msg });
+  return semua.filter(u => call('getNotifications', u).length > before[u]).sort();
+};
+
+const kenaStaff = kenaSiapa('@staff tolong cek semua');
+ok('tag @staff mengenai lebih dari satu orang', kenaStaff.length >= 2);
+ok('semuanya benar berperan Staff', kenaStaff.every(n => peranDari[n] === 'staff'));
+ok('penulis tak menotifikasi dirinya', kenaStaff.indexOf('Manager') < 0);
+
+const kenaMagang = kenaSiapa('@magang mohon diselesaikan');
+ok('tag @magang mengenai anak magang', kenaMagang.length >= 2);
+ok('hanya yang berperan Magang', kenaMagang.every(n => peranDari[n] === 'magang'));
+ok('tak ada staff yang ikut kena @magang', kenaMagang.indexOf('Staff Soal') < 0);
+
+// Nama lebih spesifik daripada peran: "@Staff Soal" hanya mengenai orangnya.
+eq('nama ber-spasi menang atas peran', kenaSiapa('@Staff Soal cek ini').join(), 'Staff Soal');
+// Akun teknis & tamu baca-saja tidak boleh jadi tag massal.
+eq('@dev bukan tag peran massal', kenaSiapa('@dev tolong lihat').length, 0);
+
+const kenaLeader = kenaSiapa('@leader diskusi dulu', 'Leader Konten');
+ok('tag @leader kena leader lain', kenaLeader.length >= 1);
+ok('semuanya berperan Leader', kenaLeader.every(n => peranDari[n] === 'leader'));
+ok('penulis (Leader Konten) tak kena sendiri', kenaLeader.indexOf('Leader Konten') < 0);
+
+// Dua peran sekaligus dalam satu komentar.
+const kenaDua = kenaSiapa('@staff @magang rapat jam 3');
+ok('dua peran sekaligus terkumpul', kenaDua.length > kenaStaff.length);
+ok('isinya gabungan staff + magang', kenaDua.every(n => peranDari[n] === 'staff' || peranDari[n] === 'magang'));
+// Peran + nama pribadi bisa dicampur.
+const kenaCampur = kenaSiapa('@magang dan @Leader Konten tolong sinkron');
+ok('campuran peran & nama', kenaCampur.indexOf('Leader Konten') >= 0 && kenaCampur.some(n => peranDari[n] === 'magang'));
 
 console.log('\n=== 15. Peran user (Dev / Manager / Leader / Staff) ===');
 const users = call('getUsers');
@@ -856,6 +898,18 @@ ok('modal kolaborasi diperlebar', /id="collabModal"[\s\S]{0,400}?max-w-\[1600px\
 ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.test(commHtml));
 // Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
+
+// Tag per peran di komentar.
+ok('ada daftar tag peran', /const MENTION_ROLE_TAGS = \['manager', 'leader', 'staff', 'magang'\]/.test(commHtml));
+ok('Dev & Lihat Saja tidak jadi tag peran', !/MENTION_ROLE_TAGS = \[[^\]]*'dev'/.test(commHtml) && !/MENTION_ROLE_TAGS = \[[^\]]*'lihat saja'/.test(commHtml));
+ok('tag peran ikut disorot', /for\(const rl of MENTION_ROLE_TAGS\)/.test(commHtml));
+ok('warna sorot peran dibedakan', /const wrapPeran=s=>`<span class="font-semibold text-teal-600/.test(commHtml));
+ok('nama dicocokkan sebelum peran', /if\(!hit\) for\(const rl of MENTION_ROLE_TAGS\)/.test(commHtml));
+ok('peran masuk daftar saran @', /const pool=\['everyone'\]\.concat\(availableRoleTags\(\), pics\)/.test(commHtml));
+ok('peran tanpa anggota tidak ditawarkan', /function availableRoleTags\(\)[\s\S]{0,200}?MENTION_ROLE_TAGS\.filter\(r=>roleTagCount\(r\)>0\)/.test(commHtml));
+ok('hanya user aktif yang dihitung', /function roleTagCount\(r\)[\s\S]{0,200}?u\.active!==false/.test(commHtml));
+ok('saran peran menampilkan jumlah orangnya', /orang berperan ini/.test(commHtml));
+ok('saran peran diberi ikon sendiri', /isRole\?`<span class="w-5 h-5 rounded-full inline-flex items-center justify-center bg-teal-100/.test(commHtml));
 
 // Isian proses tidak boleh hilang saat keluar dari mode Edit sebelum Simpan.
 ok('keluar mode Edit membaca isian dulu', /if\(state\._collabEdit\)\{\s*\/\/ sedang KELUAR dari mode edit\s*state\._collabDraft=collabReadStepInputs\(\);\s*state\._collabDirty=true;/.test(commHtml));

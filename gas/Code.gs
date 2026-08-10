@@ -1549,19 +1549,34 @@ function markNotificationsRead(user, refId) {
 // Parse @Nama pada komentar -> notifikasi untuk tiap user valid yang di-tag.
 // @everyone / @semua / @all -> tag SEMUA user (kecuali penulis & user lihat-saja).
 var MENTION_ALL = ['everyone', 'semua', 'all'];
+// @peran -> tag semua user AKTIF dengan peran itu (mis. @staff, @magang).
+// "Dev" & "Lihat Saja" sengaja tidak ikut: yang pertama akun teknis, yang kedua tamu baca.
+var MENTION_ROLES = ['manager', 'leader', 'staff', 'magang'];
 function createMentionNotifications_(refId, author, message) {
   var msg = String(message || '');
   if (msg.indexOf('@') < 0) return;
   var pics = [];
   try { pics = getOptions().pic || []; } catch (e) { pics = []; }
   var validPics = pics.filter(function (p) { return baseName_(p) !== 'lintas divisi'; });
+  // Kumpulan nama = dropdown PIC + baris USERS. Kalau hanya PIC, nama yang belum masuk
+  // dropdown gagal dicocokkan lalu JATUH ke tag peran — "@Magang A" berubah jadi "@magang"
+  // dan menotifikasi seluruh anak magang. Nama harus selalu menang atas peran.
+  var namaSah = validPics.slice();
+  if (usersConfigured_()) {
+    usersRaw_().forEach(function (u) {
+      if (u.active === false || baseName_(u.name) === 'lintas divisi') return;
+      var ada = namaSah.some(function (p) { return baseName_(p) === baseName_(u.name); });
+      if (!ada) namaSah.push(u.name);
+    });
+  }
   // Cocokkan nama TERPANJANG dulu supaya nama ber-spasi ("Staff Data", "Budi Santoso")
   // tidak tertukar dengan nama lain yang kata depannya sama ("Staff Soal").
-  var sorted = validPics.slice().sort(function (a, b) { return String(b).length - String(a).length; });
+  var sorted = namaSah.slice().sort(function (a, b) { return String(b).length - String(a).length; });
 
   var targets = [];
   var addTarget = function (p) { if (targets.indexOf(p) < 0) targets.push(p); };
   var tagAll = false;
+  var peranDitag = [];
 
   var lower = msg.toLowerCase();
   for (var i = 0; i < msg.length; i++) {
@@ -1579,17 +1594,31 @@ function createMentionNotifications_(refId, author, message) {
     }
     if (matched) continue;
     // 2) @everyone / @semua / @all
+    var kenaSemua = false;
     for (var m = 0; m < MENTION_ALL.length; m++) {
       var kw = MENTION_ALL[m];
-      if (rest.indexOf(kw) === 0 && !/[A-Za-z0-9]/.test(rest.charAt(kw.length) || '')) { tagAll = true; break; }
+      if (rest.indexOf(kw) === 0 && !/[A-Za-z0-9]/.test(rest.charAt(kw.length) || '')) { tagAll = true; kenaSemua = true; break; }
+    }
+    if (kenaSemua) continue;
+    // 3) @peran -> semua user aktif berperan itu
+    for (var q = 0; q < MENTION_ROLES.length; q++) {
+      var rl = MENTION_ROLES[q];
+      if (rest.indexOf(rl) === 0 && !/[A-Za-z0-9]/.test(rest.charAt(rl.length) || '')) { if (peranDitag.indexOf(rl) < 0) peranDitag.push(rl); break; }
     }
   }
   if (tagAll) validPics.forEach(function (p) { if (baseName_(p) !== baseName_(author)) addTarget(p); });
+  if (peranDitag.length && usersConfigured_()) {
+    usersRaw_().forEach(function (u) {
+      if (u.active === false) return;
+      if (peranDitag.indexOf(String(u.role || '').trim().toLowerCase()) < 0) return;
+      if (baseName_(u.name) === baseName_(author)) return;
+      addTarget(u.name);
+    });
+  }
   if (!targets.length) return;
 
-  var text = tagAll
-    ? (author + ' men-tag semua: "' + msg.slice(0, 90) + '"')
-    : (author + ' men-tag Anda: "' + msg.slice(0, 90) + '"');
+  var sasaran = tagAll ? 'semua' : (peranDitag.length ? peranDitag.join('/') : 'Anda');
+  var text = author + ' men-tag ' + sasaran + ': "' + msg.slice(0, 90) + '"';
   targets.forEach(function (t) { addNotification_(t, 'mention', refId, author, text); });
 }
 

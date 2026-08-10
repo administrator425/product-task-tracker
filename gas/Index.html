@@ -788,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.64.2'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.65.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -919,6 +919,10 @@ let state = {
    "Revisi" diletakkan SEBELUM "Review PM" karena alur kerjanya memang begitu: hasil revisi
    dikembalikan dulu, baru naik ke review PM. Status di luar daftar ini jatuh ke paling kanan. */
 const STATUS_ORDER = ['Tanpa Status', 'Todo', 'In progress', 'Revisi', 'Review PM', 'Done', 'Hold'];
+/* Tag peran di komentar: @manager, @leader, @staff, @magang -> menotifikasi SEMUA user aktif
+   berperan itu. "Dev" & "Lihat Saja" sengaja tidak ikut — yang pertama akun teknis, yang
+   kedua tamu baca-saja. Nama user tetap menang atas peran karena lebih spesifik. */
+const MENTION_ROLE_TAGS = ['manager', 'leader', 'staff', 'magang'];
 function statusRank(s){ const i=STATUS_ORDER.findIndex(o=>same(o,s)); return i<0 ? 99 : i; }
 
 const dummyOptions = {
@@ -3159,6 +3163,7 @@ function highlightMentions(text){
   const ALL=['everyone','semua','all'];
   let out='', i=0;
   const wrap=s=>`<span class="font-semibold text-indigo-600 dark:text-indigo-400">${escapeHtml(s)}</span>`;
+  const wrapPeran=s=>`<span class="font-semibold text-teal-600 dark:text-teal-400" title="Mengenai semua yang berperan ini">${escapeHtml(s)}</span>`;
   while(i<src.length){
     if(src.charAt(i)!=='@'){ out+=escapeHtml(src.charAt(i)); i++; continue; }
     const rest=src.substring(i+1), restL=rest.toLowerCase();
@@ -3171,7 +3176,12 @@ function highlightMentions(text){
     if(!hit) for(const kw of ALL){
       if(restL.indexOf(kw)===0 && !/[A-Za-z0-9]/.test(rest.charAt(kw.length)||'')){ hit=rest.substr(0,kw.length); break; }
     }
-    if(hit){ out+=wrap('@'+hit); i+=1+hit.length; }
+    // Tag peran (@staff, @magang, ...) — disorot beda warna supaya jelas ini mengenai banyak orang.
+    let peran=false;
+    if(!hit) for(const rl of MENTION_ROLE_TAGS){
+      if(restL.indexOf(rl)===0 && !/[A-Za-z0-9]/.test(rest.charAt(rl.length)||'')){ hit=rest.substr(0,rl.length); peran=true; break; }
+    }
+    if(hit){ out+=(peran?wrapPeran('@'+hit):wrap('@'+hit)); i+=1+hit.length; }
     else { out+='@'; i++; }
   }
   return out;
@@ -3184,6 +3194,10 @@ function sendCollabComment(){
      .withFailureHandler(err=>showToast(err.message||err,false)).addComment({taskId:id, author:state.currentUser, message:msg});
 }
 // ---- Tag @user: autocomplete di input komentar ----
+// Peran hanya ditawarkan bila BENAR-BENAR ada orangnya — menawarkan "@magang" saat belum ada
+// anak magang cuma memancing tag yang tak mengenai siapa pun.
+function roleTagCount(r){ return (state.users||[]).filter(u=>u.active!==false && String(u.role||'').trim().toLowerCase()===r).length; }
+function availableRoleTags(){ return usersConfigured() ? MENTION_ROLE_TAGS.filter(r=>roleTagCount(r)>0) : []; }
 function collabMentionState(){ return state._mention||(state._mention={active:false, idx:0, matches:[], start:0}); }
 function onCollabCommentInput(){
   const inp=document.getElementById('collabCommentInput'); const menu=document.getElementById('collabMentionMenu'); if(!inp||!menu) return;
@@ -3192,8 +3206,8 @@ function onCollabCommentInput(){
   if(!m){ ms.active=false; menu.classList.add('hide'); return; }
   const token=(m[1]||'').toLowerCase();
   const pics=(state.options.pic||[]).filter(p=>baseName(p)!==baseName(VIEWONLY_USER));
-  const pool=['everyone'].concat(pics);   // @everyone = tag semua
-  const matches=pool.filter(p=>!token || baseName(p).startsWith(token) || (p!=='everyone'&&baseName(p).split(' ')[0].startsWith(token))).slice(0,7);
+  const pool=['everyone'].concat(availableRoleTags(), pics);   // @everyone = semua, @peran = per peran
+  const matches=pool.filter(p=>!token || baseName(p).startsWith(token) || (p!=='everyone'&&baseName(p).split(' ')[0].startsWith(token))).slice(0,8);
   if(!matches.length){ ms.active=false; menu.classList.add('hide'); return; }
   ms.active=true; ms.matches=matches; ms.idx=0; ms.start=pos-m[0].length; renderMentionMenu();
 }
@@ -3201,8 +3215,13 @@ function renderMentionMenu(){
   const menu=document.getElementById('collabMentionMenu'); const ms=collabMentionState(); if(!menu) return;
   menu.innerHTML=ms.matches.map((p,i)=>{
     const isAll=(p==='everyone');
-    const av=isAll?`<span class="w-5 h-5 rounded-full inline-flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600"><span class="material-icons-round text-[13px]">groups</span></span>`:`<span class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[9px] font-semibold" style="background:${avatarBg(p)};color:${avatarFg(p)}">${initials(p)}</span>`;
-    const label=isAll?'everyone <span class="text-[10px] text-gray-400">— tag semua</span>':escapeHtml(p);
+    const isRole=!isAll && MENTION_ROLE_TAGS.includes(p);
+    const av=isAll?`<span class="w-5 h-5 rounded-full inline-flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600"><span class="material-icons-round text-[13px]">groups</span></span>`
+      :isRole?`<span class="w-5 h-5 rounded-full inline-flex items-center justify-center bg-teal-100 dark:bg-teal-900/40 text-teal-600"><span class="material-icons-round text-[13px]">badge</span></span>`
+      :`<span class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[9px] font-semibold" style="background:${avatarBg(p)};color:${avatarFg(p)}">${initials(p)}</span>`;
+    const label=isAll?'everyone <span class="text-[10px] text-gray-400">— tag semua</span>'
+      :isRole?`${escapeHtml(p)} <span class="text-[10px] text-gray-400">— ${roleTagCount(p)} orang berperan ini</span>`
+      :escapeHtml(p);
     return `<div onclick="insertMention(${i})" class="px-3 py-1.5 text-sm cursor-pointer flex items-center gap-2 ${i===ms.idx?'bg-indigo-50 dark:bg-indigo-900/30':''} hover:bg-indigo-50 dark:hover:bg-indigo-900/30">${av}${label}</div>`;
   }).join('');
   menu.classList.remove('hide');

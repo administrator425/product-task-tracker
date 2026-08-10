@@ -10,6 +10,38 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.65.0 — Tag per peran: @manager, @leader, @staff, @magang
+
+Selain `@Nama` dan `@everyone`, komentar kini bisa men-tag **satu peran sekaligus**.
+`@staff` menotifikasi semua user aktif berperan Staff, `@magang` semua anak magang, dan
+seterusnya. Berguna saat pengumuman hanya relevan untuk sebagian tim.
+
+- **Nama selalu menang atas peran.** `@Staff Soal` hanya mengenai orangnya; `@staff` saja
+  yang berarti perannya. Pencocokan memakai nama terpanjang lebih dulu.
+- **`Dev` dan `Lihat Saja` sengaja bukan tag peran** — yang pertama akun teknis, yang kedua
+  tamu baca-saja.
+- **Peran tanpa anggota tidak ditawarkan** di daftar saran `@`. Menawarkan `@magang` saat
+  belum ada anak magang hanya memancing tag yang tak mengenai siapa pun.
+- Daftar saran menampilkan jumlah orangnya (*"staff — 6 orang berperan ini"*), dan tag peran
+  disorot warna berbeda (teal) dari tag nama (indigo) supaya jelas ini mengenai banyak orang.
+- Penulis tidak pernah menotifikasi dirinya sendiri.
+
+### Dua perbaikan yang ikut terbawa
+
+**Parser mention Vercel disamakan dengan Apps Script.** Sisi Vercel masih memakai regex lama
+yang tidak mengenal nama ber-spasi — `@Staff Data` bisa salah sasaran ke `Staff Soal`. Kini
+memakai pemindaian nama-terpanjang-dulu yang sama.
+
+**Nama diambil dari dropdown PIC + baris `USERS`, bukan PIC saja.** Ketahuan lewat tes: nama
+yang belum masuk dropdown gagal dicocokkan lalu **jatuh ke tag peran** — `@Magang A` berubah
+jadi `@magang` dan menotifikasi seluruh anak magang. Sekarang nama selalu menang.
+
+> **Perubahan perilaku:** `@Staff` dulu tidak mengenai siapa pun (dianggap ambigu antara
+> "Staff Soal"/"Staff Data"/"Staff QC"). Sekarang itu tag peran. Hanya berdampak bila ada
+> user yang namanya persis sama dengan nama peran.
+
+---
+
 ## 1.64.2 — Perbaikan: isian proses hilang sebelum sempat disimpan
 
 Dua bug terpisah membuat perubahan di Task Kolaborasi lenyap. Keduanya bekerja diam-diam:

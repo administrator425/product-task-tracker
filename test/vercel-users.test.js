@@ -505,6 +505,35 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   fresh();
   eq('sisa sub-ceklis proses terhapus dibuang', (await backend.getChecklist(`${RU}#3`)).length, 0);
 
+  console.log('\nTag per PERAN di komentar (@staff, @magang, ...):');
+  fresh();
+  const peranDari = {};
+  (await backend.getUsers()).forEach(u => { peranDari[u.name] = String(u.role || '').toLowerCase(); });
+  const kenaSiapa = async (msg, author) => {
+    const semua = Object.keys(peranDari);
+    const before = {};
+    for (const u of semua) { fresh(); before[u] = (await backend.getNotifications(u)).length; }
+    fresh();
+    await backend.addComment({ taskId: 'TSK-001', author: author || 'Nynda', message: msg });
+    const hit = [];
+    for (const u of semua) { fresh(); if ((await backend.getNotifications(u)).length > before[u]) hit.push(u); }
+    return hit.sort();
+  };
+  const vStaff = await kenaSiapa('@staff tolong cek');
+  ok('tag @staff kena lebih dari satu', vStaff.length >= 2);
+  ok('semuanya berperan Staff', vStaff.every(n => peranDari[n] === 'staff'));
+  ok('penulis tak kena sendiri', vStaff.indexOf('Nynda') < 0);
+  const vMagang = await kenaSiapa('@magang mohon diselesaikan');
+  ok('tag @magang kena anak magang', vMagang.length >= 2 && vMagang.every(n => peranDari[n] === 'magang'));
+  ok('staff tidak ikut kena @magang', !vMagang.some(n => peranDari[n] === 'staff'));
+  // Parser Vercel dulu berbasis regex tanpa dukungan nama ber-spasi; kini disamakan dgn GAS.
+  eq('nama menang atas peran', (await kenaSiapa('@Magang A cek ini')).join(), 'Magang A');
+  eq('@dev bukan tag massal', (await kenaSiapa('@dev tolong lihat')).length, 0);
+  const vDua = await kenaSiapa('@staff @magang rapat jam 3');
+  ok('dua peran sekaligus', vDua.length > vStaff.length && vDua.every(n => peranDari[n] === 'staff' || peranDari[n] === 'magang'));
+  const vSemua = await kenaSiapa('@everyone pengumuman');
+  ok('@everyone tetap kena semua', vSemua.length >= vDua.length);
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();
