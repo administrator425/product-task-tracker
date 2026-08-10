@@ -857,6 +857,20 @@ ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.te
 // Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
 
+// Isian proses tidak boleh hilang saat keluar dari mode Edit sebelum Simpan.
+ok('keluar mode Edit membaca isian dulu', /if\(state\._collabEdit\)\{\s*\/\/ sedang KELUAR dari mode edit\s*state\._collabDraft=collabReadStepInputs\(\);\s*state\._collabDirty=true;/.test(commHtml));
+ok('masuk mode Edit tak menimpa rancangan tertunda', /state\._collabEdit=true;\s*if\(!state\._collabDirty\)\{/.test(commHtml));
+ok('mode baca menampilkan rancangan tertunda', /const pending=!!state\._collabDirty;/.test(commHtml));
+ok('ada spanduk peringatan belum tersimpan', /Perubahan proses belum disimpan/.test(commHtml));
+ok('baris rancangan tak bisa dicentang', /const turn=!s\._pending&&isMyTurnStep\(c,s\), mine=same\(s\.pic,state\.currentUser\), canChk=!s\._pending&&canCheckStepClient\(s\)/.test(commHtml));
+ok('sub-ceklis disembunyikan di baris rancangan', /\$\{s\._pending\?'':stepSubBadge\(s\.order,s\.done\)\}/.test(commHtml));
+ok('Simpan memakai rancangan bila ada', /state\._collabDirty \? \(state\._collabDraft\|\|\[\]\)\.filter\(s=>s\.name\)/.test(commHtml));
+// Menyimpan dari mode baca dulu menghapus seluruh stage karena tak ikut dipetakan.
+ok('stage ikut di jalur mode baca', /\(\(cur&&cur\.steps\)\|\|\[\]\)\.map\(s=>\(\{name:s\.name, pic:s\.pic, deadline:s\.deadline, stage:s\.stage\|\|'', srcOrder:s\.order\}\)\)/.test(commHtml));
+ok('tanda tertunda dibersihkan setelah tersimpan', /state\._collabDirty=false; state\._collabDraft=\[\];\s*\/\/ sudah tersimpan/.test(commHtml));
+ok('tanda tertunda direset saat modal dibuka', /state\._collabDraft=isNew\?\[\{name:'',pic:'',deadline:'',stage:'',srcOrder:0\}\]:\[\]; state\._collabDirty=false;/.test(commHtml));
+ok('tanda tertunda direset saat modal ditutup', /state\._collabEdit=false; state\._collabDirty=false; state\._collabDraft=\[\];/.test(commHtml));
+
 // Pemilih identitas: kolom menyesuaikan jumlah nama supaya barisnya seimbang.
 ok('ada penghitung kolom pemilih identitas', /function identityGridCols\(n\)/.test(commHtml));
 ok('4 nama diberi 2 kolom (2x2, bukan 3+1)', /n===4 \? 2/.test(commHtml));

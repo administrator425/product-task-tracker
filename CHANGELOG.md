@@ -10,6 +10,32 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.64.2 — Perbaikan: isian proses hilang sebelum sempat disimpan
+
+Dua bug terpisah membuat perubahan di Task Kolaborasi lenyap. Keduanya bekerja diam-diam:
+tidak ada pesan error, isian hanya kembali seperti semula.
+
+### 1. "Selesai edit" membuang semua isian
+`collabToggleEdit()` keluar dari mode Edit **tanpa membaca isian** lebih dulu. Sesudah itu
+`saveCollabFromModal()` menganggap tidak ada perubahan proses dan mengirim data lama dari
+server. Jadi alur yang wajar — isi stage → klik "Selesai edit" → klik "Simpan" — membuang
+seluruh isian. Yang terlihat oleh pengguna: stage yang baru diatur "kereset sendiri".
+
+Sekarang keluar mode Edit **membaca isian dulu** dan menandainya belum-tersimpan. Selama
+tanda itu aktif, daftar proses menampilkan rancangan tersebut (bukan data lama) beserta
+spanduk kuning *"Perubahan proses belum disimpan — klik Simpan"*. Centang dan sub-ceklis
+pada baris rancangan dimatikan sementara, karena nomor urutnya belum pasti sampai disimpan.
+
+### 2. Menyimpan dari mode baca menghapus semua stage
+Saat menyimpan tanpa masuk mode Edit (mis. cuma mengganti judul), proses dipetakan ulang
+dari data server — tapi pemetaannya **tidak menyertakan `stage`**. Akibatnya setiap kali ada
+yang menyimpan perubahan kecil, seluruh stage proses terhapus. Bug ini terbawa sejak stage
+dipindah ke level proses di 1.63.0.
+
+Tanda belum-tersimpan direset saat modal dibuka, ditutup, dan setelah penyimpanan berhasil.
+
+---
+
 ## 1.64.1 — Pemilih identitas: susunan kartu jadi seimbang
 
 Grid pemilih identitas dipatok `sm:grid-cols-3`, jadi **4 nama tampil 3+1** — terlihat

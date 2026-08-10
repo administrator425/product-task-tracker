@@ -788,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.64.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.64.2'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -909,7 +909,7 @@ let state = {
   kanbanSelect:false, selected:[],
   dashFilters: {preset:'all', start:'', end:'', field:'due', status:[], pic:[], priority:[]}, openDashFilter:'',
   repFilters: {preset:'all', start:'', end:'', field:'created', pic:[], stage:[]}, openRepFilter:'', repPic:'',
-  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabViz: 'grid', _collabFilter: {q:'',type:'',pic:'',status:'',mine:false}, notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
+  selectedTaskId: null, comments: [], commentsSummary: [], checklist: [], checklistSummary: {}, _pendingChecklist: [], collabs: [], _collabId: null, _collabEdit: false, _collabDraft: [], _collabDirty: false, _collabViz: 'grid', _collabFilter: {q:'',type:'',pic:'',status:'',mine:false}, notifications: [], _lastRefresh: 0, pinUsers: [], links: [], dashboards: [], notes: [], commFilters: {unreadOnly:false, pic:'', status:''}, deadlineFocus: false, chartPic: null, chartStatus: null, sortables: [],
   gantt: null, calendar: null, ganttMode: 'Day'
 };
 
@@ -2803,7 +2803,7 @@ function openCollabModal(id=''){
   if(isNew && !manage){ showToast('Hanya manager/Dev yang bisa membuat task kolaborasi.', false); return; }
   state._collabId=c?c.id:null;
   state._collabEdit=isNew;                         // task baru langsung mode edit
-  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]:[];
+  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]:[]; state._collabDirty=false;
   document.getElementById('collabModal').classList.remove('hide');
   document.getElementById('collabModalTitle').textContent=isNew?'Task Kolaborasi Baru':(manage?'Kelola Task Kolaborasi':'Detail Task Kolaborasi');
   document.getElementById('collabModalSub').textContent=c?(c.id+' • dibuat oleh '+(c.createdBy||'—')):'Cukup platform + judul + daftar proses (tiap proses punya PIC & deadline).';
@@ -2827,9 +2827,27 @@ function openCollabModal(id=''){
   if(c) loadCollabFeed(c.id); else document.getElementById('collabComments').innerHTML=emptyState('Komentar tersedia setelah task disimpan.');
   renderCollabSteps(c);
 }
-function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); const mm=document.getElementById('collabMentionMenu'); if(mm) mm.classList.add('hide'); state._collabId=null; state._collabEdit=false; if(state.activeView==='collab') renderCollab(); }
+function closeCollabModal(){ document.getElementById('collabModal').classList.add('hide'); const mm=document.getElementById('collabMentionMenu'); if(mm) mm.classList.add('hide'); state._collabId=null; state._collabEdit=false; state._collabDirty=false; state._collabDraft=[]; if(state.activeView==='collab') renderCollab(); }
 function notifOutsideClose(e){ const bell=document.getElementById('notifBell'), menu=document.getElementById('notifMenu'); if(!menu||menu.classList.contains('hide')) return; if(bell&&bell.contains(e.target)) return; if(menu.contains(e.target)) return; menu.classList.add('hide'); }
-function collabToggleEdit(){ if(!canManageCollab()) return; const c=currentCollab(); state._collabEdit=!state._collabEdit; if(state._collabEdit) state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,stage:s.stage||'',srcOrder:s.order})):[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]); renderCollabSteps(c); }
+/* PENTING: keluar dari mode Edit TIDAK boleh membuang isian. Dulu "Selesai edit" langsung
+   melempar rancangan, lalu Simpan mengambil data lama dari server — itulah sebabnya stage
+   yang baru diisi terlihat "kereset sendiri". Sekarang isian dibaca dulu dan ditandai
+   belum-tersimpan, jadi tetap terbawa saat Simpan. */
+function collabToggleEdit(){
+  if(!canManageCollab()) return;
+  const c=currentCollab();
+  if(state._collabEdit){                       // sedang KELUAR dari mode edit
+    state._collabDraft=collabReadStepInputs();
+    state._collabDirty=true;
+    state._collabEdit=false;
+  } else {                                     // MASUK mode edit
+    state._collabEdit=true;
+    if(!state._collabDirty){
+      state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,stage:s.stage||'',srcOrder:s.order})):[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]);
+    }
+  }
+  renderCollabSteps(c);
+}
 function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, stage:(row.querySelector('.cs-stage')||{}).value||'', srcOrder:Number(row.dataset.srcOrder||0) })); }
 function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
 function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
@@ -2866,10 +2884,25 @@ function renderCollabSteps(c){
     return;
   }
   if(state._collabStepSort){ try{state._collabStepSort.destroy();}catch(e){} state._collabStepSort=null; }   // keluar mode edit
-  const steps=(c&&c.steps)||[];
-  if(!steps.length){ box.innerHTML=`<div class="px-2 py-4 text-center text-xs text-gray-400">Belum ada proses.${manage?' Klik "Edit" untuk menambah.':''}</div>`; }
-  else box.innerHTML=steps.map(s=>{
-    const turn=isMyTurnStep(c,s), mine=same(s.pic,state.currentUser), canChk=canCheckStepClient(s);
+  /* Keluar dari mode Edit TIDAK membuang perubahan (lihat collabToggleEdit). Selama belum
+     ditekan Simpan, yang ditampilkan adalah rancangan itu — bukan data lama dari server,
+     yang dulu membuat perubahan terlihat "kereset sendiri". */
+  const pending=!!state._collabDirty;
+  const asal=(c&&c.steps)||[];
+  const steps=pending
+    ? (state._collabDraft||[]).filter(s=>s.name).map((s,i)=>{
+        const a=asal.find(x=>x.order===s.srcOrder)||{};
+        return { order:i+1, name:s.name, pic:s.pic, deadline:s.deadline||'', stage:s.stage||'',
+                 done:!!a.done, doneBy:a.doneBy||'', doneAt:a.doneAt||'', note:a.note||'', _pending:true };
+      })
+    : asal;
+  const spanduk=pending
+    ? `<div class="mb-2 flex items-center gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40 px-2.5 py-1.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300"><span class="material-icons-round text-[14px]">error_outline</span>Perubahan proses belum disimpan — klik <b>Simpan</b>. Sub-ceklis disembunyikan dulu sampai urutannya pasti.</div>`
+    : '';
+  if(!steps.length){ box.innerHTML=spanduk+`<div class="px-2 py-4 text-center text-xs text-gray-400">Belum ada proses.${manage?' Klik "Edit" untuk menambah.':''}</div>`; }
+  else box.innerHTML=spanduk+steps.map(s=>{
+    // Baris rancangan: nomor urutnya belum pasti, jadi centang & sub-ceklis dimatikan dulu.
+    const turn=!s._pending&&isMyTurnStep(c,s), mine=same(s.pic,state.currentUser), canChk=!s._pending&&canCheckStepClient(s);
     const overdue=s.deadline && !s.done && s.deadline < todayStr();
     const expanded=(state._collabExpanded||{})[s.order];
     const sc=stepSubComplete(s.order); const locked=!s.done && !sc.complete;   // sub-ceklis belum tuntas → main terkunci
@@ -2880,10 +2913,10 @@ function renderCollabSteps(c){
         <span class="w-5 text-center text-[10px] font-mono text-gray-400 shrink-0">${s.order}</span>
         <div class="flex-1 min-w-0">
           <div class="text-sm ${s.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(s.name)}</div>
-          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${stepSubBadge(s.order,s.done)}</span></div>
+          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${s._pending?'':stepSubBadge(s.order,s.done)}</span></div>
         </div>
         ${turn?'<span class="shrink-0 text-[10px] font-bold text-rose-600">GILIRAN</span>':(s.done?'<span class="material-icons-round text-emerald-500 text-[18px] shrink-0">check_circle</span>':'')}
-        <button type="button" onclick="toggleStepExpand(${s.order})" title="Catatan & sub-ceklis" class="shrink-0 text-gray-300 hover:text-indigo-600"><span id="collab-chev-${s.order}" class="material-icons-round text-[18px]">${expanded?'expand_less':'expand_more'}</span></button>
+        ${s._pending?'':`<button type="button" onclick="toggleStepExpand(${s.order})" title="Catatan & sub-ceklis" class="shrink-0 text-gray-300 hover:text-indigo-600"><span id="collab-chev-${s.order}" class="material-icons-round text-[18px]">${expanded?'expand_less':'expand_more'}</span></button>`}
       </div>
       <div id="collab-step-body-${s.order}" class="${expanded?'':'hide'} px-2 pb-2 space-y-2 border-t border-gray-50 dark:border-slate-800/60 pt-2">
         <div>
@@ -3069,8 +3102,12 @@ function saveCollabFromModal(){
   // Mode edit: baca proses dari input. Mode baca (mis. hanya ganti judul): pertahankan proses yang ada.
   const editing=!!state._collabEdit;
   const cur=currentCollab();
+  // Urutan sumber: input yang sedang dibuka > rancangan yang belum disimpan > data server.
+  // `stage` WAJIB ikut di jalur ketiga — tanpa itu, menyimpan dari mode baca (mis. cuma ganti
+  // judul) menghapus seluruh stage proses.
   const steps=editing ? collabReadStepInputs().filter(s=>s.name)
-                      : ((cur&&cur.steps)||[]).map(s=>({name:s.name, pic:s.pic, deadline:s.deadline, srcOrder:s.order}));
+              : (state._collabDirty ? (state._collabDraft||[]).filter(s=>s.name)
+              : ((cur&&cur.steps)||[]).map(s=>({name:s.name, pic:s.pic, deadline:s.deadline, stage:s.stage||'', srcOrder:s.order})));
   const title=getVal('collabTitle').trim();
   if(!title){ showToast('Judul task wajib diisi.', false); return; }
   if(!steps.length){ showToast('Minimal 1 proses (isi nama proses).', false); return; }
@@ -3081,6 +3118,7 @@ function saveCollabFromModal(){
     document.getElementById('loading').classList.add('hide');
     if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan', false); return; }
     state.collabs=res.collabs||state.collabs; showToast(res.message);
+    state._collabDirty=false; state._collabDraft=[];   // sudah tersimpan, rancangan tak perlu lagi
     closeCollabModal(); updateCollabTurnBadge(); if(state.activeView==='collab') renderCollab();
   }).withFailureHandler(err=>{ document.getElementById('loading').classList.add('hide'); showToast(err.message||err,false); }).saveCollab(payload, state.currentUser);
 }
