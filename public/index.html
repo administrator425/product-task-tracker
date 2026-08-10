@@ -128,7 +128,9 @@
       </div>
       <p class="text-sm text-gray-500 mb-1">Pilih identitas Anda untuk melanjutkan. Bisa diganti nanti lewat kotak "Mode User".</p>
       <p id="identityGateNote" class="hide text-[13px] font-medium text-amber-600 dark:text-amber-400 mb-3"></p>
-      <div id="identityGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3"></div>
+      <!-- Jumlah kolom diatur showIdentityGate() lewat inline style, menyesuaikan banyaknya
+           pilihan supaya barisnya seimbang (4 nama -> 2x2, bukan 3+1 yang pincang). -->
+      <div id="identityGrid" class="grid gap-2 mt-3" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
     </div>
   </div>
 
@@ -786,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.64.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.64.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -1330,6 +1332,15 @@ function needIdentityPick(){
   return !identityConfirmed();
 }
 function hideIdentityGate(){ var g=document.getElementById('identityGate'); if(g) g.classList.add('hide'); }
+/* Banyaknya kolom pemilih identitas. Dipilih supaya baris terakhir sepenuh mungkin —
+   4 nama jadi 2x2 (bukan 3+1), 6 jadi 3+3, 8 jadi 4+4. Di layar sempit dibatasi 2 kolom
+   supaya kartunya tidak terhimpit. */
+function identityGridCols(n){
+  var lebar=(typeof window!=='undefined' && window.innerWidth) ? window.innerWidth : 1024;
+  var maks=lebar<640?2:4;
+  var kol = n<=3 ? Math.max(n,1) : (n===4 ? 2 : (n<=6 ? 3 : 4));
+  return Math.min(kol, maks);
+}
 function showIdentityGate(){
   var g=document.getElementById('identityGate'), grid=document.getElementById('identityGrid'); if(!g||!grid) return;
   // Mode magang: pilihannya HANYA daftar magang yang disiapkan Dev (dikirim server),
@@ -1347,6 +1358,10 @@ function showIdentityGate(){
       : '';
     ket.classList.toggle('hide', !state.magangMode);
   }
+  // Kolom menyesuaikan banyaknya pilihan supaya barisnya seimbang: 4 nama jadi 2x2, bukan
+  // 3+1 yang terlihat pincang. Dipasang sebagai inline style, bukan class Tailwind yang
+  // dirangkai saat berjalan — class begitu tidak ikut ter-generate di build tanpa CDN.
+  grid.style.gridTemplateColumns='repeat('+identityGridCols(items.length)+',minmax(0,1fr))';
   grid.innerHTML=items.map(function(p){
     var isDev=(p==='Dev');
     var face=isDev?'<span class="material-icons-round text-[18px]">code</span>':escapeHtml(initials(p));

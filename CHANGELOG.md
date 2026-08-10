@@ -10,6 +10,31 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.64.1 — Pemilih identitas: susunan kartu jadi seimbang
+
+Grid pemilih identitas dipatok `sm:grid-cols-3`, jadi **4 nama tampil 3+1** — terlihat
+pincang. Sekarang jumlah kolomnya menyesuaikan banyaknya pilihan supaya baris terakhir
+sepenuh mungkin:
+
+| Nama | Kolom | Susunan |
+|---|---|---|
+| 1–3 | sebanyak namanya | 1 baris |
+| **4** | **2** | **2+2** |
+| 5 | 3 | 3+2 |
+| 6 | 3 | 3+3 |
+| 7 | 4 | 4+3 |
+| 8 | 4 | 4+4 |
+
+Di layar sempit (<640 px) dibatasi 2 kolom supaya kartunya tidak terhimpit.
+
+Jumlah kolom dipasang sebagai **inline style**, bukan class Tailwind yang dirangkai saat
+berjalan — class semacam itu tidak ikut ter-generate pada build tanpa CDN (versi Apps
+Script), jadi susunannya akan gagal diam-diam di sana.
+
+Berlaku juga untuk pemilih identitas karyawan, bukan hanya magang.
+
+---
+
 ## 1.64.0 — Perbaikan: sub-ceklis tidak ikut saat proses disusun ulang
 
 Menyusun ulang proses di Task Kolaborasi membuat **sub-ceklisnya tertinggal** dan menempel

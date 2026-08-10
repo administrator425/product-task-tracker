@@ -857,6 +857,21 @@ ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.te
 // Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
 
+// Pemilih identitas: kolom menyesuaikan jumlah nama supaya barisnya seimbang.
+ok('ada penghitung kolom pemilih identitas', /function identityGridCols\(n\)/.test(commHtml));
+ok('4 nama diberi 2 kolom (2x2, bukan 3+1)', /n===4 \? 2/.test(commHtml));
+ok('layar sempit dibatasi 2 kolom', /var maks=lebar<640\?2:4/.test(commHtml));
+ok('kolom dipasang sbg inline style', /grid\.style\.gridTemplateColumns='repeat\('\+identityGridCols\(items\.length\)/.test(commHtml));
+// Class Tailwind yang dirangkai saat berjalan tidak ikut ter-generate di build tanpa CDN.
+ok('grid tak lagi memakai kolom tetap', !/id="identityGrid" class="grid grid-cols-2 sm:grid-cols-3/.test(commHtml));
+// Perhitungannya diuji langsung, bukan sekadar dicocokkan polanya.
+ok('pembagian baris seimbang', (() => {
+  const m = commHtml.match(/function identityGridCols\(n\)\{[\s\S]*?\n\}/);
+  if (!m) return false;
+  const fn = new Function('window', 'return (' + m[0] + ')')({ innerWidth: 1024 });
+  return [[1,1],[2,2],[3,3],[4,2],[5,3],[6,3],[7,4],[8,4]].every(([n, k]) => fn(n) === k);
+})());
+
 // Sidebar bisa disembunyikan supaya area task lebih lebar.
 ok('ada tombol sembunyikan sidebar', /id="sidebarToggle"/.test(commHtml));
 ok('tombol hanya utk layar lebar', /id="sidebarToggle"[^>]*hidden md:inline-flex/.test(commHtml));
