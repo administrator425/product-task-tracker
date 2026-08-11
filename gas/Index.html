@@ -788,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.65.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.66.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -1459,10 +1459,12 @@ function populateModalDropdowns(){
   fillSelect('fieldStage', allStagesForInput(), 'Pilih stage…');
   const _platSel=document.getElementById('fieldPlatform');
   if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-  fillSelect('fieldPic', state.options.pic, null, state.currentUser);
+  // PIC & Support dikelompokkan per peran (lihat picOptionsHtml).
+  const picSel=document.getElementById('fieldPic');
+  if(picSel){ const lama=picSel.value; picSel.innerHTML=picOptionsHtml(state.options.pic, lama||state.currentUser); }
   fillSelect('fieldDivisiTujuan', state.options.division||['IT','Marketing','Sales'], 'Pilih divisi…');
   const support = document.getElementById('fieldSupport');
-  support.innerHTML = (state.options.support || state.options.pic || []).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  if(support) support.innerHTML = picOptionsHtml(state.options.support || state.options.pic, '');
 }
 function getTaskType(){ const r=document.querySelector('input[name="taskType"]:checked'); return r?r.value:'internal'; }
 function setTaskType(v){ document.querySelectorAll('input[name="taskType"]').forEach(r=>{ r.checked=(r.value===v); }); }
@@ -1505,6 +1507,27 @@ function onStageChange(){ populateVerbSelect(getVal('fieldStage'), '', ''); upda
 function onVerbChange(){ populateObjekSelect(getVal('fieldStage'), getVal('fieldVerb'), ''); updateNamePreview(); }
 function composeTaskName(){ const parts=[getVal('fieldVerb'), getVal('fieldJumlah').trim(), getVal('fieldObjek'), getVal('fieldDetail').trim()]; return parts.filter(x=>x && String(x).trim()).join(' '); }
 function updateNamePreview(){ const p=document.getElementById('namePreview'); if(!p) return; const n=composeTaskName(); p.textContent = n ? ('Nama task: '+n) : 'Nama task akan muncul di sini setelah memilih kata kerja & objek.'; }
+/* Kelompokkan nama per peran di dropdown PIC & Support. Tanpa ini, saat memberi task tidak
+   ada cara tahu seseorang itu anak magang atau karyawan — padahal aturan "Done" dan
+   visibilitasnya berbeda. Nama yang belum berperan dikumpulkan di grup terakhir supaya
+   kelihatan dan bisa segera diatur Dev.
+   Kalau sheet USERS belum diisi, kembali ke daftar datar seperti semula. */
+function picOptionsHtml(values, selected){
+  const daftar=(values||[]).slice();
+  const opt=v=>`<option value="${escapeHtml(v)}" ${same(v,selected)?'selected':''}>${escapeHtml(v)}</option>`;
+  if(!usersConfigured()) return daftar.map(opt).join('');
+  const urutan=(state.roles||[]).filter(r=>!same(r,'Dev'));
+  const grup=new Map(urutan.map(r=>[r,[]]));
+  const tanpaPeran=[];
+  daftar.forEach(v=>{
+    const r=roleOf(v);
+    if(r && grup.has(r)) grup.get(r).push(v); else tanpaPeran.push(v);
+  });
+  let out='';
+  grup.forEach((isi,r)=>{ if(isi.length) out+=`<optgroup label="${escapeAttr(r)}">${isi.map(opt).join('')}</optgroup>`; });
+  if(tanpaPeran.length) out+=`<optgroup label="Belum diatur">${tanpaPeran.map(opt).join('')}</optgroup>`;
+  return out;
+}
 function fillSelect(id, values=[], placeholder=null, defaultValue=''){
   const el=document.getElementById(id); if(!el) return;
   const old=el.value;
@@ -2646,7 +2669,7 @@ function isMyTurnStep(c,s){
 function myTurnSteps(){ const out=[]; (state.collabs||[]).forEach(c=>(c.steps||[]).forEach(s=>{ if(isMyTurnStep(c,s)) out.push({collab:c,step:s}); })); return out; }
 function updateCollabTurnBadge(){ const n=myTurnSteps().length; const b=document.getElementById('collabTurnBadge'); if(b){ b.textContent=n; b.classList.toggle('hide', n===0); } }
 function currentCollab(){ return (state.collabs||[]).find(c=>c.id===state._collabId)||null; }
-function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeAttr(p)}" ${same(p,sel)?'selected':''}>${escapeHtml(p)}</option>`).join(''); }
+function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+picOptionsHtml(state.options.pic, sel); }
 /* Stage per proses — OPSIONAL, memakai daftar stage yang sama dengan task biasa.
    Stage lama yang sudah tak ada di dropdown tetap ditawarkan supaya tidak terhapus
    diam-diam saat prosesnya disimpan ulang. */

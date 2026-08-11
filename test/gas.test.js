@@ -899,6 +899,17 @@ ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.te
 // Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
 
+// Dropdown PIC & Support dikelompokkan per peran.
+ok('ada pembangun opsi per peran', /function picOptionsHtml\(values, selected\)/.test(commHtml));
+ok('memakai optgroup berlabel peran', /<optgroup label="\$\{escapeAttr\(r\)\}">/.test(commHtml));
+ok('urutan grup mengikuti daftar ROLES', /const urutan=\(state\.roles\|\|\[\]\)\.filter\(r=>!same\(r,'Dev'\)\)/.test(commHtml));
+ok('yang belum berperan dikumpulkan sendiri', /<optgroup label="Belum diatur">/.test(commHtml));
+ok('tanpa sheet USERS kembali ke daftar datar', /if\(!usersConfigured\(\)\) return daftar\.map\(opt\)\.join\(''\)/.test(commHtml));
+ok('PIC task memakai pengelompokan itu', /picSel\.innerHTML=picOptionsHtml\(state\.options\.pic, lama\|\|state\.currentUser\)/.test(commHtml));
+ok('Support memakai pengelompokan itu', /support\.innerHTML = picOptionsHtml\(state\.options\.support \|\| state\.options\.pic, ''\)/.test(commHtml));
+ok('PIC proses kolaborasi ikut dikelompokkan', /function collabPicOptions\(sel\)\{ return '<option value="">\(pilih PIC\)<\/option>'\+picOptionsHtml\(state\.options\.pic, sel\)/.test(commHtml));
+ok('pilihan lama tetap terpilih', /same\(v,selected\)\?'selected':''/.test(commHtml));
+
 // Tag per peran di komentar.
 ok('ada daftar tag peran', /const MENTION_ROLE_TAGS = \['manager', 'leader', 'staff', 'magang'\]/.test(commHtml));
 ok('Dev & Lihat Saja tidak jadi tag peran', !/MENTION_ROLE_TAGS = \[[^\]]*'dev'/.test(commHtml) && !/MENTION_ROLE_TAGS = \[[^\]]*'lihat saja'/.test(commHtml));

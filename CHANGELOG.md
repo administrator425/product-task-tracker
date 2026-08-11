@@ -10,6 +10,34 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.66.0 — Dropdown PIC & Support dikelompokkan per peran
+
+Saat memberi task, dropdown PIC hanya berisi nama tanpa keterangan apa pun — tidak ada cara
+tahu seseorang itu anak magang atau karyawan tetap, padahal aturan **Done** dan
+visibilitas task keduanya berbeda. Sekarang nama dikelompokkan dengan `<optgroup>`:
+
+```
+Manager      → Nynda (PM)
+Leader       → Dhea, Alya
+Staff        → Ali, Uma, Andika, Kiki, Bilar, Arifah
+Magang       → Wildan, Nadia
+Belum diatur → (nama yang belum diberi peran)
+```
+
+Urutan grup mengikuti daftar `ROLES` aplikasi, sama seperti tabel Kelola User. Nama yang
+belum berperan dikumpulkan di grup terakhir supaya kelihatan dan bisa segera diatur Dev.
+
+Berlaku di **PIC task**, **Support**, dan **PIC proses** pada Task Kolaborasi. Bila sheet
+`USERS` belum diisi, dropdown kembali ke daftar datar seperti semula — bukan error.
+
+### Catatan soal visibilitas task magang
+Anak magang memang **saling melihat task sesama magang** — itu rancangan sejak 1.57.0,
+bukan kebocoran: `scopedTasks()` memberi mereka task sendiri **atau** task milik magang mana
+pun, dan server (`magangVisibleTask`) menyetujuinya. Yang tidak mereka lihat adalah task
+karyawan, kecuali task tempat mereka sendiri menjadi Support.
+
+---
+
 ## 1.65.0 — Tag per peran: @manager, @leader, @staff, @magang
 
 Selain `@Nama` dan `@everyone`, komentar kini bisa men-tag **satu peran sekaligus**.
