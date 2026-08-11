@@ -498,6 +498,27 @@ eq('nomor collab memang dipakai ulang', DU, RU);
 eq('collab baru TIDAK mewarisi sub-ceklis lama', call('getChecklist', DU + '#1').length, 0);
 call('deleteCollab', DU, 'Manager');
 
+// Kasus yang dilaporkan user: komentar collab lama muncul di collab baru bernomor sama.
+const kc = call('saveCollab', { title: 'Punya Chat', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Proses', pic: 'Staff Soal' }] }, 'Manager');
+const KC = call('getCollabs').find(c => c.title === 'Punya Chat').id;
+call('addComment', { taskId: KC, author: 'Staff Soal', message: 'halo ini chat lama @Staff Data' });
+call('addComment', { taskId: KC, author: 'Staff Data', message: 'balasan lama' });
+eq('collab punya 2 komentar', call('getComments', KC).length, 2);
+ok('ada aktivitas tercatat utk collab ini', call('getActivityLog', 500).some(a => a.taskId === KC));
+call('deleteCollab', KC, 'Manager');
+eq('komentar ikut terhapus', call('getComments', KC).length, 0);
+ok('aktivitas collab itu ikut dibuang', !call('getActivityLog', 500).some(a => a.taskId === KC));
+// Collab BARU dgn nomor bekas harus benar-benar bersih.
+call('saveCollab', { title: 'Collab Bersih', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Proses', pic: 'Staff Soal' }] }, 'Manager');
+const CB = call('getCollabs').find(c => c.title === 'Collab Bersih').id;
+eq('nomornya memang dipakai ulang lagi', CB, KC);
+eq('collab baru TIDAK mewarisi chat lama', call('getComments', CB).length, 0);
+ok('jejak "Collab Delete" tak nyangkut di feed-nya', !call('getActivityLog', 500).some(a => a.taskId === CB && /Collab Delete/.test(a.action)));
+ok('penghapusan tetap tercatat di log global', call('getActivityLog', 500).some(a => /Collab Delete/.test(a.action) && String(a.detail).indexOf(KC) >= 0));
+call('deleteCollab', CB, 'Manager');
+
 console.log('\n=== 7f. Proses kolaborasi ber-PIC PERAN (milik bersama) ===');
 const kb = call('saveCollab', { title: 'Kolaborasi Bersama', platform: 'JadiASN', steps: [
   { order: 1, name: 'Kerjakan bareng', pic: '@Magang' },

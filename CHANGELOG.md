@@ -10,6 +10,28 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.69.1 — Perbaikan: chat & aktivitas collab lama menempel ke collab baru
+
+Menghapus Task Kolaborasi lalu membuat yang baru membuat **komentar collab lama muncul di
+collab baru**. Akar sebabnya sama dengan sub-ceklis di 1.69.0: nomor collab **dipakai ulang**
+(`genCollabId` = max + 1), sementara `deleteCollab` hanya membuang baris `COLLAB` dan
+`COLLAB_STEPS`. Komentar, notifikasi, dan riwayat aktivitas yang memakai id itu sebagai kunci
+ditinggalkan — lalu diadopsi collab berikutnya yang kebetulan bernomor sama.
+
+Sekarang `deleteCollab` membuang semua baris yang merujuk collab tersebut — `COMMENTS`,
+`NOTIFICATIONS`, dan `ACTIVITY`, termasuk yang berkunci proses (`COL-016#2`).
+
+Jejak penghapusannya sendiri dicatat **tanpa Task ID** (nomornya dipindah ke kolom detail),
+supaya baris *"Collab Delete"* tidak ikut nyangkut di feed collab bernomor sama. Log global
+tetap mencatatnya lengkap.
+
+> **Membersihkan data yang sudah terlanjur:** perbaikan ini mencegah kejadian berikutnya,
+> tapi sisa percakapan yang sudah menempel tidak hilang sendiri. Cara termudah: **hapus**
+> collab yang tercemar itu sekali lagi setelah versi ini terpasang — penghapusannya kini ikut
+> menyapu semua sisa dengan nomor tersebut — lalu buat ulang.
+
+---
+
 ## 1.69.0 — PIC peran juga berlaku di Task Kolaborasi
 
 Grup **"Milik bersama (satu peran)"** kini ada juga di dropdown PIC tiap **proses** pada Task

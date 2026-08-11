@@ -1395,6 +1395,23 @@ function deleteStepRowsForCollab_(collabId) {
 // sub-ceklis tertinggal di nomor lama dan menempel ke proses yang salah.
 // Proses yang dihapus: sub-ceklisnya ikut dibuang, supaya tidak diwarisi proses baru yang
 // kebetulan menempati nomor itu.
+/* Buang semua baris yang merujuk sebuah collab ("COL-016" maupun "COL-016#2").
+   Dipakai saat collab dihapus: komentar, notifikasi, dan riwayat aktivitasnya ikut hilang.
+   Tanpa ini, nomor collab yang dipakai ulang (genCollabId_ = max+1) membuat collab BARU
+   mewarisi percakapan milik collab yang sudah dihapus. */
+function purgeRowsForCollab_(sheetName, colLetter, colIdx, collabId) {
+  var rows = [];
+  try { rows = valuesGet_(sheetName + '!A2:' + colLetter); } catch (e) { return 0; }
+  var hapus = [];
+  rows.forEach(function (r, i) {
+    var v = String((r || [])[colIdx] || '').trim();
+    if (v === collabId || v.indexOf(collabId + '#') === 0) hapus.push(i + 2);
+  });
+  if (!hapus.length) return 0;
+  deleteRows_(sheetName, hapus);
+  return hapus.length;
+}
+
 function remapCollabChecklists_(collabId, orderMap) {
   var rows = [];
   try { rows = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A2:A'); } catch (e) { return; }
@@ -1595,7 +1612,13 @@ function deleteCollab(id, actor) {
     if (String((crows[i] && crows[i][0]) || '').trim() === id) { ci = i; break; }
   }
   if (ci >= 0) deleteRows_(CONFIG.COLLAB_SHEET, [ci + 2]);
-  logActivity_(actor, 'Collab Delete', id, '');
+  // Komentar, notifikasi, dan riwayat aktivitasnya ikut dibuang.
+  var ikut = 0;
+  ikut += purgeRowsForCollab_(CONFIG.COMMENTS_SHEET, 'D', 1, id);   // B = Task ID
+  ikut += purgeRowsForCollab_(CONFIG.NOTIF_SHEET, 'H', 3, id);      // D = Ref ID
+  ikut += purgeRowsForCollab_(CONFIG.ACTIVITY_SHEET, 'E', 3, id);   // D = Task ID
+  // Jejak penghapusan dicatat TANPA taskId, supaya tak nyangkut di feed collab bernomor sama.
+  logActivity_(actor, 'Collab Delete', '', id + ' dihapus (' + ikut + ' komentar/notifikasi/aktivitas ikut dibuang)');
   return { success: true, message: 'Task kolaborasi dihapus.', collabs: getCollabs() };
 }
 

@@ -534,6 +534,42 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   const vSemua = await kenaSiapa('@everyone pengumuman');
   ok('@everyone tetap kena semua', vSemua.length >= vDua.length);
 
+  console.log('\nHapus collab: chat & aktivitasnya ikut dibuang:');
+  // Nomor collab dipakai ulang (genCollabId = max+1). Tanpa pembersihan, collab BARU
+  // menampilkan percakapan milik collab yang sudah dihapus — persis yang dilaporkan user.
+  fresh();
+  await backend.saveCollab({ title: 'Punya Chat', platform: 'JadiASN',
+    steps: [{ order: 1, name: 'Proses', pic: 'Ali' }] }, 'Nynda');
+  fresh();
+  const KC = (await backend.getCollabs()).find(c => c.title === 'Punya Chat').id;
+  await backend.addComment({ taskId: KC, author: 'Ali', message: 'chat lama' });
+  fresh();
+  await backend.addComment({ taskId: KC, author: 'Uma', message: 'balasan lama' });
+  fresh();
+  eq('collab punya 2 komentar', (await backend.getComments(KC)).length, 2);
+  fresh();
+  ok('ada aktivitas utk collab ini', (await backend.getActivityLog(500)).some(a => a.taskId === KC));
+  fresh();
+  await backend.deleteCollab(KC, 'Nynda');
+  fresh();
+  eq('komentar ikut terhapus', (await backend.getComments(KC)).length, 0);
+  fresh();
+  ok('aktivitasnya ikut dibuang', !(await backend.getActivityLog(500)).some(a => a.taskId === KC));
+  fresh();
+  await backend.saveCollab({ title: 'Collab Bersih', platform: 'JadiASN',
+    steps: [{ order: 1, name: 'Proses', pic: 'Ali' }] }, 'Nynda');
+  fresh();
+  const CB = (await backend.getCollabs()).find(c => c.title === 'Collab Bersih').id;
+  eq('nomor collab dipakai ulang', CB, KC);
+  fresh();
+  eq('collab baru TIDAK mewarisi chat lama', (await backend.getComments(CB)).length, 0);
+  fresh();
+  ok('jejak hapus tak nyangkut di feed collab baru',
+    !(await backend.getActivityLog(500)).some(a => a.taskId === CB && /Collab Delete/.test(a.action)));
+  fresh();
+  ok('penghapusan tetap tercatat di log global',
+    (await backend.getActivityLog(500)).some(a => /Collab Delete/.test(a.action) && String(a.detail).indexOf(KC) >= 0));
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();
