@@ -659,6 +659,40 @@ ok('isinya gabungan staff + magang', kenaDua.every(n => peranDari[n] === 'staff'
 const kenaCampur = kenaSiapa('@magang dan @Leader Konten tolong sinkron');
 ok('campuran peran & nama', kenaCampur.indexOf('Leader Konten') >= 0 && kenaCampur.some(n => peranDari[n] === 'magang'));
 
+console.log('\n=== 14d. PIC berupa PERAN (task milik bersama) + jejak pengubah status ===');
+const brs = call('saveTask', { taskName: 'Latsol bareng magang', pic: '@Magang', status: 'Todo',
+  priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Manager' });
+eq('task milik bersama tersimpan', brs.success, true);
+const BRS = brs.task.id;
+eq('PIC tersimpan sbg peran', call('getTasks').filter(t => t.id === BRS)[0].pic, '@Magang');
+// Semua anak magang memilikinya; karyawan lain tidak.
+const tBrs = call('getTasks').filter(t => t.id === BRS)[0];
+ok('Magang Konten memiliki task ini', call('ownsTaskActor_', tBrs, 'Magang Konten'));
+ok('Magang Data juga memilikinya', call('ownsTaskActor_', tBrs, 'Magang Data'));
+ok('Staff Soal TIDAK memilikinya', !call('ownsTaskActor_', tBrs, 'Staff Soal'));
+// Aturan Done ikut aturan magang: Staff boleh menutup, magang tidak.
+ok('dikenali sbg task magang', call('isMagangActor_', '@Magang'));
+eq('Magang tak boleh menutup task bersama', call('quickUpdateField', BRS, 'status', 'Done', 'Magang Konten').success, false);
+const tutup = call('quickUpdateField', BRS, 'status', 'Done', 'Staff Soal');
+eq('Staff boleh menutup task bersama', tutup.success, true);
+
+// Jejak pengubah status.
+const setelah = call('getTasks').filter(t => t.id === BRS)[0];
+ok('tercatat siapa pengubah status', /^Staff Soal • \d{4}-\d{2}-\d{2}/.test(setelah.statusBy));
+call('quickUpdateField', BRS, 'status', 'Revisi', 'Manager');
+const ubah2 = call('getTasks').filter(t => t.id === BRS)[0];
+ok('catatan ikut berganti ke pengubah terakhir', /^Manager • /.test(ubah2.statusBy));
+// Menyunting field lain TIDAK boleh mengubah catatan itu.
+call('quickUpdateField', BRS, 'priority', 'High', 'Leader Konten');
+eq('ubah prioritas tak menyentuh catatan status', call('getTasks').filter(t => t.id === BRS)[0].statusBy, ubah2.statusBy);
+call('saveTask', { id: BRS, taskName: 'Judul diganti', pic: '@Magang', status: 'Revisi',
+  priority: 'High', stage: 'QC Konten', platform: 'JadiASN', actor: 'Manager' });
+eq('simpan tanpa ganti status juga tak menyentuh', call('getTasks').filter(t => t.id === BRS)[0].statusBy, ubah2.statusBy);
+// "@Dev" tidak sah sebagai PIC bersama.
+eq('@Dev bukan PIC peran', call('rolePicOf_', '@Dev'), '');
+eq('nama biasa bukan PIC peran', call('rolePicOf_', 'Magang Konten'), '');
+call('deleteTask', BRS, 'Manager');
+
 console.log('\n=== 15. Peran user (Dev / Manager / Leader / Staff) ===');
 const users = call('getUsers');
 eq('12 user ter-seed', users.length, 12);
@@ -784,6 +818,39 @@ eq('nama sisa di dropdown boleh dihapus', delSisa.success, true);
 ok('sisa dropdown benar-benar hilang', (delSisa.options.pic || []).indexOf('Sisa Dropdown') < 0);
 eq('nama tak dikenal ditolak', call('deleteUser', 'Hantu', 'Dev').success, false);
 
+console.log('\n=== 16a-2. Ganti nama user (rujukan ikut berpindah) ===');
+const baseName_g = v => String(v || '').trim().toLowerCase().replace(/\s*\(.*\)\s*$/, '').trim();
+// Siapkan jejak: task sbg PIC, task sbg Support, proses kolaborasi, link, catatan.
+call('saveTask', { taskName: 'Task milik Staff Soal', pic: 'Staff Soal', support: ['Staff Data'], status: 'Todo',
+  priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Manager' });
+const sblmPic = call('getTasks').filter(t => baseName_g(t.pic) === 'staff soal').length;
+ok('Staff Soal punya task sbg PIC', sblmPic >= 1);
+const sblmSup = call('getTasks').filter(t => String(t.support || '').split(',').some(s => baseName_g(s) === 'staff data')).length;
+ok('Staff Data ada di Support task', sblmSup >= 1);
+
+eq('Manager tak boleh ganti nama', call('renameUser', 'Staff Soal', 'Staff Soalx', 'Manager').success, false);
+eq('nama kosong ditolak', call('renameUser', 'Staff Soal', '', 'Dev').success, false);
+eq('nama sama ditolak', call('renameUser', 'Staff Soal', 'Staff Soal', 'Dev').success, false);
+eq('"Dev" tak boleh dipakai', call('renameUser', 'Staff Soal', 'Dev', 'Dev').success, false);
+eq('bentrok nama lain ditolak', call('renameUser', 'Staff Soal', 'Staff Data', 'Dev').success, false);
+eq('user tak dikenal ditolak', call('renameUser', 'Hantu', 'Baru', 'Dev').success, false);
+
+const ren = call('renameUser', 'Staff Soal', 'Staf Soal Baru', 'Dev');
+eq('Dev boleh mengganti nama', ren.success, true);
+ok('jumlah rujukan dilaporkan', ren.renamed >= 1);
+eq('nama lama hilang dari daftar user', call('getUsers').filter(u => u.name === 'Staff Soal').length, 0);
+eq('nama baru ada di daftar user', call('getUsers').filter(u => u.name === 'Staf Soal Baru').length, 1);
+eq('perannya tidak berubah', call('getUsers').filter(u => u.name === 'Staf Soal Baru')[0].role, 'Staff');
+// Inti fiturnya: task tidak boleh jadi yatim.
+eq('task PIC ikut berpindah', call('getTasks').filter(t => t.pic === 'Staf Soal Baru').length, sblmPic);
+eq('tak ada lagi task ber-PIC nama lama', call('getTasks').filter(t => t.pic === 'Staff Soal').length, 0);
+// Dropdown ikut diganti supaya nama lama tak bisa dipilih lagi.
+ok('nama baru masuk dropdown PIC', (call('getOptions').pic || []).indexOf('Staf Soal Baru') >= 0);
+ok('nama lama keluar dari dropdown PIC', (call('getOptions').pic || []).indexOf('Staff Soal') < 0);
+// Kembalikan supaya bagian tes berikutnya tetap memakai nama asli.
+call('renameUser', 'Staf Soal Baru', 'Staff Soal', 'Dev');
+eq('bisa dikembalikan lagi', call('getUsers').filter(u => u.name === 'Staff Soal').length, 1);
+
 console.log('\n=== 16b. UI: panel Kelola User terkunci ke mode Dev ===');
 const uiHtml = call('doGet', {})._html;
 ok('canManageUsers() memakai isDev()', /function canManageUsers\(\)\{[^}]*isDev\(\)/.test(uiHtml));
@@ -900,12 +967,23 @@ ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.te
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
 
 // Dropdown PIC & Support dikelompokkan per peran.
-ok('ada pembangun opsi per peran', /function picOptionsHtml\(values, selected\)/.test(commHtml));
+ok('ada pembangun opsi per peran', /function picOptionsHtml\(values, selected, opsiPeran\)/.test(commHtml));
 ok('memakai optgroup berlabel peran', /<optgroup label="\$\{escapeAttr\(r\)\}">/.test(commHtml));
 ok('urutan grup mengikuti daftar ROLES', /const urutan=\(state\.roles\|\|\[\]\)\.filter\(r=>!same\(r,'Dev'\)\)/.test(commHtml));
 ok('yang belum berperan dikumpulkan sendiri', /<optgroup label="Belum diatur">/.test(commHtml));
 ok('tanpa sheet USERS kembali ke daftar datar', /if\(!usersConfigured\(\)\) return daftar\.map\(opt\)\.join\(''\)/.test(commHtml));
-ok('PIC task memakai pengelompokan itu', /picSel\.innerHTML=picOptionsHtml\(state\.options\.pic, lama\|\|state\.currentUser\)/.test(commHtml));
+ok('PIC task memakai pengelompokan itu', /picSel\.innerHTML=picOptionsHtml\(state\.options\.pic, lama\|\|state\.currentUser, true\)/.test(commHtml));
+// PIC berupa peran: task milik bersama + jejak siapa yang mengubah status.
+ok('ada pengenal PIC peran', /function rolePicOf\(pic\)/.test(commHtml));
+ok('grup "milik bersama" ditawarkan di PIC', /Milik bersama \(satu peran\)/.test(commHtml));
+ok('Dev & Lihat Saja tak bisa jadi PIC bersama', /!same\(r,'Dev'\) && !same\(r,'Lihat Saja'\) && roleTagCount/.test(commHtml));
+ok('peran kosong tidak ditawarkan', /roleTagCount\(String\(r\)\.toLowerCase\(\)\)>0/.test(commHtml));
+ok('kepemilikan mengenali PIC peran', /function ownsTask\(t,user\)\{[\s\S]{0,200}?hasRole\(user, String\(rp\)\.toLowerCase\(\)\)/.test(commHtml));
+ok('task magang bersama ikut terhitung', /same\(rolePicOf\(p\),'Magang'\) \|\| isMagang\(p\)/.test(commHtml));
+ok('lencana PIC mengenali peran', /function isPicOf\(t,user\)\{ const rp=rolePicOf/.test(commHtml));
+ok('PIC peran lama tetap ditawarkan saat disunting', /rolePicOf\(selected\) && out\.indexOf/.test(commHtml));
+ok('ada tempat menampilkan pengubah status', /id="fieldStatusBy"/.test(commHtml));
+ok('teksnya menyebut siapa pengubahnya', /Status diubah oleh/.test(commHtml));
 ok('Support memakai pengelompokan itu', /support\.innerHTML = picOptionsHtml\(state\.options\.support \|\| state\.options\.pic, ''\)/.test(commHtml));
 ok('PIC proses kolaborasi ikut dikelompokkan', /function collabPicOptions\(sel\)\{ return '<option value="">\(pilih PIC\)<\/option>'\+picOptionsHtml\(state\.options\.pic, sel\)/.test(commHtml));
 ok('pilihan lama tetap terpilih', /same\(v,selected\)\?'selected':''/.test(commHtml));

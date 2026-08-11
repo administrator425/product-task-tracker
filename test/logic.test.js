@@ -66,7 +66,7 @@ const back = taskToRow({
   platform: 'All Platform', pic: 'Ali', support: ['Nynda', 'Kiki'], document: 'Spreadsheet',
   picNotes: 'Backend siap', pmNotes: 'Cek dropdown',
 }, null);
-eq('taskToRow panjang 21 kolom (B..V)', back.length, 21);
+eq('taskToRow panjang 22 kolom (B..W)', back.length, 22);   // +Status By (siapa mengubah status)
 eq('taskToRow[0] id', back[0], 'TSK-002');
 eq('taskToRow support array -> string', back[9], 'Nynda, Kiki');
 eq('taskToRow status', back[3], 'In progress');

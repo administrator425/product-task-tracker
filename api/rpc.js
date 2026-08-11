@@ -68,6 +68,7 @@ const HANDLERS = {
   getUsers: () => backend.getUsers(),
   saveUser: (name, role, active, actor) => backend.saveUser(name, role, active, actor),
   deleteUser: (name, actor) => backend.deleteUser(name, actor),
+  renameUser: (oldName, newName, actor) => backend.renameUser(oldName, newName, actor),
   saveOption: (type, value, parent) => backend.saveOption(type, value, parent),
   deleteOption: (type, value, parent) => backend.deleteOption(type, value, parent),
   editOption: (type, oldValue, newValue, parent) => backend.editOption(type, oldValue, newValue, parent),
@@ -191,7 +192,7 @@ module.exports = async (req, res) => {
   const GUEST_ACTIONS = { getBootstrapData: 1, getComments: 1, addComment: 1 };
   // Level "magang" boleh bekerja seperti biasa, TAPI tidak boleh menyentuh hal administratif.
   const MAGANG_DENY = {
-    saveUser: 1, deleteUser: 1, setUserPin: 1, deleteUserPin: 1, listPinUsers: 1,
+    saveUser: 1, deleteUser: 1, renameUser: 1, setUserPin: 1, deleteUserPin: 1, listPinUsers: 1,
     setupTaskTracker: 1, assignMissingTaskIds: 1, seedFormulaTemplate: 1,
     saveOption: 1, deleteOption: 1, editOption: 1,
     addDashboard: 1, updateDashboard: 1, deleteDashboard: 1,

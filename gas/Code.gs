@@ -52,14 +52,14 @@ var CONFIG = {
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
-  LAST_COL_LETTER: 'V'
+  LAST_COL_LETTER: 'W'
 };
 
 var TASK_HEADERS = [
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority',
   'Task Name', 'Stage', 'Platform', 'PIC', 'Support', 'Document',
   'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kata Kerja',
-  'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View'
+  'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View', 'Status By'
 ];
 
 // Pemetaan field -> kolom (B..V). Urutan tetap.
@@ -68,7 +68,7 @@ var COL = {
   priority: 'F', taskName: 'G', stage: 'H', platform: 'I', pic: 'J',
   support: 'K', document: 'L', picNotes: 'M', pmNotes: 'N',
   divisiTujuan: 'O', kontakDivisi: 'P', verb: 'Q', jumlah: 'R',
-  objek: 'S', detail: 'T', createdBy: 'U', mirror: 'V'
+  objek: 'S', detail: 'T', createdBy: 'U', mirror: 'V', statusBy: 'W'
 };
 
 var OPTION_TYPES = ['status', 'priority', 'stage', 'platform', 'pic', 'support', 'division', 'verb', 'object'];
@@ -208,7 +208,18 @@ function isLeaderActor_(name) {
 }
 
 // Anak magang: peran paling terbatas, dan pekerjaannya dibimbing karyawan.
+// "Nama • 2026-08-11 10:00". Berawalan nama, jadi Sheets tak mengubahnya jadi nilai tanggal.
+function statusByStamp_(actor) { return (String(actor || '').trim() || 'Unknown') + ' • ' + nowStamp_(); }
+/* PIC boleh berupa PERAN, ditulis "@Magang" — task milik BERSAMA semua yang berperan itu.
+   Awalan "@" dipakai supaya tak pernah bentrok dengan orang yang kebetulan bernama "Magang". */
+function rolePicOf_(pic) {
+  var t = String(pic || '').trim();
+  if (t.charAt(0) !== '@') return '';
+  var r = normalizeRole_(t.slice(1));
+  return (r && r.toLowerCase() !== 'dev') ? r : '';
+}
 function isMagangActor_(name) {
+  if (rolePicOf_(name).toLowerCase() === 'magang') return true;   // task milik bersama anak magang
   if (!baseName_(name)) return false;
   return usersConfigured_() && hasRole_(name, 'magang');
 }
@@ -345,6 +356,81 @@ function isPermanentRole_(role) {
   var r = String(role || '').trim().toLowerCase();
   for (var i = 0; i < PERMANENT_ROLES.length; i++) if (PERMANENT_ROLES[i].toLowerCase() === r) return true;
   return false;
+}
+
+/* Ganti nama user (mis. salah ketik). Nama dipakai sebagai KUNCI di banyak tempat, jadi
+   mengganti baris USERS saja akan membuat task, proses kolaborasi, link, dan catatan orang
+   itu jadi yatim. Karena itu semua rujukan ikut diperbarui dalam satu operasi. */
+function renameUser(oldName, newName, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  oldName = String(oldName || '').trim();
+  newName = String(newName || '').trim();
+  if (!canManageUsers_(actor)) return { success: false, message: usersDeniedMessage_() };
+  if (!oldName || !newName) return { success: false, message: 'Nama lama & baru wajib diisi.' };
+  if (newName.length > 40) return { success: false, message: 'Nama baru terlalu panjang (maks 40 karakter).' };
+  if (baseName_(oldName) === 'dev' || baseName_(newName) === 'dev') {
+    return { success: false, message: '"Dev" adalah nama khusus mode Dev dan tidak bisa dipakai.' };
+  }
+  if (oldName === newName) return { success: false, message: 'Nama barunya sama dengan yang lama.' };
+
+  var list = usersRaw_(), found = null, bentrok = null;
+  list.forEach(function (u) {
+    if (baseName_(u.name) === baseName_(oldName)) found = u;
+    else if (baseName_(u.name) === baseName_(newName)) bentrok = u;
+  });
+  if (!found) return { success: false, message: 'User "' + oldName + '" tidak ditemukan.' };
+  if (bentrok) return { success: false, message: 'Sudah ada user bernama "' + bentrok.name + '".' };
+
+  var cocok = function (v) { return baseName_(v) === baseName_(oldName); };
+  var tersentuh = 0;
+
+  valuesUpdate_(CONFIG.USERS_SHEET + '!A' + found.row, [[newName]]);
+  invalidateUsers_();
+
+  // Task: kolom PIC & Support (Support daftar dipisah koma).
+  try {
+    var rows = valuesGet_(mainDataRange_());
+    rows.forEach(function (r, i) {
+      var rn = CONFIG.FIRST_DATA_ROW + i;
+      if (cocok((r || [])[8])) { valuesUpdate_(CONFIG.TASK_SHEET + '!' + COL.pic + rn, [[newName]]); tersentuh++; }
+      var sup = String((r || [])[9] || '');
+      if (sup && sup.split(',').some(cocok)) {
+        var baru = sup.split(',').map(function (s) { return cocok(s) ? newName : String(s).trim(); })
+          .filter(Boolean).join(', ');
+        valuesUpdate_(CONFIG.TASK_SHEET + '!' + COL.support + rn, [[baru]]);
+        tersentuh++;
+      }
+    });
+  } catch (e) { /* jangan gagalkan penggantian nama karena satu sheet tak terbaca */ }
+
+  // Sheet lain yang memakai nama sebagai kunci.
+  [[CONFIG.COLLAB_STEP_SHEET, 'D', 3], [CONFIG.LINKS_SHEET, 'A', 0], [CONFIG.NOTES_SHEET, 'A', 0],
+   [CONFIG.AUTH_SHEET, 'A', 0], [CONFIG.NOTIF_SHEET, 'B', 1]].forEach(function (t) {
+    try {
+      var rows2 = valuesGet_(t[0] + '!A2:' + t[1]);
+      rows2.forEach(function (r, i) {
+        if (cocok((r || [])[t[2]])) { valuesUpdate_(t[0] + '!' + t[1] + (i + 2), [[newName]]); tersentuh++; }
+      });
+    } catch (e) { /* sheet opsional */ }
+  });
+
+  // Dropdown PIC & Support ikut diganti supaya nama lama tak bisa dipilih lagi.
+  var options = null;
+  try {
+    deleteOption('pic', oldName, '');
+    deleteOption('support', oldName, '');
+    saveOption('pic', newName, '');
+    options = saveOption('support', newName, '').options;
+  } catch (e) { /* opsi tak wajib */ }
+
+  logActivity_(actor, 'User Rename', '', oldName + ' → ' + newName + ' (' + tersentuh + ' rujukan ikut diperbarui)');
+  return {
+    success: true,
+    message: '"' + oldName + '" diganti jadi "' + newName + '". ' + tersentuh + ' rujukan ikut diperbarui.',
+    renamed: tersentuh,
+    users: getUsers(),
+    options: options || getOptions()
+  };
 }
 
 function deleteUser(name, actor) {
@@ -647,6 +733,7 @@ function rowToTask_(row, rowNumber) {
     detail: String(g(18)).trim(),
     createdBy: String(g(19)).trim(),
     mirror: String(g(20)).trim(),
+    statusBy: String(g(21)).trim(),   // siapa & kapan status terakhir diubah
     // Field virtual (tak punya kolom di sheet) — disediakan agar UI tetap jalan.
     startDate: createdDate,
     approvalGate: '',
@@ -680,7 +767,8 @@ function taskToRow_(task, existingTask) {
     task.objek || '',
     task.detail || '',
     (task.createdBy || (existingTask && existingTask.createdBy) || ''),
-    (task.mirror ? 'Ya' : '')
+    (task.mirror ? 'Ya' : ''),
+    (task.statusBy !== undefined ? task.statusBy : ((existingTask && existingTask.statusBy) || ''))
   ];
 }
 
@@ -767,6 +855,12 @@ function saveTask(task) {
     Object.keys(task).forEach(function (k) { merged[k] = task[k]; });
     merged.id = finalId;
     merged.createdBy = createdBy;
+    // Catat pengubah status HANYA bila statusnya memang berganti, supaya menyunting judul
+    // atau deadline tidak ikut mengubah keterangan "diubah oleh".
+    var oldSt = String((existingTask && existingTask.status) || '').trim();
+    merged.statusBy = (String(task.status || '').trim() !== oldSt)
+      ? statusByStamp_(actor)
+      : ((existingTask && existingTask.statusBy) || '');
     var rowData = taskToRow_(merged, existingTask);
 
     if (!isUpdate) rowNumber = CONFIG.FIRST_DATA_ROW + ids.length; // baris kosong berikutnya
@@ -828,6 +922,9 @@ function quickUpdateField(taskId, field, value, actor) {
   }
 
   valuesUpdate_(CONFIG.TASK_SHEET + '!' + col + row, [[value]]);
+  // Wajib untuk task milik bersama (PIC berupa peran): tanpa ini satu status dipakai
+  // beramai-ramai tanpa jejak siapa yang menggerakkannya.
+  if (f === 'status') valuesUpdate_(CONFIG.TASK_SHEET + '!' + COL.statusBy + row, [[statusByStamp_(actor)]]);
   logActivity_(String(actor || '').trim() || 'Unknown', 'Update Task', taskId, field + ' → ' + value);
 
   var after = valuesGet_(taskRowRange_(row));
@@ -1029,6 +1126,9 @@ function addComment(payload) {
 function ownsTaskActor_(task, actor) {
   var a = baseName_(actor);
   if (!a || !task) return false;
+  // PIC berupa peran -> dimiliki bersama oleh semua yang berperan itu.
+  var rp = rolePicOf_(task.pic);
+  if (rp && hasRole_(actor, rp.toLowerCase())) return true;
   if (baseName_(task.pic) === a) return true;
   return String(task.support || '').split(',').map(function (s) { return baseName_(s); })
     .filter(Boolean).indexOf(a) >= 0;

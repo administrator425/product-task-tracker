@@ -10,6 +10,42 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.67.0 — PIC boleh berupa PERAN (task milik bersama) + ganti nama user
+
+### Task milik bersama satu peran
+Dropdown PIC kini punya grup teratas **"Milik bersama (satu peran)"**: *Semua Magang
+(2 orang)*, *Semua Staff (6 orang)*, dan seterusnya. Memilihnya membuat **satu task** yang
+dimiliki bersama semua orang berperan itu — muncul di daftar mereka, bisa mereka kerjakan,
+dan mengikuti aturan peran tersebut (mis. task `@Magang` boleh ditutup Staff, tidak boleh
+ditutup anak magang itu sendiri).
+
+Disimpan sebagai `@Magang` di kolom PIC. Awalan `@` dipakai supaya tidak pernah bentrok
+dengan orang yang kebetulan bernama "Magang", dan tetap terbaca jelas saat sheet dibuka
+manual. `Dev` dan `Lihat Saja` tidak bisa jadi PIC bersama, dan peran tanpa anggota tidak
+ditawarkan. **Support tetap perorangan** — yang dibagikan hanya tanggung jawab utamanya.
+
+### Jejak siapa yang mengubah status
+Karena satu status kini dipakai beramai-ramai, tanpa jejak tidak ada cara tahu siapa yang
+menggerakkannya. Kolom baru **`Status By`** (Main kolom **W**) mencatat *"Nama • tanggal
+jam"* setiap kali status berubah, dan ditampilkan di bawah pilihan Status pada modal task.
+
+Yang dicatat hanya **perubahan status** — menyunting judul, prioritas, atau deadline tidak
+ikut mengubah keterangan itu. Berlaku untuk semua task, bukan hanya yang milik bersama.
+
+### Ganti nama user
+Tombol pensil di **Kelola User** untuk membetulkan salah ketik. Nama dipakai sebagai
+**kunci** di banyak tempat, jadi mengganti baris `USERS` saja akan membuat task, proses
+kolaborasi, link, catatan, dan PIN orang itu jadi yatim. Karena itu semua rujukan ikut
+diperbarui dalam satu operasi — PIC & Support di task, PIC proses kolaborasi, `LINKS`,
+`NOTES`, `AUTH`, `NOTIFICATIONS`, serta dropdown PIC & Support — lalu jumlah yang tersentuh
+dilaporkan balik ("*12 rujukan ikut diperbarui*").
+
+Hanya **Dev**. Nama kosong, sama persis, `"Dev"`, dan bentrok dengan user lain ditolak.
+Bila yang diganti adalah identitas yang sedang dipakai, identitas itu ikut berpindah supaya
+tidak menjadi user hantu.
+
+---
+
 ## 1.66.0 — Dropdown PIC & Support dikelompokkan per peran
 
 Saat memberi task, dropdown PIC hanya berisi nama tanpa keterangan apa pun — tidak ada cara

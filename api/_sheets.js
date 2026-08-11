@@ -44,21 +44,22 @@ const CONFIG = {
   HEADER_ROW: 3,
   FIRST_DATA_ROW: 4,
   FIRST_COL_LETTER: 'B',
-  LAST_COL_LETTER: 'V',
+  LAST_COL_LETTER: 'W',
 };
 
 const TASK_HEADERS = [
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority',
   'Task Name', 'Stage', 'Platform', 'PIC', 'Support', 'Document',
-  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View',
+  'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi', 'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View', 'Status By',
 ];
 
-// Pemetaan field -> kolom (B..V). Urutan tetap.
+// Pemetaan field -> kolom (B..W). Urutan tetap.
 const COL = {
   taskId: 'B', createdDate: 'C', dueDate: 'D', status: 'E',
   priority: 'F', taskName: 'G', stage: 'H', platform: 'I', pic: 'J',
   support: 'K', document: 'L', picNotes: 'M', pmNotes: 'N',
   divisiTujuan: 'O', kontakDivisi: 'P', verb: 'Q', jumlah: 'R', objek: 'S', detail: 'T', createdBy: 'U', mirror: 'V',
+  statusBy: 'W',
 };
 
 // Rumus nama task: Kata Kerja (verb, parent=stage) -> Objek (object, parent="stage||verb"). Jumlah & Detail diisi manual.
@@ -216,7 +217,22 @@ function isLeaderActor(name) {
   return envList('DONE_APPROVERS', 'Nynda,Dhea,Alya').some(a => baseName(a) === n) && !isManagerActor(name);
 }
 function isStaffActor(name) { return usersConfigured() && hasRole(name, 'staff'); }
-function isMagangActor(name) { return usersConfigured() && hasRole(name, 'magang'); }
+/* PIC boleh berupa PERAN, ditulis "@Magang" — task milik BERSAMA semua yang berperan itu.
+   Awalan "@" dipakai supaya tak pernah bentrok dengan orang yang kebetulan bernama "Magang",
+   dan tetap terbaca jelas saat sheet dibuka manual. "Dev" tak boleh jadi PIC bersama. */
+// "Nama • 2026-08-11 10:00". Berawalan nama, jadi Sheets tidak mengubahnya jadi nilai tanggal.
+function statusByStamp(actor) { return `${String(actor || '').trim() || 'Unknown'} • ${nowStamp()}`; }
+
+function rolePicOf(pic) {
+  const s = String(pic || '').trim();
+  if (s.charAt(0) !== '@') return '';
+  const r = normalizeRole(s.slice(1));
+  return (r && r.toLowerCase() !== 'dev') ? r : '';
+}
+function isMagangActor(name) {
+  if (rolePicOf(name).toLowerCase() === 'magang') return true;   // task milik bersama anak magang
+  return usersConfigured() && hasRole(name, 'magang');
+}
 
 // Status "Done" bersifat final dan hanya boleh diset oleh yang berwenang.
 function isDoneStatus(v) {
@@ -452,6 +468,8 @@ function rowToTask(row, rowNumber) {
     detail: String(g(18)).trim(),
     createdBy: String(g(19)).trim(),
     mirror: String(g(20)).trim(),
+    // "Nama • 2026-08-11 10:00" — teks berawalan nama, jadi Sheets tak mengubahnya jadi tanggal.
+    statusBy: String(g(21)).trim(),   // siapa & kapan status terakhir diubah
     // Field virtual (tidak ada kolomnya di sheet ini) — disediakan agar UI lama tetap jalan.
     startDate: createdDate,
     approvalGate: '',
@@ -486,6 +504,7 @@ function taskToRow(task, existingTask) {
     task.detail || '',
     (task.createdBy || (existingTask && existingTask.createdBy) || ''),
     (task.mirror ? 'Ya' : ''),
+    (task.statusBy !== undefined ? task.statusBy : ((existingTask && existingTask.statusBy) || '')),
   ];
 }
 
@@ -557,7 +576,11 @@ async function saveTask(task) {
   // Pastikan ID terisi. createdBy = pembuat task (di-set saat create, dipertahankan saat update).
   const finalId = task.id || generateTaskId(ids);
   const createdBy = isUpdate ? ((existingTask && existingTask.createdBy) || task.createdBy || '') : actor;
-  const rowData = taskToRow(Object.assign({}, task, { id: finalId, createdBy }), existingTask);
+  // Catat pengubah status hanya bila statusnya memang berganti — supaya menyunting judul
+  // atau deadline tidak ikut mengubah keterangan "diubah oleh".
+  const statusBerubah = String(task.status || '').trim() !== String(oldStatus).trim();
+  const statusBy = statusBerubah ? statusByStamp(actor) : ((existingTask && existingTask.statusBy) || '');
+  const rowData = taskToRow(Object.assign({}, task, { id: finalId, createdBy, statusBy }), existingTask);
 
   if (!isUpdate) {
     rowNumber = CONFIG.FIRST_DATA_ROW + ids.length; // baris kosong berikutnya
@@ -633,6 +656,9 @@ async function quickUpdateField(taskId, field, value, actor) {
   }
 
   await valuesUpdate(`${CONFIG.TASK_SHEET}!${col}${row}`, [[value]]);
+  // Catat siapa yang mengubah status. Wajib untuk task milik bersama (PIC berupa peran):
+  // tanpa ini, satu status dipakai beramai-ramai tanpa jejak siapa yang menggerakkannya.
+  if (f === 'status') await valuesUpdate(`${CONFIG.TASK_SHEET}!${COL.statusBy}${row}`, [[statusByStamp(actor)]]);
   await logActivity(String(actor || '').trim() || 'Unknown', 'Update Task', taskId, `${field} → ${value}`);
 
   const cur = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${row}:${CONFIG.LAST_COL_LETTER}${row}`);
@@ -848,6 +874,9 @@ function isChecked(v) {
 function ownsTaskActor(task, actor) {
   const a = baseName(actor);
   if (!a || !task) return false;
+  // PIC berupa peran -> dimiliki bersama oleh semua yang berperan itu.
+  const rp = rolePicOf(task.pic);
+  if (rp && hasRole(actor, rp.toLowerCase())) return true;
   if (baseName(task.pic) === a) return true;
   return String(task.support || '').split(',').map(s => baseName(s)).filter(Boolean).includes(a);
 }
@@ -1394,6 +1423,98 @@ const PERMANENT_ROLES = ['Manager', 'Leader', 'Staff'];
 function isPermanentRole(role) {
   const r = String(role || '').trim().toLowerCase();
   return PERMANENT_ROLES.some(x => x.toLowerCase() === r);
+}
+
+/* Ganti nama user (mis. salah ketik). Nama dipakai sebagai KUNCI di banyak tempat, jadi
+   mengganti baris USERS saja akan membuat task, proses kolaborasi, link, dan catatan orang
+   itu jadi yatim — pemiliknya tak lagi cocok dengan siapa pun. Karena itu semua rujukan
+   ikut diperbarui dalam satu operasi, dan jumlah yang tersentuh dilaporkan balik. */
+async function renameUser(oldName, newName, actor) {
+  actor = String(actor || '').trim() || 'Unknown';
+  oldName = String(oldName || '').trim();
+  newName = String(newName || '').trim();
+  if (!canManageUsers(actor)) return { success: false, message: usersDeniedMessage() };
+  if (!oldName || !newName) return { success: false, message: 'Nama lama & baru wajib diisi.' };
+  if (newName.length > 40) return { success: false, message: 'Nama baru terlalu panjang (maks 40 karakter).' };
+  if (baseName(oldName) === 'dev' || baseName(newName) === 'dev') {
+    return { success: false, message: '"Dev" adalah nama khusus mode Dev dan tidak bisa dipakai.' };
+  }
+  if (baseName(oldName) === baseName(newName) && oldName === newName) {
+    return { success: false, message: 'Nama barunya sama dengan yang lama.' };
+  }
+
+  invalidateUsers();
+  await loadUsers();
+  const found = _users.find(u => baseName(u.name) === baseName(oldName));
+  if (!found) return { success: false, message: `User "${oldName}" tidak ditemukan.` };
+  // Hanya tolak bila BENAR-BENAR orang lain (bukan sekadar beda kapital dari dirinya sendiri).
+  const bentrok = _users.find(u => baseName(u.name) === baseName(newName) && baseName(u.name) !== baseName(oldName));
+  if (bentrok) return { success: false, message: `Sudah ada user bernama "${bentrok.name}".` };
+
+  const cocok = v => baseName(v) === baseName(oldName);
+  let tersentuh = 0;
+
+  await valuesUpdate(`${CONFIG.USERS_SHEET}!A${found.row}`, [[newName]]);
+  invalidateUsers();
+
+  // Task: kolom PIC dan Support (Support berisi daftar dipisah koma).
+  try {
+    const rows = await valuesGet(MAIN_DATA_RANGE());
+    const data = [];
+    rows.forEach((r, i) => {
+      const rn = CONFIG.FIRST_DATA_ROW + i;
+      if (cocok((r || [])[8])) { data.push({ range: `${CONFIG.TASK_SHEET}!${COL.pic}${rn}`, values: [[newName]] }); tersentuh++; }
+      const sup = String((r || [])[9] || '');
+      if (sup && sup.split(',').some(cocok)) {
+        const baru = sup.split(',').map(s => (cocok(s) ? newName : s.trim())).filter(Boolean).join(', ');
+        data.push({ range: `${CONFIG.TASK_SHEET}!${COL.support}${rn}`, values: [[baru]] });
+        tersentuh++;
+      }
+    });
+    if (data.length) {
+      const sheets = await getSheets();
+      await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: getSpreadsheetId(), requestBody: { valueInputOption: 'RAW', data } });
+    }
+  } catch (e) { /* jangan gagalkan penggantian nama karena satu sheet tak terbaca */ }
+
+  // Sheet lain yang memakai nama sebagai kunci: PIC proses kolaborasi, link, catatan, PIN.
+  const kolomNama = [
+    [CONFIG.COLLAB_STEP_SHEET, 'D', 3],   // PIC proses
+    [CONFIG.LINKS_SHEET, 'A', 0],
+    [CONFIG.NOTES_SHEET, 'A', 0],
+    [CONFIG.AUTH_SHEET, 'A', 0],
+    [CONFIG.NOTIF_SHEET, 'B', 1],         // penerima notifikasi
+  ];
+  for (const [sheetName, kolom, idx] of kolomNama) {
+    try {
+      const rows = await valuesGet(`${sheetName}!A2:${kolom > 'A' ? kolom : 'A'}`);
+      const data = [];
+      rows.forEach((r, i) => { if (cocok((r || [])[idx])) data.push({ range: `${sheetName}!${kolom}${i + 2}`, values: [[newName]] }); });
+      if (data.length) {
+        const sheets = await getSheets();
+        await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: getSpreadsheetId(), requestBody: { valueInputOption: 'RAW', data } });
+        tersentuh += data.length;
+      }
+    } catch (e) { /* sheet opsional */ }
+  }
+
+  // Dropdown PIC & Support ikut diganti supaya nama lama tak bisa dipilih lagi.
+  let options = null;
+  try {
+    await deleteOption('pic', oldName, '');
+    await deleteOption('support', oldName, '');
+    await saveOption('pic', newName, '');
+    options = (await saveOption('support', newName, '')).options;
+  } catch (e) { /* opsi tak wajib */ }
+
+  await logActivity(actor, 'User Rename', '', `${oldName} → ${newName} (${tersentuh} rujukan ikut diperbarui)`);
+  return {
+    success: true,
+    message: `"${oldName}" diganti jadi "${newName}". ${tersentuh} rujukan ikut diperbarui.`,
+    renamed: tersentuh,
+    users: await getUsers(),
+    options: options || await getOptions(),
+  };
 }
 
 async function deleteUser(name, actor) {
@@ -2275,6 +2396,7 @@ module.exports = {
   saveTask, deleteTask, quickUpdateField, quickUpdateDates,
   addComment, saveOption, deleteOption, editOption,
   // ceklis per task (PM menyusun, PIC mencentang)
+  renameUser,
   getChecklist, addChecklistItem, copyChecklist, setChecklistDone, deleteChecklistItem,
   // task kolaborasi (alur beruntun antar-PIC)
   getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, setCollabType, deleteCollab,
