@@ -1097,6 +1097,9 @@ function genCollabId(ids) {
 function canCheckStep(stepPic, actor, undo) {
   if (baseName(actor) === 'dev') return true;
   if (undo && isManagerActor(actor)) return true;
+  // PIC proses berupa peran -> proses milik bersama, siapa pun berperan itu boleh mencentang.
+  const rp = rolePicOf(stepPic);
+  if (rp) return hasRole(actor, rp.toLowerCase());
   const p = baseName(stepPic);
   return !!p && p === baseName(actor);
 }
@@ -1343,6 +1346,9 @@ async function deleteCollab(id, actor) {
   id = String(id || '').trim();
   await ensureCollabSheets();
   await deleteStepRowsForCollab(id);
+  // Sub-ceklisnya ikut dibuang. Nomor collab dipakai ulang (genCollabId = max+1), jadi bila
+  // dibiarkan menggantung, collab BARU akan mewarisi sub-ceklis milik collab yang dihapus.
+  await remapCollabChecklists(id, {});
   let crows = [];
   try { crows = await valuesGet(`${CONFIG.COLLAB_SHEET}!A2:F`); } catch (e) { crows = []; }
   const ci = crows.findIndex(r => String((r && r[0]) || '').trim() === id);

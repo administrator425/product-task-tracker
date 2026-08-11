@@ -10,6 +10,32 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.69.0 — PIC peran juga berlaku di Task Kolaborasi
+
+Grup **"Milik bersama (satu peran)"** kini ada juga di dropdown PIC tiap **proses** pada Task
+Kolaborasi. Memilih *Semua Magang* membuat proses itu dikerjakan bersama semua anak magang.
+
+Bukan hanya dropdown-nya — yang ikut paham:
+- **Izin mencentang** (`canCheckStep` di kedua backend): siapa pun berperan itu boleh; peran
+  lain ditolak. Manager tetap boleh **membatalkan** centang, tapi tidak mencentangnya.
+- **Penanda "Giliran Anda"**: kini memakai `stepIsMine()`, jadi proses milik bersama muncul
+  sebagai giliran bagi semua yang berperan itu.
+- **Tampilan**: `@Magang` dibaca sebagai **"Semua Magang"** di kartu, baris proses, dan panel
+  salin sub-ceklis — bukan token mentah.
+
+### Bug lama yang ikut ketahuan
+Tes fitur ini gagal dengan pesan janggal *"Selesaikan dulu semua sub-ceklis proses ini
+(0/1)"* pada proses yang baru dibuat. Sebabnya: `deleteCollab` membuang baris `COLLAB` dan
+`COLLAB_STEPS`, **tapi tidak sub-ceklisnya**. Karena nomor collab dipakai ulang
+(`genCollabId` = max + 1), menghapus collab bernomor tertinggi membuat collab **berikutnya**
+mewarisi sub-ceklis milik pendahulunya — terkunci oleh ceklis yang tak pernah ia buat.
+
+Sekarang `deleteCollab` ikut membuang sub-ceklis collab tersebut. Ini bug lama yang tidak
+berhubungan dengan fitur PIC peran; ia kebetulan tersingkap karena tesnya membuat lalu
+menghapus collab berkali-kali.
+
+---
+
 ## 1.68.0 — Stage jadi opsional (jatuh ke "Umum")
 
 Stage sebelumnya **wajib** — menyimpan tanpa memilihnya ditolak dengan *"Pilih Stage dulu."*

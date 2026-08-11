@@ -1319,6 +1319,9 @@ function genCollabId_(ids) {
 function canCheckStep_(stepPic, actor, undo) {
   if (baseName_(actor) === 'dev') return true;
   if (undo && isManagerActor_(actor)) return true;
+  // PIC proses berupa peran -> proses milik bersama, siapa pun berperan itu boleh mencentang.
+  var rp = rolePicOf_(stepPic);
+  if (rp) return hasRole_(actor, rp.toLowerCase());
   var p = baseName_(stepPic);
   return !!p && p === baseName_(actor);
 }
@@ -1582,6 +1585,9 @@ function deleteCollab(id, actor) {
   id = String(id || '').trim();
   ensureCollabSheets_();
   deleteStepRowsForCollab_(id);
+  // Sub-ceklisnya ikut dibuang. Nomor collab dipakai ulang (genCollabId_ = max+1), jadi bila
+  // dibiarkan menggantung, collab BARU akan mewarisi sub-ceklis milik collab yang dihapus.
+  remapCollabChecklists_(id, {});
   var crows = [];
   try { crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:F'); } catch (e) { crows = []; }
   var ci = -1;

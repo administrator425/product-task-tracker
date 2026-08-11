@@ -788,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.68.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.69.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -2699,20 +2699,32 @@ function canCheckStepClient(s){
   if(isViewOnly()) return false;
   if(isDev()) return true;
   if(s && s.done && isManager(state.currentUser)) return true;   // batalkan centang
+  // PIC proses berupa peran -> proses milik bersama satu peran.
+  const rp=rolePicOf(s&&s.pic);
+  if(rp) return hasRole(state.currentUser, String(rp).toLowerCase());
   return !!s && same(s.pic, state.currentUser);
 }
+/* Proses ini "milik saya"? PIC proses boleh berupa peran ("@Magang") — artinya prosesnya
+   milik bersama semua yang berperan itu, jadi giliran & izin centangnya ikut kolektif. */
+function stepIsMine(s){
+  const rp=rolePicOf(s&&s.pic);
+  if(rp) return hasRole(state.currentUser, String(rp).toLowerCase());
+  return same(s&&s.pic, state.currentUser);
+}
+// Nama PIC proses untuk ditampilkan: "@Magang" dibaca sebagai "Semua Magang".
+function stepPicLabel(pic){ return rolePicLabel(pic) || String(pic||'—'); }
 function collabProgress(c){ const list=(c&&c.steps)||[]; const total=list.length, done=list.filter(s=>s.done).length; return {done,total,pct: total?Math.round(done/total*100):0}; }
 // "Giliran saya": proses milik saya yang belum selesai & proses sebelumnya sudah selesai (handoff sampai ke saya).
 function isMyTurnStep(c,s){
   if(s.done || isViewOnly()) return false;
-  if(!same(s.pic,state.currentUser)) return false;
+  if(!stepIsMine(s)) return false;
   const prev=(c.steps||[]).find(x=>x.order===s.order-1);
   return !prev || prev.done;
 }
 function myTurnSteps(){ const out=[]; (state.collabs||[]).forEach(c=>(c.steps||[]).forEach(s=>{ if(isMyTurnStep(c,s)) out.push({collab:c,step:s}); })); return out; }
 function updateCollabTurnBadge(){ const n=myTurnSteps().length; const b=document.getElementById('collabTurnBadge'); if(b){ b.textContent=n; b.classList.toggle('hide', n===0); } }
 function currentCollab(){ return (state.collabs||[]).find(c=>c.id===state._collabId)||null; }
-function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+picOptionsHtml(state.options.pic, sel); }
+function collabPicOptions(sel){ return '<option value="">(pilih PIC)</option>'+picOptionsHtml(state.options.pic, sel, true); }
 /* Stage per proses — OPSIONAL, memakai daftar stage yang sama dengan task biasa.
    Stage lama yang sudah tak ada di dropdown tetap ditawarkan supaya tidak terhapus
    diam-diam saat prosesnya disimpan ulang. */
@@ -2832,14 +2844,14 @@ function collabCard(c){
   const myTurns=(c.steps||[]).filter(s=>isMyTurnStep(c,s));
   const mineTurn=myTurns.length>0;
   const rows=(c.steps||[]).map(s=>{
-    const mine=same(s.pic,state.currentUser);
+    const mine=stepIsMine(s);
     const turn=isMyTurnStep(c,s);
     const icon=s.done?'check_circle':(turn?'play_circle':'radio_button_unchecked');
     const ic=s.done?'text-emerald-500':(turn?'text-rose-500':'text-gray-300 dark:text-slate-600');
     // Baris yang jadi giliran disorot: di antara belasan proses, titik merah kecil saja tenggelam.
     const box=turn?'bg-rose-50 dark:bg-rose-900/25 rounded-md -mx-1.5 px-1.5 py-0.5 ring-1 ring-rose-200 dark:ring-rose-800':'';
     const txt=s.done?'text-gray-400':(turn?'text-rose-700 dark:text-rose-200 font-semibold':'text-gray-600 dark:text-slate-300');
-    return `<div class="flex items-center gap-1.5 text-[12px] ${txt} ${box}"><span class="material-icons-round ${turn?'text-[16px]':'text-[14px]'} ${ic}">${icon}</span><span class="flex-1 min-w-0 truncate ${s.done?'line-through':''}">${escapeHtml(s.name)}</span><span class="text-[10px] ${turn?'font-bold text-rose-600 dark:text-rose-300':(mine?'font-bold text-indigo-600':'text-gray-400')}">${escapeHtml(s.pic||'—')}</span></div>`;
+    return `<div class="flex items-center gap-1.5 text-[12px] ${txt} ${box}"><span class="material-icons-round ${turn?'text-[16px]':'text-[14px]'} ${ic}">${icon}</span><span class="flex-1 min-w-0 truncate ${s.done?'line-through':''}">${escapeHtml(s.name)}</span><span class="text-[10px] ${turn?'font-bold text-rose-600 dark:text-rose-300':(mine?'font-bold text-indigo-600':'text-gray-400')}">${escapeHtml(stepPicLabel(s.pic))}</span></div>`;
   }).join('');
   // Pita penuh-lebar di puncak kartu — penanda utama, sekaligus menyebut proses mana yang menunggu.
   const turnRibbon = mineTurn ? `<div class="mb-2.5 flex items-center gap-1.5 rounded-lg bg-rose-500 dark:bg-rose-600 px-2.5 py-1.5 text-white shadow-sm">
@@ -2972,7 +2984,7 @@ function renderCollabSteps(c){
   if(!steps.length){ box.innerHTML=spanduk+`<div class="px-2 py-4 text-center text-xs text-gray-400">Belum ada proses.${manage?' Klik "Edit" untuk menambah.':''}</div>`; }
   else box.innerHTML=spanduk+steps.map(s=>{
     // Baris rancangan: nomor urutnya belum pasti, jadi centang & sub-ceklis dimatikan dulu.
-    const turn=!s._pending&&isMyTurnStep(c,s), mine=same(s.pic,state.currentUser), canChk=!s._pending&&canCheckStepClient(s);
+    const turn=!s._pending&&isMyTurnStep(c,s), mine=stepIsMine(s), canChk=!s._pending&&canCheckStepClient(s);
     const overdue=s.deadline && !s.done && s.deadline < todayStr();
     const expanded=(state._collabExpanded||{})[s.order];
     const sc=stepSubComplete(s.order); const locked=!s.done && !sc.complete;   // sub-ceklis belum tuntas → main terkunci
@@ -2983,7 +2995,7 @@ function renderCollabSteps(c){
         <span class="w-5 text-center text-[10px] font-mono text-gray-400 shrink-0">${s.order}</span>
         <div class="flex-1 min-w-0">
           <div class="text-sm ${s.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(s.name)}</div>
-          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(s.pic||'—')}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${s._pending?'':stepSubBadge(s.order,s.done)}</span></div>
+          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(stepPicLabel(s.pic))}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${s._pending?'':stepSubBadge(s.order,s.done)}</span></div>
         </div>
         ${turn?'<span class="shrink-0 text-[10px] font-bold text-rose-600">GILIRAN</span>':(s.done?'<span class="material-icons-round text-emerald-500 text-[18px] shrink-0">check_circle</span>':'')}
         ${s._pending?'':`<button type="button" onclick="toggleStepExpand(${s.order})" title="Catatan & sub-ceklis" class="shrink-0 text-gray-300 hover:text-indigo-600"><span id="collab-chev-${s.order}" class="material-icons-round text-[18px]">${expanded?'expand_less':'expand_more'}</span></button>`}
@@ -3122,7 +3134,7 @@ function renderCopyChecklistPanel(order){
     return `<label class="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-white/70 dark:hover:bg-slate-800/50 rounded px-1">
       <input type="checkbox" value="${s.order}" data-copy-src="${order}" class="w-3.5 h-3.5 shrink-0 accent-indigo-600 cursor-pointer">
       <span class="flex-1 min-w-0 truncate text-[11px] text-gray-700 dark:text-slate-300">${s.order}. ${escapeHtml(s.name||'(tanpa nama)')}</span>
-      <span class="shrink-0 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">${escapeHtml(s.pic||'—')}</span>${nota}
+      <span class="shrink-0 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">${escapeHtml(stepPicLabel(s.pic))}</span>${nota}
     </label>`;
   }).join('');
   box.innerHTML=`<div class="rounded-lg border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/70 dark:bg-indigo-900/20 p-2">

@@ -484,7 +484,39 @@ eq('proses tersisa 2', call('getCollabs').find(c => c.id === RU).steps.length, 2
 eq('sub-ceklis proses bertahan ikut', call('getChecklist', RU + '#1').map(i => i.item).join(), 'sub milik C');
 eq('proses BARU tidak mewarisi sub-ceklis orang lain', call('getChecklist', RU + '#2').length, 0);
 eq('sisa sub-ceklis proses terhapus dibuang', call('getChecklist', RU + '#3').length, 0);
+// Menghapus collab harus ikut membuang sub-ceklisnya. Nomor collab dipakai ulang
+// (genCollabId_ = max+1), jadi kalau menggantung, collab BARU mewarisi sub-ceklis
+// milik collab yang sudah dihapus — ditemukan lewat tes, bukan kebetulan.
+call('addChecklistItem', RU + '#1', 'sisa yg harus ikut terhapus', 'Staff Data');
+ok('collab uji punya sub-ceklis sebelum dihapus', call('getChecklist', RU + '#1').length >= 1);
 call('deleteCollab', RU, 'Manager');
+eq('sub-ceklis ikut terhapus bersama collab', call('getChecklist', RU + '#1').length, 0);
+const daurUlang = call('saveCollab', { title: 'Pemakai Nomor Bekas', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Proses baru', pic: 'Staff Soal' }] }, 'Manager');
+const DU = call('getCollabs').find(c => c.title === 'Pemakai Nomor Bekas').id;
+eq('nomor collab memang dipakai ulang', DU, RU);
+eq('collab baru TIDAK mewarisi sub-ceklis lama', call('getChecklist', DU + '#1').length, 0);
+call('deleteCollab', DU, 'Manager');
+
+console.log('\n=== 7f. Proses kolaborasi ber-PIC PERAN (milik bersama) ===');
+const kb = call('saveCollab', { title: 'Kolaborasi Bersama', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Kerjakan bareng', pic: '@Magang' },
+  { order: 2, name: 'QC oleh staff', pic: '@Staff' }] }, 'Manager');
+eq('collab ber-PIC peran tersimpan', kb.success, true);
+const KB = call('getCollabs').find(c => c.title === 'Kolaborasi Bersama').id;
+eq('PIC proses tersimpan sbg peran', call('getCollabs').find(c => c.id === KB).steps[0].pic, '@Magang');
+// Siapa pun berperan itu boleh mencentang; yang bukan, ditolak.
+eq('Magang Konten boleh centang proses magang', call('setCollabStepDone', KB, 1, true, 'Magang Konten').success, true);
+eq('Magang Data juga boleh (milik bersama)', call('setCollabStepDone', KB, 1, false, 'Magang Data').success, true);
+const tolak = call('setCollabStepDone', KB, 1, true, 'Staff Soal');
+eq('Staff ditolak di proses magang', tolak.success, false);
+eq('Staff boleh centang proses staff', call('setCollabStepDone', KB, 2, true, 'Staff Soal').success, true);
+eq('Staff lain juga boleh', call('setCollabStepDone', KB, 2, false, 'Staff Data').success, true);
+// Manager tetap boleh MEMBATALKAN, tapi tidak mencentang milik peran lain.
+call('setCollabStepDone', KB, 1, true, 'Magang Konten');
+eq('Manager boleh batalkan centang', call('setCollabStepDone', KB, 1, false, 'Manager').success, true);
+eq('Manager tak boleh mencentangnya', call('setCollabStepDone', KB, 1, true, 'Manager').success, false);
+call('deleteCollab', KB, 'Manager');
 
 console.log('\n=== 8. Gerbang status "Done" ===');
 const denied = call('quickUpdateField', 'TSK-028', 'status', 'Done', 'Staff Soal');
@@ -993,7 +1025,14 @@ ok('PIC peran lama tetap ditawarkan saat disunting', /rolePicOf\(selected\) && o
 ok('ada tempat menampilkan pengubah status', /id="fieldStatusBy"/.test(commHtml));
 ok('teksnya menyebut siapa pengubahnya', /Status diubah oleh/.test(commHtml));
 ok('Support memakai pengelompokan itu', /support\.innerHTML = picOptionsHtml\(state\.options\.support \|\| state\.options\.pic, ''\)/.test(commHtml));
-ok('PIC proses kolaborasi ikut dikelompokkan', /function collabPicOptions\(sel\)\{ return '<option value="">\(pilih PIC\)<\/option>'\+picOptionsHtml\(state\.options\.pic, sel\)/.test(commHtml));
+ok('PIC proses kolaborasi ikut dikelompokkan', /function collabPicOptions\(sel\)\{ return '<option value="">\(pilih PIC\)<\/option>'\+picOptionsHtml\(state\.options\.pic, sel, true\)/.test(commHtml));
+// Proses kolaborasi juga boleh ber-PIC peran (milik bersama).
+ok('ada penentu proses "milik saya"', /function stepIsMine\(s\)/.test(commHtml));
+ok('stepIsMine memahami PIC peran', /function stepIsMine\(s\)[\s\S]{0,220}?hasRole\(state\.currentUser, String\(rp\)\.toLowerCase\(\)\)/.test(commHtml));
+ok('giliran memakai stepIsMine', /if\(!stepIsMine\(s\)\) return false;/.test(commHtml));
+ok('izin centang proses memahami peran', /function canCheckStepClient\(s\)\{[\s\S]{0,320}?const rp=rolePicOf\(s&&s\.pic\);/.test(commHtml));
+ok('PIC peran ditampilkan ramah', /function stepPicLabel\(pic\)\{ return rolePicLabel\(pic\) \|\| String\(pic\|\|'—'\); \}/.test(commHtml));
+ok('label dipakai di baris proses', /\$\{escapeHtml\(stepPicLabel\(s\.pic\)\)\}/.test(commHtml));
 ok('pilihan lama tetap terpilih', /same\(v,selected\)\?'selected':''/.test(commHtml));
 
 // Tag per peran di komentar.
@@ -1013,7 +1052,7 @@ ok('keluar mode Edit membaca isian dulu', /if\(state\._collabEdit\)\{\s*\/\/ sed
 ok('masuk mode Edit tak menimpa rancangan tertunda', /state\._collabEdit=true;\s*if\(!state\._collabDirty\)\{/.test(commHtml));
 ok('mode baca menampilkan rancangan tertunda', /const pending=!!state\._collabDirty;/.test(commHtml));
 ok('ada spanduk peringatan belum tersimpan', /Perubahan proses belum disimpan/.test(commHtml));
-ok('baris rancangan tak bisa dicentang', /const turn=!s\._pending&&isMyTurnStep\(c,s\), mine=same\(s\.pic,state\.currentUser\), canChk=!s\._pending&&canCheckStepClient\(s\)/.test(commHtml));
+ok('baris rancangan tak bisa dicentang', /const turn=!s\._pending&&isMyTurnStep\(c,s\), mine=stepIsMine\(s\), canChk=!s\._pending&&canCheckStepClient\(s\)/.test(commHtml));
 ok('sub-ceklis disembunyikan di baris rancangan', /\$\{s\._pending\?'':stepSubBadge\(s\.order,s\.done\)\}/.test(commHtml));
 ok('Simpan memakai rancangan bila ada', /state\._collabDirty \? \(state\._collabDraft\|\|\[\]\)\.filter\(s=>s\.name\)/.test(commHtml));
 // Menyimpan dari mode baca dulu menghapus seluruh stage karena tak ikut dipetakan.
@@ -1052,7 +1091,7 @@ ok('tombol salin ada di kepala sub-ceklis', /toggleCopyChecklistPanel\(\$\{order
 ok('tombol hanya muncul bila ada proses lain', /editable&&otherStepsFor\(order\)\.length\?/.test(commHtml));
 ok('ada wadah panel salin', /id="collab-subck-copy-\$\{order\}"/.test(commHtml));
 ok('panel mendaftar proses selain sumber', /function otherStepsFor\(order\)[\s\S]{0,200}?s\.order!==order/.test(commHtml));
-ok('tiap tujuan menampilkan PIC-nya', /renderCopyChecklistPanel[\s\S]{0,1200}?escapeHtml\(s\.pic\|\|'—'\)/.test(commHtml));
+ok('tiap tujuan menampilkan PIC-nya', /renderCopyChecklistPanel[\s\S]{0,1200}?escapeHtml\(stepPicLabel\(s\.pic\)\)/.test(commHtml));
 // Menyalin MENAMBAH, bukan menimpa — user harus tahu sebelum menekan tombol.
 ok('tujuan yang sudah berisi diberi tanda', /sudah ada \$\{punya\}/.test(commHtml));
 ok('diberi tahu item masuk belum tercentang', /item masuk belum tercentang/.test(commHtml));
