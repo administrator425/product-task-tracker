@@ -788,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.67.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.68.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -1462,7 +1462,7 @@ function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;a
 function populateModalDropdowns(){
   fillSelect('fieldStatus', state.options.status, null, 'Todo');
   fillSelect('fieldPriority', state.options.priority, null, 'Normal');
-  fillSelect('fieldStage', allStagesForInput(), 'Pilih stage…');
+  fillSelect('fieldStage', allStagesForInput(), '(Umum — tanpa stage khusus)');
   const _platSel=document.getElementById('fieldPlatform');
   if(_platSel) _platSel.innerHTML=(state.options.platform||[]).map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
   // PIC & Support dikelompokkan per peran (lihat picOptionsHtml).
@@ -1493,7 +1493,12 @@ Object.keys(FORMULA_FALLBACK).forEach(st=>{ _fbVerbMap[st]=Object.keys(FORMULA_F
 function mapLookup(map, key){ if(!map) return []; if(map[key]) return map[key]; const k=Object.keys(map).find(x=>x.toLowerCase()===String(key||'').toLowerCase()); return k?map[k]:[]; }
 function verbsFor(stage){ const real=mapLookup((state.options&&state.options.verbMap)||{}, stage); return real.length?real:mapLookup(_fbVerbMap, stage); }
 function objeksFor(stage, verb){ if(!stage||!verb) return []; const real=mapLookup((state.options&&state.options.objekMap)||{}, stage+'||'+verb); return real.length?real:mapLookup(_fbObjekMap, stage+'||'+verb); }
-function allStagesForInput(){ const out=[]; (state.options.stage||[]).forEach(s=>{ if(s && !out.some(x=>x.toLowerCase()===String(s).toLowerCase())) out.push(s); }); Object.keys(FORMULA_FALLBACK).forEach(s=>{ if(!out.some(x=>x.toLowerCase()===s.toLowerCase())) out.push(s); }); return out; }
+const STAGE_UMUM='Umum';   // stage bawaan saat task tak punya tahapan khusus
+function allStagesForInput(){ const out=[]; (state.options.stage||[]).forEach(s=>{ if(s && !out.some(x=>x.toLowerCase()===String(s).toLowerCase())) out.push(s); }); Object.keys(FORMULA_FALLBACK).forEach(s=>{ if(!out.some(x=>x.toLowerCase()===s.toLowerCase())) out.push(s); });
+  // "Umum" selalu tersedia supaya task tanpa tahapan khusus tetap punya rumah, dan task
+  // lama yang sudah ber-stage Umum tidak kehilangan pilihannya saat disunting.
+  if(!out.some(x=>x.toLowerCase()===STAGE_UMUM.toLowerCase())) out.push(STAGE_UMUM);
+  return out; }
 function fillCascade(selId, wrapId, values, selected, placeholder){
   const sel=document.getElementById(selId); if(!sel) return;
   sel.innerHTML='<option value="">'+(values.length?placeholder:'(belum ada pilihan)')+'</option>'+values.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
@@ -2510,11 +2515,11 @@ function setModalReadonly(ro){
 function closeTaskModal(){document.getElementById('taskModal').classList.add('hide');}
 function setVal(id,v){const el=document.getElementById(id); if(el) el.value=v;}
 function getVal(id){return document.getElementById(id)?.value || '';}
-function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:getVal('fieldStage'),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',verb:getVal('fieldVerb'),jumlah:getVal('fieldJumlah').trim(),objek:getVal('fieldObjek'),detail:getVal('fieldDetail').trim(),mirror:(document.getElementById('fieldMirror')&&document.getElementById('fieldMirror').checked)?'Ya':''};}
+function modalTask(){const ext=(getTaskType()==='eksternal'); return {id:getVal('fieldId'),taskName:composeTaskName(),createdDate:getVal('fieldCreatedDate'),dueDate:getVal('fieldDueDate'),status:getVal('fieldStatus'),priority:getVal('fieldPriority'),stage:(getVal('fieldStage').trim()||STAGE_UMUM),platform:[...document.getElementById('fieldPlatform').selectedOptions].map(o=>o.value).join(', '),pic:getVal('fieldPic'),support:[...document.getElementById('fieldSupport').selectedOptions].map(o=>o.value),document:getVal('fieldDocument'),picNotes:getVal('fieldPicNotes'),pmNotes:getVal('fieldPmNotes'),divisiTujuan:ext?getVal('fieldDivisiTujuan'):'',kontakDivisi:ext?getVal('fieldKontakDivisi').trim():'',verb:getVal('fieldVerb'),jumlah:getVal('fieldJumlah').trim(),objek:getVal('fieldObjek'),detail:getVal('fieldDetail').trim(),mirror:(document.getElementById('fieldMirror')&&document.getElementById('fieldMirror').checked)?'Ya':''};}
 function saveTaskFromModal(){
   if(isViewOnly()) return;
   const _stage=getVal('fieldStage'), _verb=getVal('fieldVerb');
-  if(!_stage){ showToast('Pilih Stage dulu.', false); return; }
+  // Stage OPSIONAL: kalau dikosongkan, task masuk stage "Umum" (lihat STAGE_UMUM).
   if(verbsFor(_stage).length && !_verb){ showToast('Pilih Kata Kerja.', false); return; }
   const task=modalTask(); if(!task.taskName){showToast('Nama task belum terbentuk — isi minimal Kata Kerja atau Objek.',false);return;}
   if(getTaskType()==='eksternal' && !String(task.divisiTujuan||'').trim()){ showToast('Pilih Divisi Tujuan untuk task lintas divisi.', false); return; }

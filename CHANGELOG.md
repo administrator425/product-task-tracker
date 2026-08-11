@@ -10,6 +10,23 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.68.0 — Stage jadi opsional (jatuh ke "Umum")
+
+Stage sebelumnya **wajib** — menyimpan tanpa memilihnya ditolak dengan *"Pilih Stage dulu."*
+Padahal tidak semua task punya tahapan khusus. Sekarang boleh dikosongkan: pilihan
+teratasnya berbunyi **"(Umum — tanpa stage khusus)"**, dan saat disimpan task itu masuk
+stage **"Umum"**.
+
+Disimpan sebagai `"Umum"`, bukan sel kosong, supaya task tersebut tetap punya rumah di
+laporan, filter, dan pengelompokan per stage — sel kosong hanya menghasilkan kelompok tanpa
+nama yang membingungkan. `"Umum"` juga selalu tersedia di daftar pilihan, jadi bisa dipilih
+sengaja dan task lama yang sudah memakainya tidak kehilangan pilihannya saat disunting.
+
+Aturan lain tidak berubah: bila stage yang dipilih **punya daftar kata kerja**, kata kerjanya
+tetap wajib — rumus nama task masih utuh.
+
+---
+
 ## 1.67.0 — PIC boleh berupa PERAN (task milik bersama) + ganti nama user
 
 ### Task milik bersama satu peran

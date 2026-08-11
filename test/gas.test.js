@@ -966,6 +966,14 @@ ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.te
 // Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
 
+// Stage OPSIONAL: boleh dikosongkan, jatuh ke "Umum".
+ok('ada stage bawaan Umum', /const STAGE_UMUM='Umum';/.test(commHtml));
+ok('tak lagi memblokir simpan tanpa stage', !/showToast\('Pilih Stage dulu\.', false\)/.test(commHtml));
+ok('stage kosong disimpan sbg Umum', /stage:\(getVal\('fieldStage'\)\.trim\(\)\|\|STAGE_UMUM\)/.test(commHtml));
+ok('placeholder menjelaskan artinya', /\(Umum — tanpa stage khusus\)/.test(commHtml));
+ok('"Umum" selalu ada di daftar pilihan', /if\(!out\.some\(x=>x\.toLowerCase\(\)===STAGE_UMUM\.toLowerCase\(\)\)\) out\.push\(STAGE_UMUM\)/.test(commHtml));
+ok('kata kerja tetap wajib bila stage-nya punya', /if\(verbsFor\(_stage\)\.length && !_verb\)\{ showToast\('Pilih Kata Kerja\.'/.test(commHtml));
+
 // Dropdown PIC & Support dikelompokkan per peran.
 ok('ada pembangun opsi per peran', /function picOptionsHtml\(values, selected, opsiPeran\)/.test(commHtml));
 ok('memakai optgroup berlabel peran', /<optgroup label="\$\{escapeAttr\(r\)\}">/.test(commHtml));
