@@ -257,7 +257,7 @@
           <button onclick="showLoginGate(true)" class="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs flex items-center justify-center gap-1.5"><span class="material-icons-round text-[15px]">lock_open</span>Masuk penuh (PIN)</button>
         </div>
         <div id="managerFocusBox" class="hide p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-900/40">
-          <div class="text-[10px] font-bold text-amber-600 dark:text-amber-300 uppercase tracking-widest mb-1.5 flex items-center gap-1"><span class="material-icons-round text-[14px]">supervisor_account</span>Fokus PIC</div>
+          <div class="text-[10px] font-bold text-amber-600 dark:text-amber-300 uppercase tracking-widest mb-1.5 flex items-center gap-1"><span class="material-icons-round text-[14px]">supervisor_account</span><span id="focusBoxLabel">Fokus PIC</span></div>
           <select id="managerFocusPic" onchange="setManagerFocus(this.value)" class="w-full bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-900/40 rounded-lg px-2.5 py-2 text-sm font-medium outline-none"></select>
         </div>
       </div>
@@ -300,6 +300,14 @@
           </button>
         </div>
       </header>
+      <!-- Spanduk "Lihat sebagai". Selalu tampil selama pratinjau, TERPISAH dari sidebar:
+           saat menyamar jadi Staff/Magang, kotak Fokus PIC ikut tersembunyi, jadi tombol
+           keluarnya harus punya rumah sendiri. -->
+      <div id="previewBar" class="hide shrink-0 px-4 md:px-6 py-2 bg-amber-100 dark:bg-amber-900/30 border-b border-amber-300 dark:border-amber-900/50 flex items-center gap-2 text-sm">
+        <span class="material-icons-round text-[18px] text-amber-700 dark:text-amber-300">visibility</span>
+        <span class="flex-1 min-w-0 text-amber-900 dark:text-amber-100">Melihat sebagai <b id="previewName"></b><span id="previewRole" class="font-normal opacity-80"></span> — tampilan persis seperti yang ia lihat. <span class="opacity-80">Tindakan tidak dijalankan.</span></span>
+        <button onclick="exitPreview()" class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold"><span class="material-icons-round text-[14px]">logout</span>Kembali jadi Dev</button>
+      </div>
 
       <section class="flex-1 overflow-y-auto p-4 md:p-6">
         <div id="deadlineReminder" class="hide max-w-[1700px] mx-auto mb-4"></div>
@@ -788,7 +796,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.70.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.71.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -897,12 +905,40 @@ function makeRunner(){
   return runner;
 }
 // Pakai GAS native bila berjalan di dalam Apps Script; selain itu pakai Vercel API.
-const GAS = GAS_NATIVE || makeRunner();
+/* Mode "Lihat sebagai" hanya untuk MELIHAT. Tombolnya sengaja tetap tampil supaya
+   tampilannya jujur, tapi tindakannya dicegat di sini — satu pintu untuk kedua jalur
+   (Apps Script native maupun API Vercel). Tanpa ini, Dev bisa tak sengaja mencentang atau
+   menutup task ATAS NAMA orang yang sedang ia intip. */
+const PREVIEW_BOLEH = { getBootstrapData:1, getTasks:1, getOptions:1, getActivityLog:1,
+  getComments:1, getChecklist:1, getCollabs:1, getNotifications:1, getUsers:1, listPinUsers:1 };
+function guardPreview(inner){
+  const g={}; let ok=null, fail=null;
+  g.withSuccessHandler=function(fn){ ok=fn; return g; };
+  g.withFailureHandler=function(fn){ fail=fn; return g; };
+  BACKEND_ACTIONS.forEach(function(name){
+    g[name]=function(){
+      const args=Array.prototype.slice.call(arguments);
+      const o=ok, f=fail; ok=null; fail=null;
+      if(state.previewAs && !PREVIEW_BOLEH[name]){
+        showToast('Mode "Lihat sebagai": tampilan saja, tindakan tidak dijalankan.', false);
+        if(o) o({ success:false, message:'Mode lihat-sebagai: tindakan tidak dijalankan.' });
+        return g;
+      }
+      let chain=inner;
+      if(o) chain=chain.withSuccessHandler(o);
+      if(f) chain=chain.withFailureHandler(f);
+      chain[name].apply(chain, args);
+      return g;
+    };
+  });
+  return g;
+}
+const GAS = guardPreview(GAS_NATIVE || makeRunner());
 const IS_GAS = true; // selalu ada backend sekarang (GAS native ATAU Vercel API)
 const TODAY = new Date(); TODAY.setHours(0,0,0,0);
 let state = {
   tasks: [], options: {}, activeView: 'dashboard', currentUser: LS.get('tt_current_user') || 'Nynda',
-  managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], collabManagers: ['Nynda','Dhea','Alya'], managerFocus: '', activity: [], quickFilter: 'all',
+  managers: ['Nynda'], doneApprovers: ['Nynda','Dhea','Alya'], collabManagers: ['Nynda','Dhea','Alya'], managerFocus: '', previewAs: '', _realUser: '', activity: [], quickFilter: 'all',
   users: [], roles: ['Dev','Manager','Leader','Staff','Magang','Lihat Saja'], usersSupported: false,
   magangMode: false, magangUsers: [],
   filters: {status:[], priority:[], stage:[], platform:[], pic:[], dueStart:'', dueEnd:''}, openFilter:'',
@@ -991,7 +1027,7 @@ function afterLoad() {
   // (mis. library CDN diblokir jaringan kantor), aplikasi tetap bisa dipakai dan
   // pesan errornya ditampilkan — bukan layar loading yang menggantung selamanya.
   try {
-    renderAppVersion(); applySidebar();
+    renderAppVersion(); applySidebar(); renderPreviewBar();
     populateUserSelect(); populateManagerFocus(); populateModalDropdowns(); applyRoleUI(); renderAll(); updateCommNavBadge(); renderDeadlineReminder(); notifyUnreadOnLoad(); loadNotifications(); if(needIdentityPick()) showIdentityGate();
     if(!state._msBound){state._msBound=true; document.addEventListener('click', msOutsideClose); document.addEventListener('click', notifOutsideClose); window.addEventListener('resize', ()=>{ if(window.innerWidth>=768) closeMobileSidebar(); }); document.addEventListener('keydown', e=>{ if(e.key==='Escape' && state.activeView==='communication' && state.selectedTaskId && document.getElementById('taskModal').classList.contains('hide')){ closeCommChat(); } });}
   } catch(e) {
@@ -1080,7 +1116,13 @@ const ROLE_POWERS={
 // melihat SEMUA task produk, tapi tidak bisa edit & hanya tab Dashboard/Kanban/List/Timeline/Calendar.
 const VIEWONLY_USER='Lintas Divisi';
 function isViewOnly(){ return !!state.guestMode || baseName(state.currentUser)===baseName(VIEWONLY_USER); }
-function isDev(){ return String(state.currentUser||'').toLowerCase()==='dev'; }
+/* Dua pengertian "Dev" yang harus dipisah:
+   - isDevReal(): identitas ASLI. Dipakai untuk masuk/keluar mode Lihat-sebagai, supaya
+     Anda tidak terkunci di dalam pratinjau setelah menyamar jadi Staff/Magang.
+   - isDev(): hak yang BERLAKU sekarang. Selama pratinjau ia false, jadi panel & tombol
+     khusus Dev ikut tersembunyi — itulah inti "tampilan persis seperti user itu". */
+function isDevReal(){ return String(state._realUser || state.currentUser || '').toLowerCase()==='dev'; }
+function isDev(){ return !state.previewAs && isDevReal(); }
 function seesAll(){ return canSeeAllTasks(state.currentUser) || isViewOnly(); }
 // Task eksternal (lintas divisi) = punya Divisi Tujuan. Hanya manager/dev yang boleh buat/edit/hapus.
 function isExternalTask(t){ return !!(t && String(t.divisiTujuan||'').trim()); }
@@ -1186,7 +1228,11 @@ function applyRoleUI(){
   const roleLbl=vo?'Lihat Saja':(String(state.currentUser||'').toLowerCase()==='dev'?'Dev':(roleOf(state.currentUser)||roleFallback));
   if(badge){badge.textContent=roleLbl; badge.className='text-[10px] font-semibold px-2 py-0.5 rounded-full '+roleBadgeClass(vo?'Lihat Saja':roleLbl);}
   const av=document.getElementById('userAvatar'); if(av){av.textContent=initials(state.currentUser); av.style.background=avatarBg(state.currentUser); av.style.color=avatarFg(state.currentUser);}
-  document.getElementById('managerFocusBox').classList.toggle('hide',!mgr || vo);
+  // Dev: kotak ini masuk ke mode "Lihat sebagai" (pratinjau penuh), bukan sekadar saringan.
+  const fBox=document.getElementById('managerFocusBox');
+  if(fBox) fBox.classList.toggle('hide', (!mgr && !isDevReal()) || vo || !!state.previewAs);
+  const fLbl=document.getElementById('focusBoxLabel');
+  if(fLbl) fLbl.textContent = isDevReal() ? 'Lihat sebagai' : 'Fokus PIC';
   updateMagangNavBadge();   // tab "Kerjaan Magang" hanya untuk karyawan
   document.getElementById('nav-activity').classList.toggle('hide',!mgr || vo);
   const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
@@ -1331,7 +1377,7 @@ function populateUserSelect(){
   select.value = state.currentUser;
   select.disabled = !!locked;
 }
-function setCurrentUser(user){state.currentUser=user;LS.set('tt_current_user',user);try{localStorage.setItem('tt_identity_confirmed','1');}catch(_){ }hideIdentityGate();state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateUserSelect();populateModalDropdowns();renderAll();updateCommNavBadge();loadNotifications();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
+function setCurrentUser(user){if(state.previewAs){state.previewAs='';state._realUser='';renderPreviewBar();}state.currentUser=user;LS.set('tt_current_user',user);try{localStorage.setItem('tt_identity_confirmed','1');}catch(_){ }hideIdentityGate();state.managerFocus='';const mf=document.getElementById('managerFocusPic');if(mf)mf.value='';state.selectedTaskId=null;applyRoleUI();populateUserSelect();populateModalDropdowns();renderAll();updateCommNavBadge();loadNotifications();state._deadlineDismissed=false;renderDeadlineReminder();if(state.activeView==='communication') renderCommunicationPanel();}
 // ---- Halaman pilih identitas (setelah login PIN penuh) ----
 function identityConfirmed(){ try{ return localStorage.getItem('tt_identity_confirmed')==='1'; }catch(_){ return false; } }
 function needIdentityPick(){
@@ -1459,7 +1505,50 @@ function submitPin(){
 }
 function pinInputKey(e){ if(e.key==='Enter'){ e.preventDefault(); submitPin(); } else if(e.key==='Escape'){ closePinModal(true); } }
 function populateManagerFocus(){const el=document.getElementById('managerFocusPic');if(!el)return;el.innerHTML='<option value="">Semua PIC</option>'+(state.options.pic||[]).map(p=>`<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');el.value=state.managerFocus;}
-function setManagerFocus(pic){state.managerFocus=pic;state.selectedTaskId=null;applyRoleUI();renderAll();}
+/* Fokus PIC punya dua arti, tergantung siapa yang memakainya:
+   - Manager: MENYARING papan ke pekerjaan satu orang, dirinya tetap Manager.
+   - Dev: masuk mode "Lihat sebagai" — seluruh tampilan dirender sebagai orang itu
+     (hak, tab, tombol Done, giliran, aturan magang), bukan sekadar daftar task disaring.
+     Itulah yang membuat pratinjaunya benar-benar sama dengan layar user tsb. */
+function setManagerFocus(pic){
+  if(isDevReal()){
+    if(pic) return enterPreviewAs(pic);
+    if(state.previewAs) return exitPreview();
+  }
+  state.managerFocus=pic;state.selectedTaskId=null;applyRoleUI();renderAll();
+}
+function renderPreviewBar(){
+  const bar=document.getElementById('previewBar'); if(!bar) return;
+  const on=!!state.previewAs;
+  bar.classList.toggle('hide', !on);
+  if(on){
+    const nm=document.getElementById('previewName'); if(nm) nm.textContent=state.previewAs;
+    const rl=document.getElementById('previewRole');
+    const r=roleOf(state.previewAs);
+    if(rl) rl.textContent = r ? ` (${r})` : ' (belum diberi peran)';
+  }
+}
+function enterPreviewAs(name){
+  if(!isDevReal() || !name) return;
+  if(!state._realUser) state._realUser=state.currentUser;   // simpan identitas asli sekali saja
+  state.previewAs=name;
+  state.currentUser=name;
+  state.managerFocus=''; state.selectedTaskId=null;
+  refreshTampilanPratinjau();
+}
+function exitPreview(){
+  if(!state.previewAs) return;
+  state.currentUser=state._realUser||state.currentUser;
+  state.previewAs=''; state._realUser='';
+  state.managerFocus=''; state.selectedTaskId=null;
+  const mf=document.getElementById('managerFocusPic'); if(mf) mf.value='';
+  refreshTampilanPratinjau();
+}
+function refreshTampilanPratinjau(){
+  renderPreviewBar(); applyRoleUI(); populateManagerFocus(); populateModalDropdowns();
+  renderAll(); updateCommNavBadge(); updateCollabTurnBadge();
+  try{ renderMagangView&&updateMagangNavBadge&&updateMagangNavBadge(); }catch(e){}
+}
 
 function populateModalDropdowns(){
   fillSelect('fieldStatus', state.options.status, null, 'Todo');

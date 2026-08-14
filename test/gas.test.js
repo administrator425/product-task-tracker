@@ -1024,6 +1024,24 @@ ok('tidak lagi memakai max-w-5xl', !/id="collabModal"[\s\S]{0,400}?max-w-5xl/.te
 // Teks panjang tanpa spasi (mis. URL Drive) dulu terpotong di gelembung komentar.
 ok('gelembung komentar mematahkan kata', /rounded-lg px-3 py-1\.5 mt-0\.5 inline-block max-w-full whitespace-pre-wrap break-words \[overflow-wrap:anywhere\]/.test(commHtml));
 
+// Mode Dev: "Lihat sebagai" — tampilan dirender sebagai user itu, bukan sekadar disaring.
+ok('identitas Dev asli dipisah dari hak berlaku', /function isDevReal\(\)[\s\S]{0,200}?function isDev\(\)\{ return !state\.previewAs && isDevReal\(\); \}/.test(commHtml));
+ok('ada state pratinjau', /previewAs: '', _realUser: ''/.test(commHtml));
+ok('Fokus PIC di mode Dev masuk pratinjau', /function setManagerFocus\(pic\)\{[\s\S]{0,260}?if\(isDevReal\(\)\)\{[\s\S]{0,140}?enterPreviewAs\(pic\)/.test(commHtml));
+ok('pratinjau mengganti identitas render', /function enterPreviewAs\(name\)[\s\S]{0,320}?state\.currentUser=name;/.test(commHtml));
+ok('identitas asli disimpan utk keluar', /if\(!state\._realUser\) state\._realUser=state\.currentUser;/.test(commHtml));
+ok('keluar mengembalikan identitas asli', /function exitPreview\(\)[\s\S]{0,220}?state\.currentUser=state\._realUser\|\|state\.currentUser;/.test(commHtml));
+ok('ada spanduk pratinjau', /id="previewBar"/.test(commHtml));
+ok('spanduk punya tombol keluar', /onclick="exitPreview\(\)"/.test(commHtml));
+ok('spanduk terpisah dari sidebar', /id="previewBar"[\s\S]{0,900}?Kembali jadi Dev/.test(commHtml));
+// Pengaman: selama pratinjau tak boleh ada tindakan atas nama orang yang diintip.
+ok('ada daftar aksi yang boleh saat pratinjau', /const PREVIEW_BOLEH = \{ getBootstrapData:1/.test(commHtml));
+ok('aksi tulis dicegat', /if\(state\.previewAs && !PREVIEW_BOLEH\[name\]\)\{/.test(commHtml));
+ok('pencegatan membungkus KEDUA jalur', /const GAS = guardPreview\(GAS_NATIVE \|\| makeRunner\(\)\);/.test(commHtml));
+ok('kotak fokus disembunyikan selama pratinjau', /fBox\.classList\.toggle\('hide', \(!mgr && !isDevReal\(\)\) \|\| vo \|\| !!state\.previewAs\)/.test(commHtml));
+ok('label kotak berubah di mode Dev', /fLbl\.textContent = isDevReal\(\) \? 'Lihat sebagai' : 'Fokus PIC'/.test(commHtml));
+ok('ganti identitas keluar dari pratinjau', /function setCurrentUser\(user\)\{if\(state\.previewAs\)\{state\.previewAs='';state\._realUser='';/.test(commHtml));
+
 // Stage OPSIONAL: boleh dikosongkan, jatuh ke "Umum".
 ok('ada stage bawaan Umum', /const STAGE_UMUM='Umum';/.test(commHtml));
 ok('tak lagi memblokir simpan tanpa stage', !/showToast\('Pilih Stage dulu\.', false\)/.test(commHtml));
@@ -1202,7 +1220,7 @@ ok('ada pembungkus localStorage aman', /var LS = \{[\s\S]{0,300}catch\(e\)\{ ret
 ok('state awal pakai LS.get', /currentUser: LS\.get\('tt_current_user'\)/.test(pageHtml));
 ok('applyTheme pakai LS.get', /LS\.get\('theme'\)/.test(pageHtml));
 ok('toggleTheme pakai LS.set', /function toggleTheme\(\)\{LS\.set\('theme'/.test(pageHtml));
-ok('setCurrentUser pakai LS.set', /setCurrentUser\(user\)\{state\.currentUser=user;LS\.set\('tt_current_user',user\)/.test(pageHtml));
+ok('setCurrentUser pakai LS.set', /setCurrentUser\(user\)\{[\s\S]{0,160}?state\.currentUser=user;LS\.set\('tt_current_user',user\)/.test(pageHtml));
 
 console.log('\n=== 18. doGet: halaman web app ===');
 const page = call('doGet', {});

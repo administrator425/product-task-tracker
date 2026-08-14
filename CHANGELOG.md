@@ -10,6 +10,47 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.71.0 — Mode Dev: "Lihat sebagai" jadi pratinjau sungguhan
+
+**Fokus PIC** di mode Dev dulu hanya **menyaring daftar task**. Hak, tab, tombol, dan
+lencana tetap milik Dev — jadi yang terlihat bukan layar user itu, melainkan layar Dev
+dengan daftar yang dipersempit. Sekarang seluruh tampilan dirender **sebagai orang itu**.
+
+Terukur pada satu skenario yang sama:
+
+| | Dev | Lihat sebagai Wildan (Magang) |
+|---|---|---|
+| Task terlihat | 5 | **3** (miliknya + bersama + tempat ia Support) |
+| Panel Kelola User | ada | **tidak ada** |
+| Boleh set Done | ya | **tidak** |
+| `isDev()` | true | **false** |
+
+### Dua pengertian "Dev" yang harus dipisah
+`isDev()` dulu membaca `state.currentUser`, jadi berpindah identitas untuk pratinjau akan
+mencabut hak Dev — dan Anda **terkunci di dalam pratinjau**. Kini dipisah: `isDevReal()`
+untuk identitas asli (masuk/keluar pratinjau), `isDev()` untuk hak yang **berlaku** — false
+selama pratinjau, supaya panel dan tombol khusus Dev ikut tersembunyi. Itulah yang membuat
+tampilannya benar-benar sama.
+
+### Pratinjau tidak boleh berubah jadi tindakan
+Tombol sengaja **tetap tampil** agar tampilannya jujur, tapi setiap aksi tulis dicegat di
+satu pintu yang membungkus **kedua jalur** (Apps Script native & API Vercel) — bukan
+disembunyikan per tombol. Tanpa ini, Dev bisa tak sengaja mencentang atau menutup task
+**atas nama** orang yang sedang ia intip. Aksi baca tetap berjalan normal.
+
+Spanduk kuning **"Melihat sebagai … — Kembali jadi Dev"** ditaruh di bawah header, terpisah
+dari sidebar: saat menyamar jadi Staff/Magang, kotak Fokus PIC ikut tersembunyi, jadi tombol
+keluarnya harus punya rumah sendiri. Berpindah identitas lewat Mode User juga otomatis
+mengakhiri pratinjau.
+
+Untuk **Manager**, Fokus PIC tetap berarti menyaring papan seperti sebelumnya.
+
+> **Catatan jujur:** ini pratinjau **tampilan**, bukan sekat keamanan. Data mentahnya tetap
+> ada di browser karena Dev memang berhak menerimanya; yang dirender ulang adalah cakupan
+> dan hak. Untuk menguji pemangkasan di sisi server, pakai PIN-nya langsung (mis. `MAGANG_PIN`).
+
+---
+
 ## 1.70.0 — Magang hanya melihat task miliknya sendiri
 
 Sejak 1.57.0 anak magang saling melihat task sesama magang. Dalam pemakaian nyata itu
