@@ -253,7 +253,14 @@ function getDoneApprovers() {
 // Boleh menutup task ke "Done"? Bergantung SIAPA PIC task itu:
 //   Manager/Leader/Dev -> task siapa pun · Staff -> hanya task MAGANG · Magang -> tidak.
 // taskPic boleh dikosongkan untuk pertanyaan umum "orang ini bisa Done sama sekali?".
-function canApproveDone(name, taskPic) {
+// Apakah `name` terdaftar sebagai Support pada task ini?
+function isSupportOf(taskSupport, name) {
+  const n = baseName(name);
+  if (!n) return false;
+  const list = Array.isArray(taskSupport) ? taskSupport : String(taskSupport || '').split(',');
+  return list.map(s => baseName(s)).filter(Boolean).includes(n);
+}
+function canApproveDone(name, taskPic, taskSupport) {
   if (!baseName(name)) return false;
   if (isManagerActor(name)) return true;
   if (usersConfigured()) {
@@ -261,7 +268,11 @@ function canApproveDone(name, taskPic) {
     if (isMagangActor(name)) return false;
     if (isStaffActor(name)) {
       if (taskPic === undefined || taskPic === null || taskPic === '') return true;
-      return isMagangActor(taskPic);
+      // Task karyawan (termasuk miliknya sendiri): paling jauh Review PM.
+      if (!isMagangActor(taskPic)) return false;
+      // Task anak magang: hanya karyawan yang MENDAMPINGI di task itu (Support) yang
+      // boleh menutupnya — bukan sembarang Staff yang tak terlibat.
+      return isSupportOf(taskSupport, name);
     }
     return false;
   }
@@ -569,7 +580,7 @@ async function saveTask(task) {
   // Izin Done bergantung PIC task-nya (Staff boleh menutup task anak magang).
   await loadUsers();
   const finalPic = String(task.pic || (existingTask && existingTask.pic) || '').trim();
-  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !canApproveDone(actor, finalPic)) {
+  if (isDoneStatus(task.status) && !isDoneStatus(oldStatus) && !canApproveDone(actor, finalPic, task.support !== undefined ? task.support : (existingTask && existingTask.support))) {
     return { success: false, message: doneDeniedMessage(finalPic) };
   }
 
@@ -650,7 +661,7 @@ async function quickUpdateField(taskId, field, value, actor) {
     const cur0 = await valuesGet(`${CONFIG.TASK_SHEET}!${CONFIG.FIRST_COL_LETTER}${row}:${CONFIG.LAST_COL_LETTER}${row}`);
     const existing = rowToTask(cur0[0] || [], row);
     await loadUsers();
-    if (!isDoneStatus(existing.status) && !canApproveDone(actor, existing.pic)) {
+    if (!isDoneStatus(existing.status) && !canApproveDone(actor, existing.pic, existing.support)) {
       return { success: false, message: doneDeniedMessage(existing.pic) };
     }
   }

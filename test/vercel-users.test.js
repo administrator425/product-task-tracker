@@ -122,11 +122,11 @@ writeRange('Main!B3:V3', [[
   'Task ID', 'Created Date', 'Due Date', 'Status', 'Priority', 'Task Name', 'Stage', 'Platform',
   'PIC', 'Support', 'Document', 'PIC Notes', 'PM Notes', 'Divisi Tujuan', 'Kontak Divisi',
   'Kata Kerja', 'Jumlah', 'Objek', 'Detail', 'Dibuat Oleh', 'Lintas View']]);
-const T = (id, pic, status) => [id, '2026-07-01', '2026-08-01', status, 'Normal', 'Task ' + id, 'QC Konten', 'JadiASN', pic, '', '', '', '', '', '', '', '', '', '', 'Nynda', ''];
+const T = (id, pic, status, sup) => [id, '2026-07-01', '2026-08-01', status, 'Normal', 'Task ' + id, 'QC Konten', 'JadiASN', pic, sup || '', '', '', '', '', '', '', '', '', '', 'Nynda', ''];
 writeRange('Main!B4:V7', [
   T('TSK-001', 'Ali', 'In progress'),        // PIC karyawan (Staff)
-  T('TSK-002', 'Magang A', 'Review PM'),     // PIC anak magang
-  T('TSK-003', 'Magang B', 'In progress'),
+  T('TSK-002', 'Magang A', 'Review PM', 'Ali'),   // PIC magang, DIDAMPINGI Ali (Support)
+  T('TSK-003', 'Magang B', 'In progress', 'Uma'), // PIC magang, didampingi Uma
   T('TSK-004', 'Uma', 'In progress'),
 ]);
 writeRange('USERS!A1:C1', [['Nama', 'Peran', 'Aktif']]);
@@ -171,7 +171,11 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   console.log('\nGerbang "Done" via quickUpdateField (bergantung PIC):');
   resetAll(); fresh();
   const staffOnMagang = await backend.quickUpdateField('TSK-002', 'status', 'Done', 'Ali');
-  eq('Staff BOLEH menutup task magang', staffOnMagang.success, true);
+  eq('Staff pendamping BOLEH menutup task magang', staffOnMagang.success, true);
+  // Staff yang TIDAK terlibat di task itu tidak boleh, walau PIC-nya anak magang.
+  resetAll(); fresh();
+  const staffLuar = await backend.quickUpdateField('TSK-002', 'status', 'Done', 'Uma');
+  eq('Staff yg bukan Support TIDAK boleh', staffLuar.success, false);
   resetAll(); fresh();
   const staffOnStaff = await backend.quickUpdateField('TSK-004', 'status', 'Done', 'Ali');
   eq('Staff TIDAK boleh menutup task karyawan', staffOnStaff.success, false);
@@ -189,8 +193,8 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
 
   console.log('\nGerbang "Done" via saveTask:');
   resetAll(); fresh();
-  const saveByStaffMagang = await backend.saveTask({ id: 'TSK-003', taskName: 'Task TSK-003', pic: 'Magang B', status: 'Done', actor: 'Uma' });
-  eq('saveTask: Staff boleh menutup task magang', saveByStaffMagang.success, true);
+  const saveByStaffMagang = await backend.saveTask({ id: 'TSK-003', taskName: 'Task TSK-003', pic: 'Magang B', support: ['Uma'], status: 'Done', actor: 'Uma' });
+  eq('saveTask: Staff pendamping boleh menutup', saveByStaffMagang.success, true);
   resetAll(); fresh();
   const saveByMagang = await backend.saveTask({ taskName: 'Task baru magang', pic: 'Magang A', status: 'Done', actor: 'Magang A' });
   eq('saveTask: Magang tak boleh membuat task Done', saveByMagang.success, false);

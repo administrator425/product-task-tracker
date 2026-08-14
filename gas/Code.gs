@@ -246,7 +246,15 @@ function getDoneApprovers_() {
 //  - Staff                   -> hanya task milik anak MAGANG (ia yang membimbing).
 //  - Magang                  -> tidak pernah (maksimal "Review PM").
 // taskPic boleh dikosongkan untuk pertanyaan umum "orang ini bisa Done sama sekali?".
-function canApproveDone_(name, taskPic) {
+// Apakah `name` terdaftar sebagai Support pada task ini?
+function isSupportOf_(taskSupport, name) {
+  var n = baseName_(name);
+  if (!n) return false;
+  var list = (Object.prototype.toString.call(taskSupport) === '[object Array]')
+    ? taskSupport : String(taskSupport || '').split(',');
+  return list.map(function (s) { return baseName_(s); }).filter(Boolean).indexOf(n) >= 0;
+}
+function canApproveDone_(name, taskPic, taskSupport) {
   if (!baseName_(name)) return false;
   if (isManagerActor_(name)) return true;
   if (usersConfigured_()) {
@@ -254,7 +262,11 @@ function canApproveDone_(name, taskPic) {
     if (isMagangActor_(name)) return false;
     if (isStaffActor_(name)) {
       if (taskPic === undefined || taskPic === null || taskPic === '') return true;  // pertanyaan umum
-      return isMagangActor_(taskPic);
+      // Task karyawan (termasuk miliknya sendiri): paling jauh Review PM.
+      if (!isMagangActor_(taskPic)) return false;
+      // Task anak magang: hanya karyawan yang MENDAMPINGI di task itu (Support) yang
+      // boleh menutupnya — bukan sembarang Staff yang tak terlibat.
+      return isSupportOf_(taskSupport, name);
     }
     return false;
   }
@@ -845,7 +857,7 @@ function saveTask(task) {
     var oldStatus = (existingTask && existingTask.status) || '';
     // Izin Done bergantung pada PIC task-nya (Staff boleh menutup task anak magang).
     var finalPic = String(task.pic || (existingTask && existingTask.pic) || '').trim();
-    if (isDoneStatus_(task.status) && !isDoneStatus_(oldStatus) && !canApproveDone_(actor, finalPic)) {
+    if (isDoneStatus_(task.status) && !isDoneStatus_(oldStatus) && !canApproveDone_(actor, finalPic, task.support !== undefined ? task.support : (existingTask && existingTask.support))) {
       return { success: false, message: doneDeniedMessage_(finalPic) };
     }
 
@@ -916,7 +928,7 @@ function quickUpdateField(taskId, field, value, actor) {
   if (f === 'status' && isDoneStatus_(value)) {
     var prev = valuesGet_(taskRowRange_(row));
     var existing = rowToTask_(prev[0] || [], row);
-    if (!isDoneStatus_(existing.status) && !canApproveDone_(actor, existing.pic)) {
+    if (!isDoneStatus_(existing.status) && !canApproveDone_(actor, existing.pic, existing.support)) {
       return { success: false, message: doneDeniedMessage_(existing.pic) };
     }
   }

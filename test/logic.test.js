@@ -192,12 +192,21 @@ ok('nama ber-suffix tetap cocok', roleOfActor('Ali (Data)') === 'Staff');
 console.log('  -- izin "Done" bergantung PIC task --');
 ok('Manager boleh Done task siapa pun', canApproveDone('Nynda', 'Ali') === true);
 ok('Leader boleh Done task siapa pun', canApproveDone('Dhea', 'Uma') === true);
-ok('Staff BOLEH Done task magang', canApproveDone('Ali', 'Magang A') === true);
-ok('Staff TIDAK boleh Done task karyawan lain', canApproveDone('Ali', 'Uma') === false);
-ok('Staff TIDAK boleh Done task sendiri', canApproveDone('Ali', 'Ali') === false);
-ok('Magang tidak boleh Done task sendiri', canApproveDone('Magang A', 'Magang A') === false);
-ok('Magang tidak boleh Done task sesama magang', canApproveDone('Magang A', 'Magang B') === false);
-ok('user nonaktif kehilangan hak', canApproveDone('Bilar', 'Magang A') === false);
+// v1.72.0: Staff boleh menutup task magang HANYA bila ia yang mendampingi (Support) di
+// task itu — bukan sembarang Staff. Argumen ke-3 = daftar Support task tsb.
+ok('Staff yg jadi Support BOLEH Done task magang', canApproveDone('Ali', 'Magang A', 'Ali') === true);
+ok('Support ditulis sbg daftar juga dikenali', canApproveDone('Ali', 'Magang A', 'Uma, Ali') === true);
+ok('Support berbentuk array juga dikenali', canApproveDone('Ali', 'Magang A', ['Uma', 'Ali']) === true);
+ok('Staff yg TIDAK terlibat tak boleh Done', canApproveDone('Ali', 'Magang A', 'Uma') === false);
+ok('tanpa Support sama sekali juga tak boleh', canApproveDone('Ali', 'Magang A', '') === false);
+ok('Staff TIDAK boleh Done task karyawan lain', canApproveDone('Ali', 'Uma', 'Ali') === false);
+ok('Staff TIDAK boleh Done task sendiri', canApproveDone('Ali', 'Ali', 'Ali') === false);
+ok('Magang tidak boleh Done task sendiri', canApproveDone('Magang A', 'Magang A', 'Ali') === false);
+ok('Magang tidak boleh Done task sesama magang', canApproveDone('Magang A', 'Magang B', 'Magang A') === false);
+ok('user nonaktif kehilangan hak', canApproveDone('Bilar', 'Magang A', 'Bilar') === false);
+// PIC berupa peran "@Magang" ikut aturan yang sama.
+ok('task milik bersama magang: Support boleh Done', canApproveDone('Ali', '@Magang', 'Ali') === true);
+ok('task milik bersama magang: bukan Support tak boleh', canApproveDone('Ali', '@Magang', 'Uma') === false);
 ok('Lihat Saja tidak boleh Done', canApproveDone('Tamu', 'Magang A') === false);
 ok('Dev boleh Done apa pun', canApproveDone('Dev', 'Uma') === true);
 

@@ -10,6 +10,34 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.72.0 — "Done" task magang: hanya pendampingnya + tab Kerjaan Magang dicabut
+
+### Aturannya diikat ke hubungan Support, bukan ke peran
+Sebelumnya **Staff mana pun** boleh menutup task yang PIC-nya anak magang, walau tak terlibat
+sama sekali. Sekarang hanya karyawan yang **terdaftar sebagai Support** di task itu:
+
+| Task | Ali (Staff) | Uma (Staff) | Wildan (Magang) | Manager |
+|---|---|---|---|---|
+| PIC Wildan · Support **Ali** | **✓ Done** | ✗ | ✗ | ✓ |
+| PIC Wildan · Support **Uma** | ✗ | **✓ Done** | ✗ | ✓ |
+| PIC **Ali** · Support Wildan | ✗ (maks Review PM) | ✗ | ✗ | ✓ |
+| PIC **@Magang** · Support Ali | **✓ Done** | ✗ | ✗ | ✓ |
+
+Task milik sendiri tetap **maksimal Review PM** — termasuk bila anak magang jadi Support di
+situ. Task tetap muncul di daftar siapa pun yang jadi Support, seperti biasa.
+
+Ditegakkan di **kedua backend** (`canApproveDone` kini menerima daftar Support task) dan di
+tampilan, bukan hanya menyembunyikan tombol.
+
+### Tab "Kerjaan Magang" dicabut
+Tab itu lahir dari salah tafsir saya: yang diminta adalah aturan **siapa yang boleh
+mem-Done-kan**, bukan halaman terpisah. Ia juga bertabrakan dengan 1.70.0 — memperlihatkan
+seluruh kerjaan magang kepada Staff yang tidak terlibat, padahal aturannya kini "hanya task
+milik sendiri". Nav, halaman, dan fungsinya dihapus tanpa sisa; Manager & Leader tetap
+melihat semua task magang lewat tampilan biasa.
+
+---
+
 ## 1.71.0 — Mode Dev: "Lihat sebagai" jadi pratinjau sungguhan
 
 **Fokus PIC** di mode Dev dulu hanya **menyaring daftar task**. Hak, tab, tombol, dan

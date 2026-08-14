@@ -713,7 +713,7 @@ const kenaCampur = kenaSiapa('@magang dan @Leader Konten tolong sinkron');
 ok('campuran peran & nama', kenaCampur.indexOf('Leader Konten') >= 0 && kenaCampur.some(n => peranDari[n] === 'magang'));
 
 console.log('\n=== 14d. PIC berupa PERAN (task milik bersama) + jejak pengubah status ===');
-const brs = call('saveTask', { taskName: 'Latsol bareng magang', pic: '@Magang', status: 'Todo',
+const brs = call('saveTask', { taskName: 'Latsol bareng magang', pic: '@Magang', support: ['Staff Soal'], status: 'Todo',
   priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Manager' });
 eq('task milik bersama tersimpan', brs.success, true);
 const BRS = brs.task.id;
@@ -722,12 +722,14 @@ eq('PIC tersimpan sbg peran', call('getTasks').filter(t => t.id === BRS)[0].pic,
 const tBrs = call('getTasks').filter(t => t.id === BRS)[0];
 ok('Magang Konten memiliki task ini', call('ownsTaskActor_', tBrs, 'Magang Konten'));
 ok('Magang Data juga memilikinya', call('ownsTaskActor_', tBrs, 'Magang Data'));
-ok('Staff Soal TIDAK memilikinya', !call('ownsTaskActor_', tBrs, 'Staff Soal'));
+ok('Staff Soal memilikinya sbg Support', call('ownsTaskActor_', tBrs, 'Staff Soal'));
+ok('Staff lain yg tak terlibat TIDAK memilikinya', !call('ownsTaskActor_', tBrs, 'Staff Data'));
 // Aturan Done ikut aturan magang: Staff boleh menutup, magang tidak.
 ok('dikenali sbg task magang', call('isMagangActor_', '@Magang'));
 eq('Magang tak boleh menutup task bersama', call('quickUpdateField', BRS, 'status', 'Done', 'Magang Konten').success, false);
+eq('Staff yg bukan Support tak boleh menutup', call('quickUpdateField', BRS, 'status', 'Done', 'Staff Data').success, false);
 const tutup = call('quickUpdateField', BRS, 'status', 'Done', 'Staff Soal');
-eq('Staff boleh menutup task bersama', tutup.success, true);
+eq('Staff pendamping boleh menutup task bersama', tutup.success, true);
 
 // Jejak pengubah status.
 const setelah = call('getTasks').filter(t => t.id === BRS)[0];
@@ -777,8 +779,11 @@ ok('ada 4 task milik magang', magangTasks.length === 4);
 const tMagang = magangTasks[0];                                   // PIC = Magang Konten
 const tKaryawan = T.filter(t => t.pic === 'Staff Soal' && t.status !== 'Done')[0].id;
 // Staff BOLEH menutup task magang — inti permintaan.
+// v1.72.0: hanya karyawan yang MENDAMPINGI (Support) di task itu yang boleh menutupnya.
+// tMagang di data dummy ber-Support 'Staff QC', jadi ia pendampingnya; 'Staff Data' bukan.
+eq('Staff yg tak terlibat TIDAK boleh', call('quickUpdateField', tMagang, 'status', 'Done', 'Staff Data').success, false);
 const staffDoneMagang = call('quickUpdateField', tMagang, 'status', 'Done', 'Staff QC');
-eq('Staff BOLEH mem-Done-kan task magang', staffDoneMagang.success, true);
+eq('Staff pendamping BOLEH mem-Done-kan task magang', staffDoneMagang.success, true);
 // ...tapi TIDAK task karyawan lain.
 const staffDoneKaryawan = call('quickUpdateField', tKaryawan, 'status', 'Done', 'Staff QC');
 eq('Staff TIDAK boleh mem-Done-kan task karyawan', staffDoneKaryawan.success, false);
@@ -792,8 +797,8 @@ eq('Magang TIDAK boleh mem-Done-kan task sesama magang',
 eq('Leader boleh mem-Done-kan task magang', call('quickUpdateField', magangTasks[1], 'status', 'Done', 'Leader Konten').success, true);
 eq('Manager boleh mem-Done-kan task karyawan', call('quickUpdateField', tKaryawan, 'status', 'Done', 'Manager').success, true);
 // Lewat saveTask (form) juga ditegakkan.
-const saveMagangByStaff = call('saveTask', { id: magangTasks[2], taskName: 'Rekap data pendaftar mingguan', pic: 'Magang Data', status: 'Done', actor: 'Staff Data' });
-eq('saveTask: Staff boleh menutup task magang', saveMagangByStaff.success, true);
+const saveMagangByStaff = call('saveTask', { id: magangTasks[2], taskName: 'Rekap data pendaftar mingguan', pic: 'Magang Data', support: ['Staff Data'], status: 'Done', actor: 'Staff Data' });
+eq('saveTask: Staff pendamping boleh menutup', saveMagangByStaff.success, true);
 const saveKaryawanByStaff = call('saveTask', { id: 'TSK-020', taskName: 'x', pic: 'Leader Sistem', status: 'Done', actor: 'Staff QC' });
 eq('saveTask: Staff tak boleh menutup task karyawan', saveKaryawanByStaff.success, false);
 // Magang tidak masuk daftar approver umum.
@@ -938,8 +943,15 @@ ok('tombol "Ganti identitas" disembunyikan utk magang', /state\.magangMode\)\{[\
 ok('ada keterangan identitas terkunci', /id="magangLockNote"/.test(commHtml) && /Identitas terkunci untuk akun magang/.test(commHtml));
 ok('dropdown identitas magang tetap mati', /state\.magangMode\)\{[\s\S]{0,500}?select\.disabled=true/.test(commHtml));
 ok('identitas dikirim ke server sbg x-user', /'x-user': magangIdentity\(\)/.test(commHtml));
-ok('ada tab Kerjaan Magang utk karyawan', /id="nav-magang"/.test(commHtml) && /function renderMagangView\(\)/.test(commHtml));
-ok('tab Kerjaan Magang tak tampil utk magang', /function canSeeMagangView\(\)\{[\s\S]{0,200}?state\.magangMode \|\| isMagang\(state\.currentUser\)\) return false/.test(commHtml));
+// v1.72.0: tab "Kerjaan Magang" DICABUT. Salah tafsir permintaan — yang diminta adalah
+// aturan siapa yang boleh mem-Done-kan, bukan tab terpisah. Tab itu juga bertabrakan dgn
+// v1.70.0 (karyawan hanya melihat task miliknya): ia memperlihatkan semua kerjaan magang
+// kepada Staff yang tidak terlibat sama sekali.
+ok('tab Kerjaan Magang sudah dicabut', !/id="nav-magang"/.test(commHtml) && !/function renderMagangView\(\)/.test(commHtml));
+ok('tak ada sisa fungsi/pemanggilnya', !/updateMagangNavBadge|canSeeMagangView|magangContent/.test(commHtml));
+// Gantinya: Staff boleh menutup task magang HANYA bila ia Support di task itu.
+ok('Staff harus jadi Support utk menutup task magang', /if\(isStaff\(me\)\) return !task \|\| \(isMagangTask\(task\) && supportNames\(task\)\.some\(s=>same\(s,me\)\)\)/.test(commHtml));
+ok('alasannya dicatat di kode', /hanya oleh karyawan yang mendampingi di task itu/.test(commHtml));
 ok('kerjaan magang tak lagi tercampur ke daftar karyawan', !/isMagang\(me\) \|\| isStaff\(me\)\) return state\.tasks\.filter/.test(commHtml));
 // v1.70.0: magang HANYA melihat task miliknya sendiri — sesama magang tak saling melihat.
 ok('tak ada lagi cabang khusus magang di scopedTasks', !/if\(isMagang\(me\)\) return state\.tasks\.filter/.test(commHtml));

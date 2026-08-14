@@ -207,10 +207,6 @@
             <span class="material-icons-round text-[20px]">account_tree</span> <span class="flex-1">Task Kolaborasi</span>
             <span id="collabTurnBadge" class="hide inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold">0</span>
           </button>
-          <button onclick="switchView('magang')" id="nav-magang" class="hide nav-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left font-medium text-sm text-gray-600 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800">
-            <span class="material-icons-round text-[20px]">school</span> <span class="flex-1">Kerjaan Magang</span>
-            <span id="magangNavBadge" class="hide inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-sky-500 text-white text-[10px] font-bold"></span>
-          </button>
         </div>
 
         <div id="navgrp-ruangsaya" class="nav-group space-y-1 mt-4 first:mt-0">
@@ -419,7 +415,6 @@
 
         <!-- TASK KOLABORASI (alur proses beruntun antar-PIC) -->
         <!-- KERJAAN MAGANG (untuk karyawan — pola sama seperti view Lintas Divisi) -->
-        <div id="magangView" class="view hide max-w-[1400px] mx-auto space-y-4"><div id="magangContent" class="space-y-4"></div></div>
 
         <div id="collabView" class="view hide max-w-[1600px] mx-auto space-y-4">
           <div id="collabTurnBanner"></div>
@@ -796,7 +791,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.71.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.72.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -1144,7 +1139,10 @@ function canSetDoneFor(task){
   if(isLeader(me)) return true;                           // Leader
   if(usersConfigured()){
     if(isMagang(me)) return false;
-    if(isStaff(me)) return !task || isMagang(task.pic);   // tanpa task = pertanyaan umum
+    // Staff: task karyawan (termasuk miliknya sendiri) paling jauh Review PM. Task anak
+    // magang boleh ditutup, TAPI hanya oleh karyawan yang mendampingi di task itu —
+    // yaitu yang terdaftar sebagai Support. Bukan sembarang Staff yang tak terlibat.
+    if(isStaff(me)) return !task || (isMagangTask(task) && supportNames(task).some(s=>same(s,me)));
     return false;
   }
   const u=baseName(me);
@@ -1180,12 +1178,6 @@ function roleChip(t){
 // Task milik bersama anak magang ikut dihitung sebagai kerjaan magang.
 function isMagangTask(t){ const p=t&&t.pic; return same(rolePicOf(p),'Magang') || isMagang(p); }
 // Semua kerjaan magang, untuk view "Kerjaan Magang" milik karyawan.
-function magangTasks(){ return state.tasks.filter(isMagangTask); }
-// Karyawan (Staff ke atas) melihat tab ini; anak magang & mode lihat-saja tidak.
-function canSeeMagangView(){
-  if(isViewOnly() || state.magangMode || isMagang(state.currentUser)) return false;
-  return usersConfigured() && state.tasks.some(isMagangTask);
-}
 function scopedTasks(){
   if(isViewOnly()) return state.tasks.filter(inLintasView);   // task lintas divisi + task internal yang di-mirror PM/Dev
   if(canSeeAllTasks(state.currentUser)){                       // Manager, Leader, Dev
@@ -1233,7 +1225,6 @@ function applyRoleUI(){
   if(fBox) fBox.classList.toggle('hide', (!mgr && !isDevReal()) || vo || !!state.previewAs);
   const fLbl=document.getElementById('focusBoxLabel');
   if(fLbl) fLbl.textContent = isDevReal() ? 'Lihat sebagai' : 'Fokus PIC';
-  updateMagangNavBadge();   // tab "Kerjaan Magang" hanya untuk karyawan
   document.getElementById('nav-activity').classList.toggle('hide',!mgr || vo);
   const navSettings=document.getElementById('nav-settings'); if(navSettings) navSettings.classList.toggle('hide',!mgr || vo);
   const navReport=document.getElementById('nav-report'); if(navReport) navReport.classList.toggle('hide',!mgr || vo); // Laporan: manager/dev
@@ -1547,7 +1538,6 @@ function exitPreview(){
 function refreshTampilanPratinjau(){
   renderPreviewBar(); applyRoleUI(); populateManagerFocus(); populateModalDropdowns();
   renderAll(); updateCommNavBadge(); updateCollabTurnBadge();
-  try{ renderMagangView&&updateMagangNavBadge&&updateMagangNavBadge(); }catch(e){}
 }
 
 function populateModalDropdowns(){
@@ -1704,7 +1694,6 @@ function renderActiveView(){
   else if(v==='calendar') renderCalendar();
   else if(v==='communication'){ state.selectedTaskId=null; renderCommunicationTasks(); renderCommunicationPanel(); }
   else if(v==='collab') renderCollab();
-  else if(v==='magang') renderMagangView();
   else if(v==='settings'){ renderSettings(); renderUserAdmin(); renderPinAdmin(); renderCatSubManager(); }
   else if(v==='activity') renderActivity();
   else if(v==='extdash') renderExternalDashboards();
@@ -3500,65 +3489,6 @@ function renderComments(targetId,comments){
    Dipisah dari daftar task karyawan supaya dashboard mereka tetap bersih, tapi tetap
    mudah dipantau: dikelompokkan per anak magang, lengkap dengan hitungan overdue.
    Karyawan boleh membuka & menutup (Done) task magang langsung dari sini. */
-function renderMagangView(){
-  const box=document.getElementById('magangContent'); if(!box) return;
-  const all=magangTasks();
-  const q=globalSearchValue();
-  const list=q ? all.filter(t=>Object.values(t).join(' ').toLowerCase().includes(q)) : all;
-
-  const byPic={};
-  list.forEach(t=>{ const p=String(t.pic||'—'); (byPic[p]=byPic[p]||[]).push(t); });
-  const names=Object.keys(byPic).sort((a,b)=>a.localeCompare(b));
-
-  const totOverdue=list.filter(isLate).length;
-  const totDone=list.filter(isDone).length;
-  const head=`<div class="flex items-center justify-between gap-3 flex-wrap">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Kerjaan Anak Magang</h2>
-        <p class="text-sm text-gray-500">Task yang PIC-nya anak magang. Klik untuk membuka — Anda boleh menutupnya ke <b>Done</b>.</p>
-      </div>
-      <div class="flex gap-2 text-center">
-        <div class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"><div class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Total</div><div class="text-lg font-bold text-gray-900 dark:text-white">${list.length}</div></div>
-        <div class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"><div class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Selesai</div><div class="text-lg font-bold text-emerald-600">${totDone}</div></div>
-        <div class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800"><div class="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Overdue</div><div class="text-lg font-bold ${totOverdue?'text-rose-600':'text-gray-900 dark:text-white'}">${totOverdue}</div></div>
-      </div>
-    </div>`;
-
-  if(!names.length){ box.innerHTML=head+emptyState('Belum ada task untuk anak magang.'); return; }
-
-  const blok=names.map(p=>{
-    const arr=byPic[p].slice().sort(cardSort);
-    const late=arr.filter(isLate).length, done=arr.filter(isDone).length;
-    const pal=AV_PALETTE[avHash(p)];
-    return `<div class="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-800 overflow-hidden">
-      <div class="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-gray-100 dark:border-slate-800 bg-sky-50/60 dark:bg-sky-900/10">
-        <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0" style="background:${pal[0]};color:${pal[1]}">${escapeHtml(String(p).trim().charAt(0).toUpperCase())}</div>
-        <div class="min-w-0">
-          <div class="font-semibold text-gray-900 dark:text-white truncate">${escapeHtml(p)}</div>
-          <div class="text-[11px] text-gray-500 dark:text-slate-400">${arr.length} task • ${done} selesai${late?` • <span class="text-rose-600 font-semibold">${late} overdue</span>`:''}</div>
-        </div>
-        <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${roleBadgeClass('Magang')}">MAGANG</span>
-      </div>
-      <div class="p-2 space-y-1">${arr.map(t=>{
-        const late2=isLate(t);
-        return `<div onclick="openTaskModal('${escapeAttr(t.id)}')" class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer">
-          <span class="text-[11px] font-mono text-gray-400 shrink-0">${escapeHtml(t.id)}</span>
-          <span class="text-[13px] text-gray-700 dark:text-slate-300 truncate flex-1">${escapeHtml(t.taskName||'-')}</span>
-          ${t.support?`<span class="hidden sm:inline text-[11px] text-gray-400 shrink-0">+${escapeHtml(t.support)}</span>`:''}
-          ${statusChip(t.status)}
-          <span class="text-[11px] shrink-0 ${late2?'text-rose-600 font-semibold':'text-gray-400'}">${t.dueDate?escapeHtml(t.dueDate):'—'}${late2?' • telat':''}</span>
-        </div>`;}).join('')}</div>
-    </div>`;
-  }).join('');
-  box.innerHTML=head+`<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">${blok}</div>`;
-}
-function updateMagangNavBadge(){
-  const nav=document.getElementById('nav-magang'); if(!nav) return;
-  nav.classList.toggle('hide', !canSeeMagangView());
-  const b=document.getElementById('magangNavBadge'); if(!b) return;
-  const n=magangTasks().filter(isLate).length;
-  b.textContent=n; b.classList.toggle('hide', n===0);
-}
 
 /* ---------- Settings ---------- */
 // Cadangan daftar dashboard eksternal — hanya dipakai bila sheet DASHBOARDS masih kosong.
