@@ -293,7 +293,10 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   const mA = await backend.getBootstrapData({ magangOnly: true, asUser: 'Magang A' });
   ok('flag magangOnly dikirim', mA.magangOnly === true);
   eq('daftar identitas magang', (mA.magangUsers || []).join(','), 'Magang A,Magang B');
-  ok('SEMUA task magang terkirim', mA.tasks.filter(t => /^Magang /.test(t.pic)).length >= 2);
+  // PERUBAHAN v1.70.0: magang HANYA melihat task miliknya sendiri, tidak lagi task sesama magang.
+  ok('hanya task miliknya sendiri', mA.tasks.every(t => t.pic === 'Magang A' || String(t.support||'').split(',').some(x => x.trim() === 'Magang A')));
+  ok('task magang LAIN tidak ikut terkirim', !mA.tasks.some(t => t.pic === 'Magang B'));
+  ok('task miliknya sendiri tetap ada', mA.tasks.some(t => t.pic === 'Magang A'));
   ok('task karyawan biasa TIDAK terkirim', !mA.tasks.some(t => karyawan.includes(t.pic) && t.id !== 'TSK-005'));
   ok('task karyawan tempat ia Support IKUT terkirim', mA.tasks.some(t => t.id === 'TSK-005'));
   eq('riwayat aktivitas tidak dikirim', mA.activity.length, 0);
@@ -309,7 +312,8 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   fresh();
   const mB = await backend.getBootstrapData({ magangOnly: true, asUser: 'Magang B' });
   ok('magang lain TIDAK melihat task Support milik temannya', !mB.tasks.some(t => t.id === 'TSK-005'));
-  ok('tapi tetap melihat task sesama magang', mB.tasks.some(t => /^Magang /.test(t.pic)));
+  ok('magang lain juga tak melihat task Magang A', !mB.tasks.some(t => t.pic === 'Magang A'));
+  ok('hanya melihat task miliknya sendiri', mB.tasks.every(t => t.pic === 'Magang B'));
 
   // Percobaan naik hak: mengaku karyawan sambil memakai jalur magang.
   fresh();
@@ -318,7 +322,9 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   ok('klaim palsu juga tak menarik task Support orang lain', !palsu.tasks.some(t => t.id === 'TSK-005'));
   fresh();
   const kosong = await backend.getBootstrapData({ magangOnly: true, asUser: '' });
-  ok('tanpa klaim: hanya task milik magang', kosong.tasks.every(t => /^Magang /.test(t.pic)));
+  // Tanpa identitas (cookie belum dipilih) tak ada yang bisa diklaim miliknya -> kosong.
+  eq('tanpa identitas: tak ada task sama sekali', kosong.tasks.length, 0);
+  ok('daftar identitas tetap dikirim agar bisa memilih', (kosong.magangUsers || []).length >= 2);
 
   // Bandingkan dengan karyawan biasa.
   fresh();

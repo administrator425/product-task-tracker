@@ -941,6 +941,11 @@ ok('identitas dikirim ke server sbg x-user', /'x-user': magangIdentity\(\)/.test
 ok('ada tab Kerjaan Magang utk karyawan', /id="nav-magang"/.test(commHtml) && /function renderMagangView\(\)/.test(commHtml));
 ok('tab Kerjaan Magang tak tampil utk magang', /function canSeeMagangView\(\)\{[\s\S]{0,200}?state\.magangMode \|\| isMagang\(state\.currentUser\)\) return false/.test(commHtml));
 ok('kerjaan magang tak lagi tercampur ke daftar karyawan', !/isMagang\(me\) \|\| isStaff\(me\)\) return state\.tasks\.filter/.test(commHtml));
+// v1.70.0: magang HANYA melihat task miliknya sendiri — sesama magang tak saling melihat.
+ok('tak ada lagi cabang khusus magang di scopedTasks', !/if\(isMagang\(me\)\) return state\.tasks\.filter/.test(commHtml));
+ok('semua peran memakai penyaring kepemilikan yang sama', /function scopedTasks\(\)[\s\S]{0,900}?return state\.tasks\.filter\(t=>ownsTask\(t,me\)\);/.test(commHtml));
+ok('alasannya dicatat di kode', /Sesama magang tidak lagi saling melihat/.test(commHtml));
+ok('PIC peran tetap milik bersama', /Task ber-PIC peran \("@Magang"\) TETAP terlihat oleh semuanya/.test(commHtml));
 
 // Wewenang Leader HARUS tetap.
 ok('Leader tetap boleh set Done', /function canSetDoneFor\(task\)\{[\s\S]{0,400}?isLeader\(me\)\) return true/.test(commHtml));

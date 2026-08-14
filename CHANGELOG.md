@@ -10,6 +10,27 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.70.0 — Magang hanya melihat task miliknya sendiri
+
+Sejak 1.57.0 anak magang saling melihat task sesama magang. Dalam pemakaian nyata itu
+menyesatkan: memberi satu task ke Wildan membuat task yang sama ikut muncul di layar tiga
+anak magang lain, seolah mereka juga mengerjakannya.
+
+Sekarang aturannya **sama dengan karyawan**: yang muncul hanya task tempat ia menjadi **PIC
+atau Support**. Cabang khusus magang di `scopedTasks()` dihapus — semua peran memakai
+penyaring kepemilikan yang sama.
+
+**Task ber-PIC peran (`@Magang`) tetap milik bersama** dan terlihat oleh semua anak magang —
+itu memang gunanya, dan tetap jadi cara memberi satu pekerjaan ke seluruh anak magang
+sekaligus. Yang berubah hanya task yang PIC-nya satu orang.
+
+Ditegakkan di server juga (`magangVisibleTask` kini murni berbasis kepemilikan), bukan cuma
+disaring di tampilan. Efek sampingnya: selama identitas magang belum dipilih (cookie masih
+kosong), tak ada task yang dikirim sama sekali — daftar nama untuk memilih identitas tetap
+dikirim, jadi alurnya tidak buntu.
+
+---
+
 ## 1.69.1 — Perbaikan: chat & aktivitas collab lama menempel ke collab baru
 
 Menghapus Task Kolaborasi lalu membuat yang baru membuat **komentar collab lama muncul di

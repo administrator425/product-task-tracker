@@ -1773,20 +1773,15 @@ async function getAllCommentsLite(pre) {
 }
 
 // Apakah salah satu Support task ini seorang magang?
-function supportHasMagang(task) {
-  return String((task && task.support) || '').split(',').map(s => s.trim()).filter(Boolean).some(s => isMagangActor(s));
-}
-// Task yang boleh dilihat dari level "magang":
-//   - task milik magang mana pun (sesama magang saling melihat), DAN
-//   - task karyawan tempat magang INI terdaftar sebagai PIC/Support (boleh ikut membantu).
+
+/* Task yang boleh dilihat dari level "magang": HANYA yang benar-benar miliknya —
+   sebagai PIC atau Support. Sesama magang TIDAK lagi saling melihat: task Wildan dulu ikut
+   muncul di layar tiga magang lain, padahal bukan pekerjaan mereka.
+   Task yang sengaja ber-PIC peran ("@Magang") tetap terlihat oleh semuanya — itu memang
+   task milik bersama, dan ownsTaskActor() yang memutuskannya. */
 // Nama yang diklaim browser divalidasi dulu harus ber-peran Magang, jadi klaim palsu
 // tidak bisa dipakai untuk menembus ke data karyawan.
 function magangVisibleTask(task, asUser) {
-  if (isMagangActor(task && task.pic)) return true;
-  if (supportHasMagang(task)) {
-    if (!asUser) return false;
-    return ownsTaskActor(task, asUser);
-  }
   return !!asUser && ownsTaskActor(task, asUser);
 }
 

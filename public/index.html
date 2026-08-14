@@ -788,7 +788,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.69.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.70.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -1151,11 +1151,13 @@ function scopedTasks(){
     return [...state.tasks];
   }
   const me=state.currentUser;
-  // Magang → lingkungan magang saja: task sendiri + sesama magang. (Di mode magang,
-  // datanya bahkan sudah dipangkas server, jadi ini lapis kerapian belakangnya.)
-  if(isMagang(me)) return state.tasks.filter(t=>ownsTask(t,me) || isMagangTask(t));
-  // Karyawan → task miliknya saja. Kerjaan magang punya tab sendiri ("Kerjaan Magang")
-  // supaya dashboard & hitungan mereka tidak tercampur.
+  /* Semua orang (termasuk MAGANG) → hanya task miliknya sendiri: PIC atau Support.
+     Sesama magang tidak lagi saling melihat — dulu task Wildan ikut muncul di layar tiga
+     magang lain padahal bukan pekerjaan mereka.
+     Task ber-PIC peran ("@Magang") TETAP terlihat oleh semuanya, karena ownsTask()
+     memang menganggapnya milik bersama — itulah gunanya PIC peran.
+     Kerjaan magang punya tab sendiri ("Kerjaan Magang") untuk karyawan, supaya dashboard
+     & hitungan beban kerja tidak tercampur. */
   return state.tasks.filter(t=>ownsTask(t,me));
 }
 // Deteksi link berbagi ?view=lintas → kunci ke mode lihat-saja (switcher disembunyikan).
