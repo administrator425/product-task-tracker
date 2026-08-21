@@ -10,6 +10,53 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.74.1 — QC: task dihapus meninggalkan ceklis & chat yang diwarisi task baru
+
+Audit menyeluruh terhadap kelas bug yang sama dengan sub-ceklis kolaborasi: **data yang
+dikunci ke ID turunan yang bisa dipakai ulang**. Satu kasus lagi ditemukan, kali ini lebih
+berdampak karena mengenai task biasa.
+
+### Yang rusak
+`deleteTask` hanya menghapus barisnya di sheet **Main**. Ceklis, komentar, notifikasi, dan
+riwayat aktivitasnya ditinggalkan — sementara `generateTaskId` = nomor tertinggi + 1, jadi
+menghapus task bernomor tertinggi membuat task **berikutnya memakai ulang nomor itu** dan
+langsung mewarisi semuanya.
+
+Terlihat gamblang saat diprobe: task baru dibuat, diberi 1 ceklis + 1 komentar, lalu dihapus —
+sisanya **1 ceklis dan 3 komentar** (dua di antaranya sudah warisan dari task sebelumnya yang
+juga pernah memakai nomor itu). Task berikutnya mewarisi seluruhnya.
+
+### Perbaikannya
+`deleteTask` kini membuang semua baris yang merujuk task tersebut di `CHECKLIST`,
+`COMMENTS`, `NOTIFICATIONS`, dan `ACTIVITY` — memakai ulang helper pembersih yang sudah
+dipakai `deleteCollab` (namanya dinetralkan jadi `purgeRowsForRef` karena kini melayani
+keduanya). Jejak penghapusannya sendiri dicatat **tanpa Task ID** agar tidak nyangkut di task
+bernomor sama; log global tetap lengkap.
+
+### Yang diperiksa dan ternyata SEHAT
+- **Susun ulang proses kolaborasi** — sub-ceklis, catatan, dan link hasil semuanya ikut
+  berpindah bersama prosesnya; posisi yang ditinggalkan tidak mewarisi milik orang lain.
+  (Ditambahkan tes khusus untuk catatan & link, sebelumnya hanya sub-ceklis yang diuji.)
+- **Hapus proses / hapus collab** — sudah membersihkan sejak 1.69.x.
+- **Hapus user** — rujukan diperbarui/dibersihkan sejak 1.67.0.
+- **Operasi berbasis nomor baris** pada ceklis, Link Saya, dan Catatan Saya — semuanya
+  memverifikasi kepemilikan baris sebelum menulis atau menghapus.
+- `deleteChecklistItem`, `deleteUserLink`, `deleteNote`, `deleteDashboard` memang hanya
+  menghapus barisnya sendiri — benar, karena tak ada data lain yang merujuknya.
+
+### Dua catatan yang TIDAK diperbaiki (sengaja)
+1. **Nomor baris usang saat dua orang menyunting ceklis task yang sama.** Server memastikan
+   baris itu milik task yang benar, tapi belum memastikan itu *item* yang sama. Bila rekan
+   menghapus satu item sementara layar Anda belum disegarkan, centang bisa mengenai item
+   tetangganya. Perlu penambahan verifikasi teks item pada tiga aksi — dampaknya sempit
+   (butuh penyuntingan bersamaan) dan tidak permanen, jadi saya laporkan dulu, bukan
+   diam-diam diubah.
+2. **Nama user dipakai sebagai kunci.** Menghapus user lalu menambah orang baru dengan nama
+   persis sama membuat task, link, dan catatan lama menempel padanya. Itu konsekuensi wajar
+   dari sistem berbasis nama, bukan cacat — tapi layak diingat saat mengganti angkatan magang.
+
+---
+
 ## 1.74.0 — Lampiran link di Ceklis Pengerjaan task
 
 Lampiran hasil yang di 1.73.0 baru ada di Task Kolaborasi kini tersedia juga di **Ceklis

@@ -475,6 +475,28 @@ eq('urutan proses berubah', su.steps.map(s => s.name).join('>'), 'Proses C>Prose
 eq('sub-ceklis ikut ke posisi 1', call('getChecklist', RU + '#1').map(i => i.item).join(), 'sub milik C');
 eq('sub-ceklis ikut ke posisi 2', call('getChecklist', RU + '#2').map(i => i.item).join(), 'sub milik A');
 eq('sub-ceklis ikut ke posisi 3', call('getChecklist', RU + '#3').map(i => i.item).join(), 'sub milik B');
+// Catatan & link HASIL milik proses harus ikut berpindah juga, bukan cuma sub-ceklisnya.
+call('setCollabStepNote', RU, 1, 'catatan milik C', 'Staff Data');
+call('setCollabStepLink', RU, 1, 'https://drive.google.com/MILIK-C', 'Staff Data');
+call('saveCollab', { id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses A', pic: 'Staff Soal', srcOrder: 2 },
+  { order: 2, name: 'Proses C', pic: 'Staff Data', srcOrder: 1 },
+  { order: 3, name: 'Proses B', pic: 'Staff QC', srcOrder: 3 }] }, 'Manager');
+const geser = call('getCollabs').find(function(c){ return c.id === RU; }).steps;
+eq('Proses C pindah ke posisi 2', geser[1].name, 'Proses C');
+eq('catatan ikut berpindah', geser[1].note, 'catatan milik C');
+eq('link hasil ikut berpindah', geser[1].link, 'https://drive.google.com/MILIK-C');
+eq('posisi 1 tidak mewarisi catatan orang lain', geser[0].note, '');
+eq('posisi 1 tidak mewarisi link orang lain', geser[0].link, '');
+eq('sub-ceklis pun ikut ke posisi 2', call('getChecklist', RU + '#2').map(function(x){return x.item;}).join(), 'sub milik C');
+// Kembalikan susunan seperti sebelum blok ini, supaya pemeriksaan berikutnya tetap sahih.
+call('saveCollab', { id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses C', pic: 'Staff Data', srcOrder: 2 },
+  { order: 2, name: 'Proses A', pic: 'Staff Soal', srcOrder: 1 },
+  { order: 3, name: 'Proses B', pic: 'Staff QC', srcOrder: 3 }] }, 'Manager');
+eq('susunan dikembalikan', call('getChecklist', RU + '#1').map(function(x){return x.item;}).join(), 'sub milik C');
+
+
 
 // Proses dihapus: sub-ceklisnya ikut dibuang, tak boleh diwarisi proses baru di nomor itu.
 call('saveCollab', { id: RU, title: 'Uji Urutan', platform: 'JadiASN', steps: [
@@ -664,6 +686,31 @@ eq('hapus task sukses', delRes.success, true);
 eq('jumlah task kembali', delRes.tasks.length, before);
 ok('TSK-055 hilang', !delRes.tasks.some(t => t.id === 'TSK-055'));
 ok('task lain tidak ikut tergeser', delRes.tasks[0].id === 'TSK-001' && delRes.tasks[9].id === 'TSK-010');
+
+console.log("\n=== 10b. Task dihapus: ceklis & chat-nya ikut dibuang ===");
+// Nomor task dipakai ulang (generateTaskId_ = max+1). Tanpa pembersihan, task BARU
+// mewarisi ceklis & percakapan milik task yang sudah dihapus — kelas bug yang sama
+// dengan sub-ceklis collab, tapi di sisi task biasa.
+const pr = call('saveTask', { taskName: 'Task probe', pic: 'Staff Soal', status: 'Todo', priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Manager' });
+const PR = pr.task.id;
+eq('task baru mulai TANPA ceklis warisan', call('getChecklist', PR).length, 0);
+eq('task baru mulai TANPA chat warisan', call('getComments', PR).length, 0);
+call('addChecklistItem', PR, 'ceklis milik task probe', 'Manager', 'https://drive.google.com/PROBE');
+call('addComment', { taskId: PR, author: 'Manager', message: 'chat milik task probe' });
+eq('probe punya 1 ceklis', call('getChecklist', PR).length, 1);
+eq('probe punya 1 komentar', call('getComments', PR).length, 1);
+ok('ada aktivitas utk task ini', call('getActivityLog', 800).some(function(a){ return a.taskId === PR; }));
+call('deleteTask', PR, 'Manager');
+eq('ceklis ikut terhapus', call('getChecklist', PR).length, 0);
+eq('komentar ikut terhapus', call('getComments', PR).length, 0);
+ok('aktivitasnya ikut dibuang', !call('getActivityLog', 800).some(function(a){ return a.taskId === PR; }));
+const pr2 = call('saveTask', { taskName: 'Task baru', pic: 'Staff Soal', status: 'Todo', priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Manager' });
+eq('nomor task memang dipakai ulang', pr2.task.id, PR);
+eq('task baru TIDAK mewarisi ceklis', call('getChecklist', pr2.task.id).length, 0);
+eq('task baru TIDAK mewarisi chat', call('getComments', pr2.task.id).length, 0);
+ok('jejak hapus tak nyangkut di task bernomor sama', !call('getActivityLog', 800).some(function(a){ return a.taskId === pr2.task.id && /Delete Task/.test(a.action); }));
+ok('penghapusan tetap tercatat di log global', call('getActivityLog', 800).some(function(a){ return /Delete Task/.test(a.action) && String(a.detail).indexOf(PR) >= 0; }));
+call('deleteTask', pr2.task.id, 'Manager');
 
 console.log('\n=== 11. Mode lihat-saja (Lintas Divisi) ===');
 const guest = call('getBootstrapData', { viewOnly: true });

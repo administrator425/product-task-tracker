@@ -628,7 +628,17 @@ async function deleteTask(taskId, actor) {
     },
   }]);
 
-  await logActivity(String(actor || '').trim() || 'Unknown', 'Delete Task', taskId, removed.taskName || '');
+  // Ceklis, komentar, notifikasi, dan riwayatnya ikut dibuang. Nomor task dipakai ulang
+  // (generateTaskId = max+1), jadi kalau ditinggalkan, task BARU akan mewarisi ceklis dan
+  // percakapan milik task yang sudah dihapus.
+  let ikut = 0;
+  ikut += await purgeRowsForRef(CONFIG.CHECKLIST_SHEET, 'G', 0, taskId);   // A = Task ID
+  ikut += await purgeRowsForRef(CONFIG.COMMENTS_SHEET, 'D', 1, taskId);    // B = Task ID
+  ikut += await purgeRowsForRef(CONFIG.NOTIF_SHEET, 'H', 3, taskId);       // D = Ref ID
+  ikut += await purgeRowsForRef(CONFIG.ACTIVITY_SHEET, 'E', 3, taskId);    // D = Task ID
+  // Jejak penghapusan dicatat TANPA taskId, supaya tak nyangkut di task bernomor sama.
+  await logActivity(String(actor || '').trim() || 'Unknown', 'Delete Task', '',
+    `${taskId} dihapus: ${removed.taskName || ''} (${ikut} ceklis/komentar/notifikasi/aktivitas ikut dibuang)`);
   const tasks = await getTasks();
   return { success: true, message: 'Task berhasil dihapus.', tasks };
 }
@@ -1210,11 +1220,12 @@ async function deleteStepRowsForCollab(collabId) {
 // sub-ceklis tertinggal di nomor lama dan menempel ke proses yang salah.
 // Proses yang dihapus: sub-ceklisnya ikut dibuang, supaya tidak diwarisi proses baru yang
 // kebetulan menempati nomor itu.
-/* Buang semua baris yang merujuk sebuah collab (baik "COL-016" maupun "COL-016#2").
+/* Buang semua baris yang merujuk sebuah entitas — task ("TSK-055") maupun collab
+   ("COL-016", termasuk kunci prosesnya "COL-016#2").
    Dipakai saat collab dihapus: komentar, notifikasi, dan riwayat aktivitasnya ikut hilang.
    Tanpa ini, nomor collab yang dipakai ulang (genCollabId = max+1) membuat collab BARU
    mewarisi percakapan milik collab yang sudah dihapus. */
-async function purgeRowsForCollab(sheetName, colLetter, colIdx, collabId) {
+async function purgeRowsForRef(sheetName, colLetter, colIdx, collabId) {
   let rows = [];
   try { rows = await valuesGet(`${sheetName}!A2:${colLetter}`); } catch (e) { return 0; }
   const kena = v => { const s = String(v || '').trim(); return s === collabId || s.indexOf(collabId + '#') === 0; };
@@ -1447,9 +1458,9 @@ async function deleteCollab(id, actor) {
   // Komentar, notifikasi, dan riwayat aktivitasnya ikut dibuang — kalau tidak, collab baru
   // yang memakai ulang nomor itu akan menampilkan percakapan milik collab yang sudah dihapus.
   let ikut = 0;
-  ikut += await purgeRowsForCollab(CONFIG.COMMENTS_SHEET, 'D', 1, id);   // B = Task ID
-  ikut += await purgeRowsForCollab(CONFIG.NOTIF_SHEET, 'H', 3, id);      // D = Ref ID
-  ikut += await purgeRowsForCollab(CONFIG.ACTIVITY_SHEET, 'E', 3, id);   // D = Task ID
+  ikut += await purgeRowsForRef(CONFIG.COMMENTS_SHEET, 'D', 1, id);   // B = Task ID
+  ikut += await purgeRowsForRef(CONFIG.NOTIF_SHEET, 'H', 3, id);      // D = Ref ID
+  ikut += await purgeRowsForRef(CONFIG.ACTIVITY_SHEET, 'E', 3, id);   // D = Task ID
   // Jejak penghapusan dicatat TANPA taskId, supaya tidak nyangkut di feed collab bernomor sama.
   await logActivity(actor, 'Collab Delete', '', `${id} dihapus (${ikut} komentar/notifikasi/aktivitas ikut dibuang)`);
   return { success: true, message: 'Task kolaborasi dihapus.', collabs: await getCollabs() };

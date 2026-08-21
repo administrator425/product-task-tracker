@@ -580,6 +580,42 @@ function resetAll() { ['TSK-001', 'TSK-002', 'TSK-003', 'TSK-004'].forEach(id =>
   ok('penghapusan tetap tercatat di log global',
     (await backend.getActivityLog(500)).some(a => /Collab Delete/.test(a.action) && String(a.detail).indexOf(KC) >= 0));
 
+  console.log("\nHapus task: ceklis, chat & aktivitasnya ikut dibuang:");
+  // Nomor task dipakai ulang (generateTaskId = max+1). Tanpa pembersihan, task BARU
+  // mewarisi ceklis & percakapan milik task yang sudah dihapus.
+  fresh();
+  const mkT = await backend.saveTask({ taskName: 'Task probe', pic: 'Ali', status: 'Todo', priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Nynda' });
+  const PT = mkT.task.id;
+  fresh();
+  eq('task baru mulai tanpa ceklis warisan', (await backend.getChecklist(PT)).length, 0);
+  fresh();
+  await backend.addChecklistItem(PT, 'ceklis probe', 'Nynda', 'https://drive.google.com/P');
+  fresh();
+  await backend.addComment({ taskId: PT, author: 'Nynda', message: 'chat probe' });
+  fresh();
+  eq('probe punya 1 ceklis', (await backend.getChecklist(PT)).length, 1);
+  fresh();
+  eq('probe punya 1 komentar', (await backend.getComments(PT)).length, 1);
+  fresh();
+  await backend.deleteTask(PT, 'Nynda');
+  fresh();
+  eq('ceklis ikut terhapus', (await backend.getChecklist(PT)).length, 0);
+  fresh();
+  eq('komentar ikut terhapus', (await backend.getComments(PT)).length, 0);
+  fresh();
+  ok('aktivitasnya ikut dibuang', !(await backend.getActivityLog(800)).some(a => a.taskId === PT));
+  fresh();
+  const mkT2 = await backend.saveTask({ taskName: 'Task baru', pic: 'Ali', status: 'Todo', priority: 'Normal', stage: 'QC Konten', platform: 'JadiASN', actor: 'Nynda' });
+  eq('nomor task dipakai ulang', mkT2.task.id, PT);
+  fresh();
+  eq('task baru TIDAK mewarisi ceklis', (await backend.getChecklist(mkT2.task.id)).length, 0);
+  fresh();
+  eq('task baru TIDAK mewarisi chat', (await backend.getComments(mkT2.task.id)).length, 0);
+  fresh();
+  ok('penghapusan tetap tercatat di log global', (await backend.getActivityLog(800)).some(a => /Delete Task/.test(a.action) && String(a.detail).indexOf(PT) >= 0));
+  fresh();
+  await backend.deleteTask(mkT2.task.id, 'Nynda');
+
   console.log('\nTanpa sheet USERS -> kembali ke environment variable:');
   SHEETS['USERS'] = [['Nama', 'Peran', 'Aktif']];   // kosongkan isinya
   fresh();

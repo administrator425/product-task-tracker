@@ -899,7 +899,17 @@ function deleteTask(taskId, actor) {
   if (!sheet_(CONFIG.TASK_SHEET, false)) return { success: false, message: 'Sheet Main tidak ditemukan.' };
   deleteRows_(CONFIG.TASK_SHEET, [rowNumber]);
 
-  logActivity_(String(actor || '').trim() || 'Unknown', 'Delete Task', taskId, removed.taskName || '');
+  // Ceklis, komentar, notifikasi, dan riwayatnya ikut dibuang. Nomor task dipakai ulang
+  // (generateTaskId_ = max+1), jadi kalau ditinggalkan, task BARU akan mewarisi ceklis dan
+  // percakapan milik task yang sudah dihapus.
+  var ikut = 0;
+  ikut += purgeRowsForRef_(CONFIG.CHECKLIST_SHEET, 'G', 0, taskId);   // A = Task ID
+  ikut += purgeRowsForRef_(CONFIG.COMMENTS_SHEET, 'D', 1, taskId);    // B = Task ID
+  ikut += purgeRowsForRef_(CONFIG.NOTIF_SHEET, 'H', 3, taskId);       // D = Ref ID
+  ikut += purgeRowsForRef_(CONFIG.ACTIVITY_SHEET, 'E', 3, taskId);    // D = Task ID
+  // Jejak penghapusan dicatat TANPA taskId, supaya tak nyangkut di task bernomor sama.
+  logActivity_(String(actor || '').trim() || 'Unknown', 'Delete Task', '',
+    taskId + ' dihapus: ' + (removed.taskName || '') + ' (' + ikut + ' ceklis/komentar/notifikasi/aktivitas ikut dibuang)');
   return { success: true, message: 'Task berhasil dihapus.', tasks: getTasks() };
 }
 
@@ -1428,11 +1438,12 @@ function deleteStepRowsForCollab_(collabId) {
 // sub-ceklis tertinggal di nomor lama dan menempel ke proses yang salah.
 // Proses yang dihapus: sub-ceklisnya ikut dibuang, supaya tidak diwarisi proses baru yang
 // kebetulan menempati nomor itu.
-/* Buang semua baris yang merujuk sebuah collab ("COL-016" maupun "COL-016#2").
+/* Buang semua baris yang merujuk sebuah entitas — task ("TSK-055") maupun collab
+   ("COL-016", termasuk kunci prosesnya "COL-016#2").
    Dipakai saat collab dihapus: komentar, notifikasi, dan riwayat aktivitasnya ikut hilang.
    Tanpa ini, nomor collab yang dipakai ulang (genCollabId_ = max+1) membuat collab BARU
    mewarisi percakapan milik collab yang sudah dihapus. */
-function purgeRowsForCollab_(sheetName, colLetter, colIdx, collabId) {
+function purgeRowsForRef_(sheetName, colLetter, colIdx, collabId) {
   var rows = [];
   try { rows = valuesGet_(sheetName + '!A2:' + colLetter); } catch (e) { return 0; }
   var hapus = [];
@@ -1674,9 +1685,9 @@ function deleteCollab(id, actor) {
   if (ci >= 0) deleteRows_(CONFIG.COLLAB_SHEET, [ci + 2]);
   // Komentar, notifikasi, dan riwayat aktivitasnya ikut dibuang.
   var ikut = 0;
-  ikut += purgeRowsForCollab_(CONFIG.COMMENTS_SHEET, 'D', 1, id);   // B = Task ID
-  ikut += purgeRowsForCollab_(CONFIG.NOTIF_SHEET, 'H', 3, id);      // D = Ref ID
-  ikut += purgeRowsForCollab_(CONFIG.ACTIVITY_SHEET, 'E', 3, id);   // D = Task ID
+  ikut += purgeRowsForRef_(CONFIG.COMMENTS_SHEET, 'D', 1, id);   // B = Task ID
+  ikut += purgeRowsForRef_(CONFIG.NOTIF_SHEET, 'H', 3, id);      // D = Ref ID
+  ikut += purgeRowsForRef_(CONFIG.ACTIVITY_SHEET, 'E', 3, id);   // D = Task ID
   // Jejak penghapusan dicatat TANPA taskId, supaya tak nyangkut di feed collab bernomor sama.
   logActivity_(actor, 'Collab Delete', '', id + ' dihapus (' + ikut + ' komentar/notifikasi/aktivitas ikut dibuang)');
   return { success: true, message: 'Task kolaborasi dihapus.', collabs: getCollabs() };
