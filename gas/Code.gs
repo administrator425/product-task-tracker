@@ -1484,7 +1484,7 @@ function saveCollab(payload, actor) {
       pic: String((s && s.pic) || '').trim(),
       deadline: String((s && s.deadline) || '').trim(),
       stage: String((s && s.stage) || '').trim(),
-      link: String((s && s.link) || '').trim(),
+      link: (s && s.link !== undefined) ? String(s.link).trim() : undefined,
       srcOrder: Number((s && s.srcOrder) || 0)
     };
   }).filter(function (s) { return s.name; });
@@ -1502,7 +1502,7 @@ function saveCollab(payload, actor) {
   if (isUpdate) {
     var existing = getCollabs().filter(function (c) { return c.id === id; })[0];
     if (existing) existing.steps.forEach(function (s) {
-      prevStep[s.order] = { done: s.done, doneBy: s.doneBy, doneAt: s.doneAt, note: s.note };
+      prevStep[s.order] = { done: s.done, doneBy: s.doneBy, doneAt: s.doneAt, note: s.note, link: s.link };
     });
   }
 
@@ -1522,7 +1522,7 @@ function saveCollab(payload, actor) {
     var order = i + 1;
     var pd = prevStep[s.srcOrder] || {};   // bawa done/catatan dari proses asalnya (tahan reorder)
     return [id, order, s.name, s.pic, s.deadline ? toSheetDate_(s.deadline) : '',
-      pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim(), String((s && s.link) || '').trim()];
+      pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim(), (s && s.link !== undefined ? String(s.link).trim() : (pd.link || ''))];
   });
   if (stepRows.length) valuesAppend_(CONFIG.COLLAB_STEP_SHEET + '!A:K', stepRows);
 
@@ -1546,6 +1546,32 @@ function findStepRow_(srows, collabId, order) {
 }
 
 // PIC proses (atau manager/Dev) mengisi catatan proses — mis. minta tambahan deadline.
+/* Lampiran hasil pada satu PROSES — OPSIONAL, izinnya sama dengan catatan proses:
+   PIC proses itu sendiri (atau manager). Menyusun ulang proses tetap khusus Manager/Leader. */
+function setCollabStepLink(collabId, order, link, actor) {
+  collabId = String(collabId || '').trim();
+  order = Number(order);
+  actor = String(actor || '').trim() || 'Unknown';
+  link = String(link || '').trim();
+  if (link.length > 500) return { success: false, message: 'Link terlalu panjang (maks 500 karakter).' };
+  ensureCollabSheets_();
+  var srows = [];
+  try { srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:K'); } catch (e) { srows = []; }
+  var idx = -1;
+  for (var i = 0; i < srows.length; i++) {
+    var r = srows[i];
+    if (String((r && r[0]) || '').trim() === collabId && Number((r && r[1]) || 0) === order) { idx = i; break; }
+  }
+  if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
+  var pic = String((srows[idx] && srows[idx][3]) || '').trim();
+  if (!isManagerActor_(actor) && !canCheckStep_(pic, actor)) {
+    return { success: false, message: 'Hanya ' + (pic || 'PIC proses ini') + ' atau manager yang bisa mengisi link hasil.' };
+  }
+  valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!K' + (idx + 2), [[link]]);
+  logActivity_(actor, 'Collab Step Link', collabId, 'Proses ' + order + ': ' + (link ? 'link hasil diperbarui' : 'link hasil dihapus'));
+  return { success: true, message: link ? 'Link hasil disimpan.' : 'Link hasil dihapus.', collabs: getCollabs() };
+}
+
 function setCollabStepNote(collabId, order, note, actor) {
   collabId = String(collabId || '').trim();
   order = Number(order);

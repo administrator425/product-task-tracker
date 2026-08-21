@@ -568,6 +568,23 @@ eq('salin membawa lampiran', call('getChecklist', LK + '#2')[0].link, 'https://d
 eq('link terlalu panjang ditolak', call('setChecklistLink', LK + '#1', subLK[0].row, new Array(502).join('x'), 'Staff Soal').success, false);
 ok('header CHECKLIST punya kolom Link', SS.getSheetByName('CHECKLIST').getRange(1, 7, 1, 1).getValues()[0][0] === 'Link');
 ok('header COLLAB_STEPS punya kolom Link', SS.getSheetByName('COLLAB_STEPS').getRange(1, 11, 1, 1).getValues()[0][0] === 'Link');
+// PIC proses harus bisa menautkan hasilnya SENDIRI, tanpa menunggu manager membuka Edit.
+eq('PIC proses boleh isi link hasil', call('setCollabStepLink', LK, 2, 'https://drive.google.com/PIC', 'Staff Data').success, true);
+eq('tersimpan', call('getCollabs').find(c => c.id === LK).steps[1].link, 'https://drive.google.com/PIC');
+eq('Manager juga boleh', call('setCollabStepLink', LK, 2, 'https://drive.google.com/MGR', 'Manager').success, true);
+const tolakLink = call('setCollabStepLink', LK, 2, 'https://x.com/a', 'Staff Soal');
+eq('orang lain ditolak', tolakLink.success, false);
+ok('pesannya menyebut PIC yang berhak', /Staff Data/.test(tolakLink.message));
+eq('link proses terlalu panjang ditolak', call('setCollabStepLink', LK, 2, new Array(502).join('x'), 'Manager').success, false);
+eq('dikosongkan = link dicabut', call('setCollabStepLink', LK, 2, '', 'Manager').success, true);
+eq('benar-benar kosong', call('getCollabs').find(c => c.id === LK).steps[1].link, '');
+// Manager menyimpan collab TANPA menyebut link -> link yang sudah ada tidak boleh hilang.
+call('setCollabStepLink', LK, 1, 'https://drive.google.com/TETAP', 'Manager');
+call('saveCollab', { id: LK, title: 'Uji Link', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Kerjakan', pic: 'Staff Soal', srcOrder: 1 },
+  { order: 2, name: 'Tanpa link', pic: 'Staff Data', srcOrder: 2 }] }, 'Manager');
+eq('simpan tanpa sebut link tak menimpanya', call('getCollabs').find(c => c.id === LK).steps[0].link, 'https://drive.google.com/TETAP');
+
 call('deleteCollab', LK, 'Manager');
 
 console.log('\n=== 8. Gerbang status "Done" ===');
@@ -1094,8 +1111,11 @@ ok('klik tautan tak ikut membuka modal', commHtml.indexOf("onclick=\"event.stopP
 ok('kolom Dokumen punya pratinjau tautan', commHtml.indexOf("id=\"fieldDocPreview\"") >= 0);
 ok('pratinjau diperbarui saat mengetik', commHtml.indexOf("oninput=\"renderDocPreview()\"") >= 0);
 ok('baris Task List punya ikon dokumen', commHtml.indexOf("linkIcon(t.document,'Buka dokumen task ini')") >= 0);
-ok('editor proses punya kolom link', commHtml.indexOf("class=\"cs-link") >= 0);
-ok('link proses ikut dibaca dari input', commHtml.indexOf(".cs-link')||{}).value||'').trim()") >= 0);
+ok('link proses TIDAK lagi di editor manager', commHtml.indexOf('class="cs-link') < 0);
+ok('panel proses jadi satu-satunya pintu link', commHtml.indexOf("id=\"collab-steplink-${s.order}\"") >= 0);
+ok('ada tombol Simpan link per proses', commHtml.indexOf("onclick=\"saveCollabStepLink(${s.order})\"") >= 0);
+ok('izinnya sama dgn catatan proses (PIC boleh)', commHtml.indexOf("${editNote?`<button type=\"button\" onclick=\"saveCollabStepLink(") >= 0);
+ok('aksi setCollabStepLink terdaftar', commHtml.indexOf("'setCollabStepNote','setCollabStepLink'") >= 0);
 ok('baris proses menampilkan tautannya', commHtml.indexOf("s.link?linkIcon(s.link,'Buka hasil proses ini'):''") >= 0);
 ok('sub-item bisa dilampiri link', commHtml.indexOf("function promptSubLink(order, row){") >= 0);
 ok('tambah sub-item menyertakan link opsional', commHtml.indexOf("id=\"collab-subck-link-${order}\"") >= 0);

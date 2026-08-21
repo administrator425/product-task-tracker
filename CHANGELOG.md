@@ -10,6 +10,32 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.73.1 — Perbaikan: PIC tak punya tombol simpan untuk prosesnya sendiri
+
+Link hasil per **proses** yang ditambahkan di 1.73.0 hanya bisa diisi lewat mode **Edit** —
+dan Edit khusus Manager/Leader. Akibatnya orang yang benar-benar mengerjakan prosesnya tidak
+punya cara menautkan hasilnya; di layarnya bahkan tak ada tombol **Simpan** sama sekali.
+
+Sekarang panel tiap proses punya kolom **Link Hasil (opsional)** dengan tombol **Simpan
+link**-nya sendiri, persis pola *Catatan Proses / Simpan catatan* yang sudah ada. Izinnya pun
+disamakan: **PIC proses itu** atau manager. Proses milik orang lain tetap terlihat, tapi
+kolomnya terkunci.
+
+Menyusun ulang, mengganti nama, PIC, deadline, dan stage proses **tetap khusus Manager/Leader** —
+yang dibuka hanya menautkan hasil pekerjaan sendiri.
+
+### Satu pintu, supaya tidak saling menimpa
+Kolom link di editor proses (mode Edit) **dicabut**, jadi panel proses adalah satu-satunya
+tempat mengisinya. Kalau dibiarkan ada di dua tempat, manager yang menekan Simpan dengan
+tampilan lama akan menimpa link yang baru saja diisi PIC-nya — persis kelas bug yang sama
+dengan catatan proses dulu.
+
+Sebagai pengaman keduanya, `saveCollab` kini **mempertahankan link lama** bila payload-nya
+tidak menyebut link sama sekali (perlakuan yang sama seperti catatan). Diuji: manager
+menyimpan collab tanpa menyebut link, link PIC-nya tetap utuh.
+
+---
+
 ## 1.73.0 — Tautan: kolom Dokumen jadi link + lampiran hasil di proses & sub-ceklis
 
 ### Kolom Dokumen langsung jadi tautan

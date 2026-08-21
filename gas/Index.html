@@ -791,7 +791,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.73.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.73.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -880,7 +880,7 @@ function onGoogleCredential(resp){
       else { var e=document.getElementById('googleErr'); if(e){ e.textContent=(d&&d.message)||'Email tidak diizinkan.'; e.classList.remove('hide'); } }
     }).catch(function(){ var e=document.getElementById('googleErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','copyChecklist','setChecklistLink','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','setCollabStepNote','setCollabType','deleteCollab','getNotifications','markNotificationsRead','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder','getUsers','saveUser','deleteUser','renameUser'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','copyChecklist','setChecklistLink','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','setCollabStepNote','setCollabStepLink','setCollabType','deleteCollab','getNotifications','markNotificationsRead','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder','getUsers','saveUser','deleteUser','renameUser'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -3047,7 +3047,7 @@ function collabToggleEdit(){
   }
   renderCollabSteps(c);
 }
-function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, stage:(row.querySelector('.cs-stage')||{}).value||'', link:((row.querySelector('.cs-link')||{}).value||'').trim(), srcOrder:Number(row.dataset.srcOrder||0) })); }
+function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, stage:(row.querySelector('.cs-stage')||{}).value||'', srcOrder:Number(row.dataset.srcOrder||0) })); }
 function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
 function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
 // Atur urutan proses (tombol naik/turun). srcOrder ikut berpindah bersama prosesnya.
@@ -3070,7 +3070,6 @@ function renderCollabSteps(c){
       <select class="cs-pic shrink-0 w-24 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none">${collabPicOptions(s.pic)}</select>
       <select class="cs-stage shrink-0 w-28 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" title="Stage (opsional)">${collabStageOptions(s.stage)}</select>
       <input type="date" class="cs-deadline shrink-0 w-[120px] rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" value="${escapeAttr(s.deadline||'')}">
-      <input class="cs-link shrink-0 w-36 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-sm outline-none" placeholder="Link hasil (ops.)" title="Tautan hasil pengerjaan — opsional" value="${escapeAttr(s.link||'')}">
       <span class="shrink-0 flex flex-col -space-y-1">
         <button type="button" onclick="collabMoveStep(${i},-1)" title="Naik" ${i===0?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===0?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_up</span></button>
         <button type="button" onclick="collabMoveStep(${i},1)" title="Turun" ${i===draft.length-1?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===draft.length-1?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_down</span></button>
@@ -3123,6 +3122,16 @@ function renderCollabSteps(c){
           <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Catatan proses</div>
           <textarea id="collab-note-${s.order}" ${editNote?'':'readonly'} rows="2" class="w-full rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none ${editNote?'':'opacity-70'}" placeholder="${editNote?'mis. butuh tambahan deadline…':'(belum ada catatan)'}">${escapeHtml(s.note||'')}</textarea>
           ${editNote?`<button type="button" onclick="saveCollabStepNote(${s.order})" class="mt-1 text-[11px] font-semibold text-indigo-600 hover:underline">Simpan catatan</button>`:''}
+          <!-- Link hasil per proses: izinnya sama dengan catatan, jadi PIC yang mengerjakan
+               bisa menautkan hasilnya sendiri tanpa menunggu manager membuka mode Edit. -->
+          <div class="mt-2">
+            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1"><span class="material-icons-round text-[12px]">link</span>Link Hasil <span class="font-normal normal-case tracking-normal">(opsional)</span></div>
+            <div class="flex items-center gap-1.5">
+              <input id="collab-steplink-${s.order}" ${editNote?'':'disabled'} value="${escapeAttr(s.link||'')}" placeholder="${editNote?'Tempel link hasil pengerjaan…':'(belum ada link)'}" class="flex-1 min-w-0 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none ${editNote?'':'opacity-60'}">
+              ${s.link?linkIcon(s.link,'Buka hasil proses ini'):''}
+            </div>
+            ${editNote?`<button type="button" onclick="saveCollabStepLink(${s.order})" class="mt-1 text-[11px] font-semibold text-indigo-600 hover:underline">Simpan link</button>`:''}
+          </div>
         </div>
         <div>
           <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1 flex items-center gap-1"><span class="material-icons-round text-[12px]">checklist</span>Sub-ceklis pengerjaan</div>
@@ -3168,6 +3177,16 @@ function toggleStepExpand(order){
   const body=document.getElementById('collab-step-body-'+order); if(body) body.classList.toggle('hide', !state._collabExpanded[order]);
   const chev=document.getElementById('collab-chev-'+order); if(chev) chev.textContent=state._collabExpanded[order]?'expand_less':'expand_more';
   if(state._collabExpanded[order]) loadStepChecklist(order);
+}
+function saveCollabStepLink(order){
+  const id=state._collabId; const el=document.getElementById('collab-steplink-'+order); if(!id||!el) return;
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal simpan link', false); return; }
+    state.collabs=res.collabs||state.collabs; showToast(res.message);
+    renderCollabSteps(currentCollab());
+    if(state.activeView==='collab') renderCollab();
+  }).withFailureHandler(err=>showToast(err.message||err,false))
+    .setCollabStepLink(id, order, el.value.trim(), state.currentUser);
 }
 function saveCollabStepNote(order){
   const id=state._collabId; const ta=document.getElementById('collab-note-'+order); if(!id||!ta) return;
