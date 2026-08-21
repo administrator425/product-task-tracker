@@ -10,6 +10,29 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.74.0 — Lampiran link di Ceklis Pengerjaan task
+
+Lampiran hasil yang di 1.73.0 baru ada di Task Kolaborasi kini tersedia juga di **Ceklis
+Pengerjaan** pada modal Edit Task — memakai aksi backend yang sama, jadi tak ada jalur baru
+yang perlu dijaga terpisah.
+
+- Kolom **"link (ops.)"** di samping input "Tambah langkah / output yang diharapkan…" —
+  langsung terlampir saat item dibuat.
+- Tombol 🔗 di tiap item untuk memasang, mengubah, atau mencabut belakangan.
+- Item yang punya lampiran menampilkan ikon tautan siap-klik (tab baru).
+
+Tetap **opsional**: item tanpa link berfungsi persis seperti sebelumnya.
+
+### Yang ikut dijaga
+- **Task baru** (belum punya ID) menampung linknya dulu bersama itemnya, lalu mengirimnya
+  setelah task tersimpan — sama seperti perlakuan item ceklisnya sendiri. Tombol 🔗 sengaja
+  baru muncul setelah task tersimpan, karena barisnya belum ada di sheet.
+- **Duplikat task** ikut membawa lampiran tiap item.
+- **Mencentang tidak menghapus lampiran** — diuji terpisah untuk ceklis task, bukan hanya
+  sub-ceklis kolaborasi.
+
+---
+
 ## 1.73.1 — Perbaikan: PIC tak punya tombol simpan untuk prosesnya sendiri
 
 Link hasil per **proses** yang ditambahkan di 1.73.0 hanya bisa diisi lewat mode **Edit** —

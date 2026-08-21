@@ -688,7 +688,7 @@
           <div id="checklistHint" class="hide px-4 py-2 text-[11px] text-gray-500 dark:text-slate-400 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-100 dark:border-amber-900/40"></div>
           <div id="checklistItems" class="p-2 bg-gray-50/60 dark:bg-slate-950/40 max-h-[220px] overflow-y-auto space-y-1 scrollbar-thin"></div>
           <div id="checklistAddRow" class="p-3 flex gap-2 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
-            <input id="checklistInput" onkeydown="checklistInputKey(event)" class="flex-1 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-emerald-300" placeholder="Tambah langkah / output yang diharapkan…">
+            <input id="checklistInput" onkeydown="checklistInputKey(event)" class="flex-1 min-w-0 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-emerald-300" placeholder="Tambah langkah / output yang diharapkan…"><input id="checklistLinkInput" onkeydown="checklistInputKey(event)" class="w-36 shrink-0 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-2 outline-none text-sm focus:ring-2 focus:ring-emerald-300" placeholder="link (ops.)" title="Tautan hasil — opsional">
             <button type="button" onclick="addChecklistFromInput()" class="px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm">Tambah</button>
           </div>
         </div>
@@ -791,7 +791,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.73.1'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.74.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -2712,7 +2712,7 @@ function loadChecklist(id){
 // Duplikat: ambil ceklis task asal sebagai template. Semua item dimulai TANPA centang,
 // dan ditampung di buffer (task baru belum punya ID) sampai Simpan.
 function loadChecklistTemplate(srcId){
-  GAS.withSuccessHandler(c=>{ state._pendingChecklist=(c||[]).map(x=>({item:x.item,done:false})); renderChecklist(); })
+  GAS.withSuccessHandler(c=>{ state._pendingChecklist=(c||[]).map(x=>({item:x.item,done:false,link:x.link||''})); renderChecklist(); })
      .withFailureHandler(()=>{ state._pendingChecklist=[]; renderChecklist(); })
      .getChecklist(srcId);
 }
@@ -2741,24 +2741,43 @@ function renderChecklist(){
       <input type="checkbox" ${c.done?'checked':''} ${editable?'':'disabled'} onchange="toggleChecklist('${escapeAttr(key)}',this.checked)" class="w-4 h-4 shrink-0 accent-emerald-600 cursor-pointer">
       <span class="flex-1 text-sm ${c.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(c.item)}</span>
       ${meta}
+      ${c.link?linkIcon(c.link,'Buka hasil item ini'):''}
+      ${(editable&&!isNew)?`<button type="button" onclick="promptChecklistLink('${escapeAttr(key)}')" title="${c.link?'Ubah/hapus link hasil':'Lampirkan link hasil (opsional)'}" class="shrink-0 ${c.link?'text-indigo-400 hover:text-indigo-600':'opacity-0 group-hover:opacity-100 transition text-gray-300 hover:text-indigo-600'}"><span class="material-icons-round text-[15px]">link</span></button>`:''}
       ${removable?`<button type="button" onclick="removeChecklist('${escapeAttr(key)}')" title="Hapus item" class="shrink-0 opacity-0 group-hover:opacity-100 transition text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[16px]">close</span></button>`:''}
     </div>`;
   }).join('');
 }
+/* Lampirkan / ubah / cabut tautan hasil pada satu item Ceklis Pengerjaan.
+   Hanya untuk task yang SUDAH tersimpan — item task baru belum punya baris di sheet,
+   jadi linknya diisi lewat kolom "link (ops.)" saat menambah. */
+function promptChecklistLink(key){
+  const id=getVal('fieldId'); if(!id) return;
+  if(!canEditChecklist()){ showToast('Anda tak berhak mengubah ceklis task ini.', false); return; }
+  const row=parseInt(key,10);
+  const it=(state.checklist||[]).find(x=>String(x.row)===String(key));
+  const v=prompt('Link hasil untuk item ini (opsional). Kosongkan untuk menghapus lampiran.', (it&&it.link)||'');
+  if(v===null) return;
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan link', false); return; }
+    state.checklist=res.checklist||[]; showToast(res.message); renderChecklist();
+  }).withFailureHandler(err=>showToast(err.message||err,false))
+    .setChecklistLink(id, row, v.trim(), state.currentUser);
+}
 function checklistInputKey(e){ if(e.key==='Enter'){ e.preventDefault(); addChecklistFromInput(); } }
 function addChecklistFromInput(){
   const inp=document.getElementById('checklistInput'); const text=(inp&&inp.value||'').trim();
+  const lnk=document.getElementById('checklistLinkInput'); const url=(lnk&&lnk.value||'').trim();
   if(!text) return;
   if(!canEditChecklist()){ showToast('Anda tak berhak mengubah ceklis task ini.', false); return; }
   const id=getVal('fieldId');
   if(!id){ // task baru -> tampung dulu, kirim setelah tersimpan
-    state._pendingChecklist=(state._pendingChecklist||[]).concat([{item:text,done:false}]);
-    inp.value=''; renderChecklist(); return;
+    state._pendingChecklist=(state._pendingChecklist||[]).concat([{item:text,done:false,link:url}]);
+    inp.value=''; if(lnk) lnk.value=''; renderChecklist(); return;
   }
   GAS.withSuccessHandler(res=>{
     if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah item', false); return; }
-    state.checklist=res.checklist||[]; inp.value=''; syncChecklistSummary(id); renderChecklist(); renderAll();
-  }).withFailureHandler(err=>showToast(err.message||err,false)).addChecklistItem(id, text, state.currentUser);
+    state.checklist=res.checklist||[]; inp.value=''; if(lnk) lnk.value=''; syncChecklistSummary(id); renderChecklist(); renderAll();
+  }).withFailureHandler(err=>showToast(err.message||err,false)).addChecklistItem(id, text, state.currentUser, url);
 }
 function toggleChecklist(key, done){
   const id=getVal('fieldId');
@@ -2795,7 +2814,7 @@ function flushPendingChecklist(taskId, cb){
     const it=pend[i++];
     GAS.withSuccessHandler(res=>{ if(res&&res.success) state.checklist=res.checklist||[]; next(); })
        .withFailureHandler(()=>next())
-       .addChecklistItem(taskId, it.item, state.currentUser);
+       .addChecklistItem(taskId, it.item, state.currentUser, it.link || '');
   })();
 }
 /* ---------- Task Kolaborasi (alur proses beruntun antar-PIC) ---------- */

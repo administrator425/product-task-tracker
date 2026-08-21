@@ -644,6 +644,20 @@ ok('@everyone menotifikasi user lain', notiUma.some(n => /men-tag semua/.test(n.
 const notiSelf = call('getNotifications', 'Manager');
 ok('penulis tidak menotifikasi dirinya sendiri', !notiSelf.some(n => n.refId === 'TSK-055' && /men-tag semua/.test(n.text)));
 
+// Lampiran link juga berlaku di Ceklis Pengerjaan task biasa (bukan hanya sub-ceklis collab).
+const CKT = 'TSK-001';
+call('addChecklistItem', CKT, 'Rekap hasil riset', 'Manager', 'https://drive.google.com/TASK-1');
+const ckt = call('getChecklist', CKT);
+const ckLast = ckt[ckt.length - 1];
+eq('item ceklis task menyimpan link', ckLast.link, 'https://drive.google.com/TASK-1');
+eq('link ceklis task bisa diubah', call('setChecklistLink', CKT, ckLast.row, 'https://drive.google.com/TASK-2', 'Manager').success, true);
+eq('perubahannya tersimpan', call('getChecklist', CKT).filter(function(x){return x.row===ckLast.row;})[0].link, 'https://drive.google.com/TASK-2');
+call('setChecklistDone', CKT, ckLast.row, true, 'Manager');
+eq('centang tak menghapus lampiran task', call('getChecklist', CKT).filter(function(x){return x.row===ckLast.row;})[0].link, 'https://drive.google.com/TASK-2');
+eq('dikosongkan = lampiran dicabut', call('setChecklistLink', CKT, ckLast.row, '', 'Manager').success, true);
+eq('benar-benar kosong', call('getChecklist', CKT).filter(function(x){return x.row===ckLast.row;})[0].link, '');
+call('deleteChecklistItem', CKT, ckLast.row, 'Manager');
+
 console.log('\n=== 10. Hapus task & baca ulang ===');
 const delRes = call('deleteTask', 'TSK-055', 'Manager');
 eq('hapus task sukses', delRes.success, true);
@@ -1121,6 +1135,16 @@ ok('sub-item bisa dilampiri link', commHtml.indexOf("function promptSubLink(orde
 ok('tambah sub-item menyertakan link opsional', commHtml.indexOf("id=\"collab-subck-link-${order}\"") >= 0);
 ok('link ikut dikirim saat menambah sub-item', commHtml.indexOf("addChecklistItem(collabStepTaskId(order), text, state.currentUser, url)") >= 0);
 ok('sub-item menampilkan tautannya', commHtml.indexOf("it.link?linkIcon(it.link,'Buka hasil sub-item ini'):''") >= 0);
+// Ceklis Pengerjaan (task biasa) juga bisa dilampiri link — memakai aksi yang sama.
+ok('ceklis task punya input link opsional', commHtml.indexOf("id=\"checklistLinkInput\"") >= 0);
+ok('item ceklis task menampilkan tautannya', commHtml.indexOf("c.link?linkIcon(c.link,'Buka hasil item ini'):''") >= 0);
+ok('ada tombol lampirkan di item ceklis task', commHtml.indexOf("promptChecklistLink('${escapeAttr(key)}')") >= 0);
+ok('tombol lampirkan hanya utk task tersimpan', commHtml.indexOf("${(editable&&!isNew)?`<button type=\"button\" onclick=\"promptChecklistLink(") >= 0);
+ok('link ikut dikirim saat menambah item', commHtml.indexOf("addChecklistItem(id, text, state.currentUser, url)") >= 0);
+ok('item task BARU menampung linknya dulu', commHtml.indexOf("{item:text,done:false,link:url}") >= 0);
+ok('item tertunda mengirim linknya setelah task tersimpan', commHtml.indexOf("addChecklistItem(taskId, it.item, state.currentUser, it.link || '')") >= 0);
+ok('duplikat task ikut membawa link ceklis', commHtml.indexOf("map(x=>({item:x.item,done:false,link:x.link||''}))") >= 0);
+
 
 // Stage OPSIONAL: boleh dikosongkan, jatuh ke "Umum".
 ok('ada stage bawaan Umum', /const STAGE_UMUM='Umum';/.test(commHtml));
