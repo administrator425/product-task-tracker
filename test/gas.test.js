@@ -541,6 +541,48 @@ ok('jejak "Collab Delete" tak nyangkut di feed-nya', !call('getActivityLog', 500
 ok('penghapusan tetap tercatat di log global', call('getActivityLog', 500).some(a => /Collab Delete/.test(a.action) && String(a.detail).indexOf(KC) >= 0));
 call('deleteCollab', CB, 'Manager');
 
+console.log("\n=== 7e-2. Sisip proses BARU di atas: semua turun, sub-ceklis ikut ===");
+// Berbeda dari 7e (menukar urutan): di sini SEMUA proses bergeser turun satu langkah.
+// Kalau kunci sub-ceklis tak ikut dipetakan, sub milik A akan mendarat di proses BARU.
+const sp = call('saveCollab', { title: 'Uji Sisip', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses A', pic: 'Staff Soal' },
+  { order: 2, name: 'Proses B', pic: 'Staff QC' },
+  { order: 3, name: 'Proses C', pic: 'Staff Data' }] }, 'Manager');
+eq('collab uji sisip dibuat', sp.success, true);
+const SP = call('getCollabs').find(function(c){ return c.title === 'Uji Sisip'; }).id;
+call('addChecklistItem', SP + '#1', 'sub A', 'Staff Soal');
+call('addChecklistItem', SP + '#2', 'sub B', 'Staff QC');
+call('addChecklistItem', SP + '#3', 'sub C', 'Staff Data');
+call('setCollabStepNote', SP, 2, 'catatan B', 'Staff QC');
+call('setCollabStepLink', SP, 2, 'https://drive.google.com/LINK-B', 'Staff QC');
+// Sisipkan proses baru di posisi 1 -> A,B,C turun jadi 2,3,4.
+call('saveCollab', { id: SP, title: 'Uji Sisip', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses BARU', pic: 'Manager', srcOrder: 0 },
+  { order: 2, name: 'Proses A', pic: 'Staff Soal', srcOrder: 1 },
+  { order: 3, name: 'Proses B', pic: 'Staff QC', srcOrder: 2 },
+  { order: 4, name: 'Proses C', pic: 'Staff Data', srcOrder: 3 }] }, 'Manager');
+const stS = call('getCollabs').find(function(c){ return c.id === SP; }).steps;
+eq('urutan bergeser turun', stS.map(function(s){ return s.name; }).join('>'), 'Proses BARU>Proses A>Proses B>Proses C');
+eq('proses BARU tidak mewarisi sub-ceklis', call('getChecklist', SP + '#1').length, 0);
+eq('sub A ikut turun ke #2', call('getChecklist', SP + '#2').map(function(x){return x.item;}).join(), 'sub A');
+eq('sub B ikut turun ke #3', call('getChecklist', SP + '#3').map(function(x){return x.item;}).join(), 'sub B');
+eq('sub C ikut turun ke #4', call('getChecklist', SP + '#4').map(function(x){return x.item;}).join(), 'sub C');
+eq('catatan B ikut prosesnya', stS[2].note, 'catatan B');
+eq('link hasil B ikut prosesnya', stS[2].link, 'https://drive.google.com/LINK-B');
+eq('proses BARU tanpa catatan warisan', stS[0].note, '');
+eq('proses BARU tanpa link warisan', stS[0].link, '');
+// Sisip di TENGAH juga: A tetap #1, BARU2 masuk #2, sisanya turun.
+call('saveCollab', { id: SP, title: 'Uji Sisip', platform: 'JadiASN', steps: [
+  { order: 1, name: 'Proses BARU', pic: 'Manager', srcOrder: 1 },
+  { order: 2, name: 'Proses BARU2', pic: 'Manager', srcOrder: 0 },
+  { order: 3, name: 'Proses A', pic: 'Staff Soal', srcOrder: 2 },
+  { order: 4, name: 'Proses B', pic: 'Staff QC', srcOrder: 3 },
+  { order: 5, name: 'Proses C', pic: 'Staff Data', srcOrder: 4 }] }, 'Manager');
+eq('sisip di tengah: BARU2 bersih', call('getChecklist', SP + '#2').length, 0);
+eq('sisip di tengah: sub A di #3', call('getChecklist', SP + '#3').map(function(x){return x.item;}).join(), 'sub A');
+eq('sisip di tengah: sub C di #5', call('getChecklist', SP + '#5').map(function(x){return x.item;}).join(), 'sub C');
+call('deleteCollab', SP, 'Manager');
+
 console.log('\n=== 7f. Proses kolaborasi ber-PIC PERAN (milik bersama) ===');
 const kb = call('saveCollab', { title: 'Kolaborasi Bersama', platform: 'JadiASN', steps: [
   { order: 1, name: 'Kerjakan bareng', pic: '@Magang' },

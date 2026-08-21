@@ -37,6 +37,12 @@ bernomor sama; log global tetap lengkap.
 - **Susun ulang proses kolaborasi** — sub-ceklis, catatan, dan link hasil semuanya ikut
   berpindah bersama prosesnya; posisi yang ditinggalkan tidak mewarisi milik orang lain.
   (Ditambahkan tes khusus untuk catatan & link, sebelumnya hanya sub-ceklis yang diuji.)
+- **Menyisipkan proses baru di atas / di tengah** — kasus yang berbeda dari sekadar menukar
+  urutan, karena SEMUA proses di bawahnya bergeser turun. Diuji terpisah: proses baru mulai
+  benar-benar kosong, sementara sub-ceklis, catatan, dan link tiap proses lama ikut turun
+  mengikuti posisinya. Diperiksa sampai ke UI: menambah proses lalu menaikkannya — baik lewat
+  tombol panah maupun seret — mengirim `srcOrder: 0` untuk yang baru dan mempertahankan
+  asal-usul yang lama, persis yang dibutuhkan pemetaan ulang di server.
 - **Hapus proses / hapus collab** — sudah membersihkan sejak 1.69.x.
 - **Hapus user** — rujukan diperbarui/dibersihkan sejak 1.67.0.
 - **Operasi berbasis nomor baris** pada ceklis, Link Saya, dan Catatan Saya — semuanya
