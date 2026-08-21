@@ -106,9 +106,9 @@ SHEET_HEADERS[CONFIG.AUTH_SHEET] = ['User', 'PinHash'];
 SHEET_HEADERS[CONFIG.LINKS_SHEET] = ['User', 'Title', 'URL', 'Folder'];
 SHEET_HEADERS[CONFIG.DASHBOARDS_SHEET] = ['Title', 'Desc', 'Icon', 'URL'];
 SHEET_HEADERS[CONFIG.NOTES_SHEET] = ['User', 'Title', 'Body', 'UpdatedAt', 'Folder'];
-SHEET_HEADERS[CONFIG.CHECKLIST_SHEET] = ['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At'];
+SHEET_HEADERS[CONFIG.CHECKLIST_SHEET] = ['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At', 'Link'];
 SHEET_HEADERS[CONFIG.COLLAB_SHEET] = ['Collab ID', 'Platform', 'Title', 'Description', 'Created By', 'Created At', 'Deadline', 'Type', 'Color'];
-SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET] = ['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note', 'Stage'];
+SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET] = ['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note', 'Stage', 'Link'];
 SHEET_HEADERS[CONFIG.NOTIF_SHEET] = ['ID', 'For User', 'Type', 'Ref ID', 'From', 'Text', 'Created At', 'Read'];
 SHEET_HEADERS[CONFIG.USERS_SHEET] = ['Nama', 'Peran', 'Aktif'];
 
@@ -1164,7 +1164,7 @@ function canDeleteChecklist_(taskId, actor) {
 
 function getChecklist(taskId) {
   var rows = [];
-  try { rows = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A2:F'); } catch (e) { return []; }
+  try { rows = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A2:G'); } catch (e) { return []; }
   var needle = String(taskId || '').trim();
   return rows
     .map(function (r, i) {
@@ -1175,13 +1175,14 @@ function getChecklist(taskId) {
         done: isChecked_(r && r[2]),
         createdBy: String((r && r[3]) || '').trim(),
         checkedBy: String((r && r[4]) || '').trim(),
-        checkedAt: stampStr_(r && r[5])
+        checkedAt: stampStr_(r && r[5]),
+        link: String((r && r[6]) || '').trim()   // lampiran hasil (opsional)
       };
     })
     .filter(function (c) { return c.taskId === needle && c.item; });
 }
 
-function addChecklistItem(taskId, item, actor) {
+function addChecklistItem(taskId, item, actor, link) {
   taskId = String(taskId || '').trim();
   item = String(item || '').trim();
   actor = String(actor || '').trim() || 'Unknown';
@@ -1191,7 +1192,7 @@ function addChecklistItem(taskId, item, actor) {
     return { success: false, message: 'Hanya PM atau PIC/Support task ini yang bisa menambah item ceklis.' };
   }
   ensureChecklistSheet_();
-  valuesAppend_(CONFIG.CHECKLIST_SHEET + '!A:F', [[taskId, item, 'FALSE', actor, '', '']]);
+  valuesAppend_(CONFIG.CHECKLIST_SHEET + '!A:G', [[taskId, item, 'FALSE', actor, '', '', String(link || '').trim()]]);
   logActivity_(actor, 'Checklist Add', taskId, item.length > 120 ? item.slice(0, 117) + '...' : item);
   return { success: true, message: 'Item ceklis ditambahkan.', checklist: getChecklist(taskId) };
 }
@@ -1216,12 +1217,12 @@ function copyChecklist(fromId, toIds, actor) {
   var rows = [], ditolak = 0;
   targets.forEach(function (to) {
     if (!canEditChecklist_(to, actor)) { ditolak++; return; }
-    source.forEach(function (it) { rows.push([to, it.item, 'FALSE', actor, '', '']); });
+    source.forEach(function (it) { rows.push([to, it.item, 'FALSE', actor, '', '', it.link || '']); });
   });
   if (!rows.length) return { success: false, message: 'Anda tidak berhak menambah ceklis di proses tujuan.' };
 
   ensureChecklistSheet_();
-  valuesAppend_(CONFIG.CHECKLIST_SHEET + '!A:F', rows);
+  valuesAppend_(CONFIG.CHECKLIST_SHEET + '!A:G', rows);
   var berhasil = targets.length - ditolak;
   logActivity_(actor, 'Checklist Copy', fromId, source.length + ' item → ' + berhasil + ' proses');
   return {
@@ -1274,6 +1275,25 @@ function restampCollabStep_(taskId, list, actor) {
   valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!H' + (idx + 2), [[nowStamp_()]]);
   logActivity_(actor, 'Collab Step Restamp', ref.collabId, 'Proses ' + ref.order + ': tanggal selesai diperbarui (sub-ceklis tuntas)');
   return true;
+}
+
+/* Lampiran hasil pada satu item ceklis — OPSIONAL. Izinnya mengikuti aturan mencentang. */
+function setChecklistLink(taskId, row, link, actor) {
+  taskId = String(taskId || '').trim();
+  row = parseInt(row, 10);
+  actor = String(actor || '').trim() || 'Unknown';
+  link = String(link || '').trim();
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (link.length > 500) return { success: false, message: 'Link terlalu panjang (maks 500 karakter).' };
+  if (!canEditChecklist_(taskId, actor)) return { success: false, message: 'Anda tak berhak mengubah ceklis ini.' };
+  var cur = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A' + row + ':B' + row);
+  if (String((cur[0] && cur[0][0]) || '').trim() !== taskId) {
+    return { success: false, message: 'Item ceklis tidak cocok dengan task ini. Muat ulang.' };
+  }
+  ensureChecklistSheet_();
+  valuesUpdate_(CONFIG.CHECKLIST_SHEET + '!G' + row, [[link]]);
+  logActivity_(actor, 'Checklist Link', taskId, link ? ('lampiran: ' + link.slice(0, 90)) : 'lampiran dihapus');
+  return { success: true, message: link ? 'Link dilampirkan.' : 'Link dihapus.', checklist: getChecklist(taskId) };
 }
 
 function deleteChecklistItem(taskId, row, actor) {
@@ -1344,7 +1364,7 @@ function getCollabs(preC, preS) {
   else {
     try {
       crows = valuesGet_(CONFIG.COLLAB_SHEET + '!A2:I');
-      srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:J');
+      srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:K');
     } catch (e) { return []; }
   }
   var steps = {};
@@ -1362,7 +1382,8 @@ function getCollabs(preC, preS) {
       doneBy: String((r && r[6]) || '').trim(),
       doneAt: stampStr_(r && r[7]),
       note: String((r && r[8]) || '').trim(),
-      stage: String((r && r[9]) || '').trim()   // OPSIONAL — baris lama tanpa kolom J terbaca ''
+      stage: String((r && r[9]) || '').trim(),  // OPSIONAL — baris lama tanpa kolom J terbaca ''
+      link: String((r && r[10]) || '').trim()   // lampiran hasil — OPSIONAL
     });
   });
   Object.keys(steps).forEach(function (k) {
@@ -1463,6 +1484,7 @@ function saveCollab(payload, actor) {
       pic: String((s && s.pic) || '').trim(),
       deadline: String((s && s.deadline) || '').trim(),
       stage: String((s && s.stage) || '').trim(),
+      link: String((s && s.link) || '').trim(),
       srcOrder: Number((s && s.srcOrder) || 0)
     };
   }).filter(function (s) { return s.name; });
@@ -1500,9 +1522,9 @@ function saveCollab(payload, actor) {
     var order = i + 1;
     var pd = prevStep[s.srcOrder] || {};   // bawa done/catatan dari proses asalnya (tahan reorder)
     return [id, order, s.name, s.pic, s.deadline ? toSheetDate_(s.deadline) : '',
-      pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim()];
+      pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim(), String((s && s.link) || '').trim()];
   });
-  if (stepRows.length) valuesAppend_(CONFIG.COLLAB_STEP_SHEET + '!A:J', stepRows);
+  if (stepRows.length) valuesAppend_(CONFIG.COLLAB_STEP_SHEET + '!A:K', stepRows);
 
   // Sub-ceklis harus ikut berpindah bersama prosesnya (lihat remapCollabChecklists_).
   if (isUpdate) {
@@ -1530,7 +1552,7 @@ function setCollabStepNote(collabId, order, note, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   ensureCollabSheets_();
   var srows = [];
-  try { srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:J'); } catch (e) { srows = []; }
+  try { srows = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A2:K'); } catch (e) { srows = []; }
   var idx = findStepRow_(srows, collabId, order);
   if (idx < 0) return { success: false, message: 'Proses tidak ditemukan. Muat ulang.' };
   var pic = String((srows[idx] && srows[idx][3]) || '').trim();
@@ -1956,9 +1978,9 @@ function ensureActivitySheet_() {
 
 function ensureChecklistSheet_() {
   sheet_(CONFIG.CHECKLIST_SHEET, true);
-  var head = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A1:F1');
+  var head = valuesGet_(CONFIG.CHECKLIST_SHEET + '!A1:G1');
   if (!head.length || !head[0] || !head[0][0]) {
-    valuesUpdate_(CONFIG.CHECKLIST_SHEET + '!A1:F1', [SHEET_HEADERS[CONFIG.CHECKLIST_SHEET]]);
+    valuesUpdate_(CONFIG.CHECKLIST_SHEET + '!A1:G1', [SHEET_HEADERS[CONFIG.CHECKLIST_SHEET]]);
   }
 }
 
@@ -1973,12 +1995,13 @@ function ensureCollabSheets_() {
     if (!h0[8]) valuesUpdate_(CONFIG.COLLAB_SHEET + '!I1', [['Color']]);
   }
   sheet_(CONFIG.COLLAB_STEP_SHEET, true);
-  head = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A1:J1');
+  head = valuesGet_(CONFIG.COLLAB_STEP_SHEET + '!A1:K1');
   h0 = head[0] || [];
-  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!A1:J1', [SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET]]);
+  if (!h0[0]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!A1:K1', [SHEET_HEADERS[CONFIG.COLLAB_STEP_SHEET]]);
   else {
     if (!h0[8]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!I1', [['Note']]);
     if (!h0[9]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!J1', [['Stage']]);   // stage per proses — OPSIONAL
+    if (!h0[10]) valuesUpdate_(CONFIG.COLLAB_STEP_SHEET + '!K1', [['Link']]);    // lampiran hasil — OPSIONAL
   }
 }
 

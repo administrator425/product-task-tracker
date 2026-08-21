@@ -868,10 +868,12 @@ async function addComment(payload) {
 async function ensureChecklistSheet() {
   if (_ensured.has('checklist')) return;
   await ensureSheetExists(CONFIG.CHECKLIST_SHEET);
-  const head = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A1:F1`);
+  const head = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A1:G1`);
   if (!head.length || !head[0] || !head[0][0]) {
-    await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!A1:F1`,
-      [['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At']]);
+    await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!A1:G1`,
+      [['Task ID', 'Item', 'Done', 'Created By', 'Checked By', 'Checked At', 'Link']]);
+  } else if (!head[0][6]) {
+    await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!G1`, [['Link']]);   // lampiran hasil — OPSIONAL
   }
   _ensured.add('checklist');
 }
@@ -923,7 +925,7 @@ async function canDeleteChecklist(taskId, actor) {
 
 async function getChecklist(taskId) {
   let rows = [];
-  try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:F`); } catch (e) { return []; }
+  try { rows = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A2:G`); } catch (e) { return []; }
   return rows
     .map((r, i) => ({
       row: i + 2,
@@ -933,11 +935,12 @@ async function getChecklist(taskId) {
       createdBy: String((r && r[3]) || '').trim(),
       checkedBy: String((r && r[4]) || '').trim(),
       checkedAt: stampStr(r && r[5]),
+      link: String((r && r[6]) || '').trim(),   // lampiran hasil (opsional)
     }))
     .filter(c => c.taskId === String(taskId || '').trim() && c.item);
 }
 
-async function addChecklistItem(taskId, item, actor) {
+async function addChecklistItem(taskId, item, actor, link) {
   taskId = String(taskId || '').trim();
   item = String(item || '').trim();
   actor = String(actor || '').trim() || 'Unknown';
@@ -947,7 +950,7 @@ async function addChecklistItem(taskId, item, actor) {
     return { success: false, message: 'Hanya PM atau PIC/Support task ini yang bisa menambah item ceklis.' };
   }
   await ensureChecklistSheet();
-  await valuesAppend(`${CONFIG.CHECKLIST_SHEET}!A:F`, [[taskId, item, 'FALSE', actor, '', '']]);
+  await valuesAppend(`${CONFIG.CHECKLIST_SHEET}!A:G`, [[taskId, item, 'FALSE', actor, '', '', String(link || '').trim()]]);
   await logActivity(actor, 'Checklist Add', taskId, item.length > 120 ? item.slice(0, 117) + '...' : item);
   return { success: true, message: 'Item ceklis ditambahkan.', checklist: await getChecklist(taskId) };
 }
@@ -974,12 +977,12 @@ async function copyChecklist(fromId, toIds, actor) {
   const ditolak = [];
   for (const to of targets) {
     if (!(await canEditChecklist(to, actor))) { ditolak.push(to); continue; }
-    source.forEach(it => rows.push([to, it.item, 'FALSE', actor, '', '']));
+    source.forEach(it => rows.push([to, it.item, 'FALSE', actor, '', '', it.link || '']));
   }
   if (!rows.length) return { success: false, message: 'Anda tidak berhak menambah ceklis di proses tujuan.' };
 
   await ensureChecklistSheet();
-  await valuesAppend(`${CONFIG.CHECKLIST_SHEET}!A:F`, rows);
+  await valuesAppend(`${CONFIG.CHECKLIST_SHEET}!A:G`, rows);
   const berhasil = targets.length - ditolak.length;
   await logActivity(actor, 'Checklist Copy', fromId, `${source.length} item → ${berhasil} proses`);
   return {
@@ -1033,6 +1036,29 @@ async function restampCollabStep(taskId, list, actor) {
   return true;
 }
 
+/* Lampiran hasil pada satu item ceklis — OPSIONAL. Dipakai saat pekerjaan sudah selesai
+   dan hasilnya perlu bisa dibuka langsung (Drive/Docs/Sheets). Izinnya mengikuti aturan
+   mencentang: siapa pun yang boleh mengubah ceklis task itu boleh melampirkan. */
+async function setChecklistLink(taskId, row, link, actor) {
+  taskId = String(taskId || '').trim();
+  row = parseInt(row, 10);
+  actor = String(actor || '').trim() || 'Unknown';
+  link = String(link || '').trim();
+  if (!row || row < 2) return { success: false, message: 'Baris tidak valid.' };
+  if (link.length > 500) return { success: false, message: 'Link terlalu panjang (maks 500 karakter).' };
+  if (!(await canEditChecklist(taskId, actor))) {
+    return { success: false, message: 'Anda tak berhak mengubah ceklis ini.' };
+  }
+  const cur = await valuesGet(`${CONFIG.CHECKLIST_SHEET}!A${row}:B${row}`);
+  if (String((cur[0] && cur[0][0]) || '').trim() !== taskId) {
+    return { success: false, message: 'Item ceklis tidak cocok dengan task ini. Muat ulang.' };
+  }
+  await ensureChecklistSheet();
+  await valuesUpdate(`${CONFIG.CHECKLIST_SHEET}!G${row}`, [[link]]);
+  await logActivity(actor, 'Checklist Link', taskId, link ? ('lampiran: ' + link.slice(0, 90)) : 'lampiran dihapus');
+  return { success: true, message: link ? 'Link dilampirkan.' : 'Link dihapus.', checklist: await getChecklist(taskId) };
+}
+
 async function deleteChecklistItem(taskId, row, actor) {
   taskId = String(taskId || '').trim();
   row = parseInt(row, 10);
@@ -1084,12 +1110,13 @@ async function ensureCollabSheets() {
     if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_SHEET}!I1`, [['Color']]);       // warna kartu (grid & kanban)
   }
   await ensureSheetExists(CONFIG.COLLAB_STEP_SHEET);
-  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:J1`);
+  head = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A1:K1`);
   h0 = head[0] || [];
-  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:J1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note', 'Stage']]);
+  if (!h0[0]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!A1:K1`, [['Collab ID', 'Order', 'Step', 'PIC', 'Deadline', 'Done', 'Done By', 'Done At', 'Note', 'Stage', 'Link']]);
   else {
     if (!h0[8]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!I1`, [['Note']]);    // catatan per proses (PIC note)
     if (!h0[9]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!J1`, [['Stage']]);   // stage per proses — OPSIONAL
+    if (!h0[10]) await valuesUpdate(`${CONFIG.COLLAB_STEP_SHEET}!K1`, [['Link']]);    // lampiran hasil — OPSIONAL
   }
   _ensured.add('collab');
 }
@@ -1120,9 +1147,9 @@ async function getCollabs(preC, preS) {
   if (preC !== undefined) { crows = preC || []; srows = preS || []; }
   else {
     try {
-      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:I`, `${CONFIG.COLLAB_STEP_SHEET}!A2:J`]);
+      const b = await valuesBatchGet([`${CONFIG.COLLAB_SHEET}!A2:I`, `${CONFIG.COLLAB_STEP_SHEET}!A2:K`]);
       crows = b[`${CONFIG.COLLAB_SHEET}!A2:I`] || [];
-      srows = b[`${CONFIG.COLLAB_STEP_SHEET}!A2:J`] || [];
+      srows = b[`${CONFIG.COLLAB_STEP_SHEET}!A2:K`] || [];
     } catch (e) { return []; }
   }
   const steps = {};
@@ -1139,6 +1166,7 @@ async function getCollabs(preC, preS) {
       doneAt: stampStr(r && r[7]),
       note: String((r && r[8]) || '').trim(),
       stage: String((r && r[9]) || '').trim(),   // OPSIONAL — baris lama tanpa kolom J terbaca ''
+      link: String((r && r[10]) || '').trim(),  // lampiran hasil — OPSIONAL
     });
   });
   Object.values(steps).forEach(list => list.sort((a, b) => a.order - b.order));
@@ -1246,7 +1274,7 @@ async function saveCollab(payload, actor) {
   if (!title) return { success: false, message: 'Judul task kolaborasi wajib diisi.' };
   // srcOrder = urutan asli proses saat form dibuka; dipakai agar status done/catatan
   // tetap ikut prosesnya saat urutan diubah (bukan mengikuti posisi). 0 = proses baru.
-  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim(), stage: String((s && s.stage) || '').trim(), srcOrder: Number((s && s.srcOrder) || 0) }))
+  const clean = steps.map(s => ({ name: String((s && s.name) || '').trim(), pic: String((s && s.pic) || '').trim(), deadline: String((s && s.deadline) || '').trim(), stage: String((s && s.stage) || '').trim(), link: String((s && s.link) || '').trim(), srcOrder: Number((s && s.srcOrder) || 0) }))
     .filter(s => s.name);
   if (!clean.length) return { success: false, message: 'Minimal 1 proses (nama proses wajib diisi).' };
 
@@ -1279,9 +1307,9 @@ async function saveCollab(payload, actor) {
   const stepRows = clean.map((s, i) => {
     const order = i + 1;
     const pd = prevStep[s.srcOrder] || {};   // bawa done/catatan dari proses asalnya (tahan reorder)
-    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim()];
+    return [id, order, s.name, s.pic, s.deadline ? toSheetDate(s.deadline) : '', pd.done ? 'TRUE' : 'FALSE', pd.doneBy || '', pd.doneAt || '', pd.note || '', String((s && s.stage) || '').trim(), String((s && s.link) || '').trim()];
   });
-  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:J`, stepRows);
+  if (stepRows.length) await valuesAppend(`${CONFIG.COLLAB_STEP_SHEET}!A:K`, stepRows);
 
   // Sub-ceklis harus ikut berpindah bersama prosesnya (lihat remapCollabChecklists).
   if (isUpdate) {
@@ -1301,7 +1329,7 @@ async function setCollabStepNote(collabId, order, note, actor) {
   actor = String(actor || '').trim() || 'Unknown';
   await ensureCollabSheets();
   let srows = [];
-  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:J`); } catch (e) { srows = []; }
+  try { srows = await valuesGet(`${CONFIG.COLLAB_STEP_SHEET}!A2:K`); } catch (e) { srows = []; }
   let idx = -1;
   for (let i = 0; i < srows.length; i++) {
     const r = srows[i];
@@ -1811,7 +1839,7 @@ async function getBootstrapData(opts) {
     tasks: MAIN_DATA_RANGE(), options: `${CONFIG.OPTIONS_SHEET}!A2:D`, activity: `${CONFIG.ACTIVITY_SHEET}!A2:E`,
     comments: `${CONFIG.COMMENTS_SHEET}!A2:D`, auth: `${CONFIG.AUTH_SHEET}!A2:B`, links: `${CONFIG.LINKS_SHEET}!A2:D`,
     dashboards: `${CONFIG.DASHBOARDS_SHEET}!A2:D`, notes: `${CONFIG.NOTES_SHEET}!A2:E`, checklist: `${CONFIG.CHECKLIST_SHEET}!A2:C`,
-    collab: `${CONFIG.COLLAB_SHEET}!A2:I`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:J`,
+    collab: `${CONFIG.COLLAB_SHEET}!A2:I`, collabSteps: `${CONFIG.COLLAB_STEP_SHEET}!A2:K`,
     users: `${CONFIG.USERS_SHEET}!A2:C`,
   };
   const present = Object.keys(R).filter(k => meta[sheetOf[k]]);
@@ -2435,7 +2463,7 @@ module.exports = {
   addComment, saveOption, deleteOption, editOption,
   // ceklis per task (PM menyusun, PIC mencentang)
   renameUser,
-  getChecklist, addChecklistItem, copyChecklist, setChecklistDone, deleteChecklistItem,
+  getChecklist, addChecklistItem, copyChecklist, setChecklistLink, setChecklistDone, deleteChecklistItem,
   // task kolaborasi (alur beruntun antar-PIC)
   getCollabs, saveCollab, setCollabStepDone, setCollabStepNote, setCollabType, deleteCollab,
   // notifikasi (tag @user)

@@ -10,6 +10,37 @@ Sumber versi: konstanta `APP_VERSION` di `public/index.html`.
 
 ---
 
+## 1.73.0 — Tautan: kolom Dokumen jadi link + lampiran hasil di proses & sub-ceklis
+
+### Kolom Dokumen langsung jadi tautan
+Isi kolom **Dokumen** dulu hanya teks. Sekarang begitu isinya alamat web, muncul tautan
+siap-klik di bawah input — **tanpa perlu menyimpan dulu** — dan ikon tautan kecil ikut
+tampil di baris Task List, jadi bisa dibuka tanpa membuka modal. Semua tautan terbuka di
+**tab baru** dengan `rel="noopener noreferrer"`.
+
+Pendeteksinya sengaja konservatif: `https://…`, `www.…`, dan `domain/path` dijadikan
+tautan; teks biasa seperti *"draft di meja PM"* tetap tampil apa adanya. Skema berbahaya
+(`javascript:`, `data:`) **tidak pernah** lolos — diuji langsung.
+
+### Lampiran hasil di Proses Beruntun & sub-ceklis
+Dua tempat baru untuk menautkan hasil pengerjaan, keduanya **opsional**:
+
+- **Proses** — kolom *"Link hasil (ops.)"* di baris editor proses, di samping deadline.
+  Tersimpan di `COLLAB_STEPS` kolom **K**.
+- **Sub-ceklis** — kolom link kecil di sebelah input "Tambah sub-item", plus tombol 🔗 di
+  tiap baris untuk memasang/mengubah/mencabut belakangan. Tersimpan di `CHECKLIST`
+  kolom **G**.
+
+Yang sudah punya lampiran menampilkan ikon tautan siap-klik. Mengosongkan isian = lampiran
+dicabut, jadi satu tombol menangani ketiga aksi.
+
+Dua hal yang dijaga dan diuji: **mencentang tidak menghapus lampiran** (kolom link tak ikut
+ditulis saat centang), dan **menyalin sub-ceklis ke proses lain ikut membawa lampirannya**.
+
+Kolom baru ditambahkan otomatis saat sheet pertama kali diakses; baris lama terbaca kosong.
+
+---
+
 ## 1.72.0 — "Done" task magang: hanya pendampingnya + tab Kerjaan Magang dicabut
 
 ### Aturannya diikat ke hubungan Support, bukan ke peran

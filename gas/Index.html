@@ -666,7 +666,7 @@
           </div>
           <div>
             <label class="form-label">Document</label>
-            <input id="fieldDocument" class="form-control" placeholder="Link Google Docs/Sheets/Canva atau nama dokumen acuan">
+            <input id="fieldDocument" oninput="renderDocPreview()" class="form-control" placeholder="Link Google Docs/Sheets/Canva atau nama dokumen acuan"><div id="fieldDocPreview" class="hide mt-1 text-[11px]"></div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div><label class="form-label">PIC Notes</label><textarea id="fieldPicNotes" rows="3" class="form-control" placeholder="Catatan dari PIC…"></textarea></div>
@@ -791,7 +791,7 @@
 /* ===== Jembatan backend: Google Apps Script native ATAU Vercel /api ===== */
 const GAS_NATIVE = (typeof google !== 'undefined' && google.script && google.script.run) ? google.script.run : null;
 const API_BASE = '/api/rpc';
-const APP_VERSION = '1.72.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
+const APP_VERSION = '1.73.0'; // >>> BUMP versi ini tiap update (lihat CHANGELOG.md), biar dev tahu build terpasang <<<
 // localStorage bisa MELEMPAR (mode privat, atau iframe Apps Script saat cookie pihak
 // ketiga diblokir). Semua akses lewat pembungkus ini supaya tak pernah mematikan aplikasi.
 var LS = {
@@ -880,7 +880,7 @@ function onGoogleCredential(resp){
       else { var e=document.getElementById('googleErr'); if(e){ e.textContent=(d&&d.message)||'Email tidak diizinkan.'; e.classList.remove('hide'); } }
     }).catch(function(){ var e=document.getElementById('googleErr'); if(e) e.classList.remove('hide'); });
 }
-var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','copyChecklist','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','setCollabStepNote','setCollabType','deleteCollab','getNotifications','markNotificationsRead','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder','getUsers','saveUser','deleteUser','renameUser'];
+var BACKEND_ACTIONS = ['getBootstrapData','getTasks','getOptions','getActivityLog','getComments','saveTask','deleteTask','quickUpdateField','quickUpdateDates','addComment','getChecklist','addChecklistItem','copyChecklist','setChecklistLink','setChecklistDone','deleteChecklistItem','getCollabs','saveCollab','setCollabStepDone','setCollabStepNote','setCollabType','deleteCollab','getNotifications','markNotificationsRead','saveOption','deleteOption','setupTaskTracker','assignMissingTaskIds','verifyPin','setUserPin','deleteUserPin','listPinUsers','editOption','addUserLink','updateUserLink','deleteUserLink','renameUserFolder','deleteUserFolder','addDashboard','updateDashboard','deleteDashboard','seedFormulaTemplate','addNote','updateNote','deleteNote','renameNoteFolder','deleteNoteFolder','getUsers','saveUser','deleteUser','renameUser'];
 function makeRunner(){
   var onSuccess = null, onFailure = null;
   var runner = {
@@ -954,6 +954,43 @@ const STATUS_ORDER = ['Tanpa Status', 'Todo', 'In progress', 'Revisi', 'Review P
    berperan itu. "Dev" & "Lihat Saja" sengaja tidak ikut — yang pertama akun teknis, yang
    kedua tamu baca-saja. Nama user tetap menang atas peran karena lebih spesifik. */
 const MENTION_ROLE_TAGS = ['manager', 'leader', 'staff', 'magang'];
+
+/* Ubah isian jadi TAUTAN bila memang alamat web. Dipakai di kolom Dokumen task dan di
+   lampiran ceklis. Sengaja konservatif: hanya http/https (atau domain yang jelas) yang
+   dijadikan tautan — teks biasa seperti "draft di meja PM" tetap tampil apa adanya, dan
+   skema berbahaya seperti javascript: tidak pernah lolos. */
+function asUrl(v){
+  const t=String(v||'').trim();
+  if(!t) return '';
+  if(new RegExp('^https?://','i').test(t)) return t;
+  if(new RegExp('^www[.]','i').test(t)) return 'https://'+t;
+  if(new RegExp('^[a-z0-9-]+([.][a-z0-9-]+)+/','i').test(t)) return 'https://'+t;   // domain/path
+  if(new RegExp('^[a-z0-9-]+([.][a-z0-9-]+)+$','i').test(t)
+     && new RegExp('[.](com|id|net|org|io|co|app|dev|sch|ac)$','i').test(t)) return 'https://'+t;
+  return '';
+}
+/* Pratinjau tautan di kolom Dokumen: begitu isinya alamat web, langsung muncul tautan
+   siap-klik (tab baru) di bawah input — tak perlu menyimpan dulu untuk mengeceknya. */
+function renderDocPreview(){
+  const el=document.getElementById('fieldDocPreview'); if(!el) return;
+  const v=(document.getElementById('fieldDocument')||{}).value||'';
+  const u=asUrl(v);
+  el.classList.toggle('hide', !u);
+  el.innerHTML = u ? ('<span class="text-gray-400">Buka: </span>'+linkOrText(v)) : '';
+}
+function shortUrl(u, maks){ const t=String(u||''); const n=maks||46; return t.length>n ? t.slice(0,n-1)+'…' : t; }
+// Tautan siap-klik (tab baru). Bila bukan alamat, kembalikan teksnya apa adanya.
+function linkOrText(v, kelas){
+  const t=String(v||'').trim(); if(!t) return '';
+  const u=asUrl(t);
+  if(!u) return '<span class="'+(kelas||'')+'">'+escapeHtml(t)+'</span>';
+  return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="'+escapeAttr(u)+'" class="'+(kelas||'')+' text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 break-all">'+escapeHtml(shortUrl(t))+'<span class="material-icons-round text-[12px] shrink-0">open_in_new</span></a>';
+}
+// Ikon tautan ringkas — untuk baris tabel/kartu yang sempit.
+function linkIcon(v, judul){
+  const u=asUrl(v); if(!u) return '';
+  return '<a href="'+escapeAttr(u)+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" title="'+escapeAttr(judul||u)+'" class="shrink-0 inline-flex items-center text-indigo-500 hover:text-indigo-700"><span class="material-icons-round text-[14px]">open_in_new</span></a>';
+}
 function statusRank(s){ const i=STATUS_ORDER.findIndex(o=>same(o,s)); return i<0 ? 99 : i; }
 
 const dummyOptions = {
@@ -2317,7 +2354,7 @@ function renderTable(){
     const overdue=isLate(t); const today=!isDone(t)&&daysToDue(t)===0;
     const edge=overdue?'border-l-[3px] border-rose-500':(today?'border-l-[3px] border-pink-500':'border-l-[3px] border-transparent');
     return `<tr onclick="openTaskModal('${escapeAttr(t.id)}')" class="hover:bg-gray-50 dark:hover:bg-slate-800/70 cursor-pointer ${edge}">
-    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isSupportOnly(t,state.currentUser)?` <span class="inline-flex items-center align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Support</span>`:''}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${t.createdBy?' • Dari: '+escapeHtml(t.createdBy):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
+    <td class="px-4 py-3 max-w-[360px]"><div class="font-medium text-gray-900 dark:text-white break-words whitespace-normal">${escapeHtml(t.taskName||'-')}${isSupportOnly(t,state.currentUser)?` <span class="inline-flex items-center align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Support</span>`:''}${isExternalTask(t)?` <span class="inline-flex items-center gap-0.5 align-middle h-5 px-1.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><span class="material-icons-round text-[11px]">swap_horiz</span>${escapeHtml(t.divisiTujuan)}</span>`:''}${linkIcon(t.document,'Buka dokumen task ini')}</div><div class="text-[11px] text-gray-400 font-mono mt-0.5">${escapeHtml(t.id||'-')}${t.createdDate?' • '+escapeHtml(t.createdDate):''}${t.createdBy?' • Dari: '+escapeHtml(t.createdBy):''}${isExternalTask(t)&&t.kontakDivisi?' • Kontak: '+escapeHtml(t.kontakDivisi):''}</div></td>
     <td class="px-4 py-3">${inlineSelect('status', t)}</td>
     <td class="px-4 py-3 text-gray-600 dark:text-slate-300">${escapeHtml(t.stage||'-')}</td>
     <td class="px-4 py-3"><div class="flex items-center gap-2">${avatar(t.pic)}${inlineSelect('pic', t)}</div></td>
@@ -2565,7 +2602,7 @@ function openTaskModal(id='', dupSrc=null){
     box.classList.toggle('hide', !v);
     if(v) box.querySelector('span:last-child').textContent='Status diubah oleh '+v;
   })();
-  setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
+  setVal('fieldPic', t?.pic||state.currentUser); setVal('fieldDocument', t?.document||''); renderDocPreview(); setVal('fieldPicNotes', t?.picNotes||''); setVal('fieldPmNotes', t?.pmNotes||'');
   setVal('fieldDivisiTujuan', t?.divisiTujuan||''); setVal('fieldKontakDivisi', t?.kontakDivisi||'');
   const selectedPlatform=String(t?.platform||'').split(',').map(x=>x.trim()).filter(Boolean);
   [...document.getElementById('fieldPlatform').options].forEach(o=>o.selected=selectedPlatform.includes(o.value));
@@ -2965,7 +3002,7 @@ function openCollabModal(id=''){
   if(isNew && !manage){ showToast('Hanya manager/Dev yang bisa membuat task kolaborasi.', false); return; }
   state._collabId=c?c.id:null;
   state._collabEdit=isNew;                         // task baru langsung mode edit
-  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]:[]; state._collabDirty=false;
+  state._collabDraft=isNew?[{name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}]:[]; state._collabDirty=false;
   document.getElementById('collabModal').classList.remove('hide');
   document.getElementById('collabModalTitle').textContent=isNew?'Task Kolaborasi Baru':(manage?'Kelola Task Kolaborasi':'Detail Task Kolaborasi');
   document.getElementById('collabModalSub').textContent=c?(c.id+' • dibuat oleh '+(c.createdBy||'—')):'Cukup platform + judul + daftar proses (tiap proses punya PIC & deadline).';
@@ -3005,14 +3042,14 @@ function collabToggleEdit(){
   } else {                                     // MASUK mode edit
     state._collabEdit=true;
     if(!state._collabDirty){
-      state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,stage:s.stage||'',srcOrder:s.order})):[{name:'',pic:'',deadline:'',stage:'',srcOrder:0}]);
+      state._collabDraft=(c?c.steps.map(s=>({name:s.name,pic:s.pic,deadline:s.deadline,stage:s.stage||'',link:s.link||'',srcOrder:s.order})):[{name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}]);
     }
   }
   renderCollabSteps(c);
 }
-function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, stage:(row.querySelector('.cs-stage')||{}).value||'', srcOrder:Number(row.dataset.srcOrder||0) })); }
-function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
-function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
+function collabReadStepInputs(){ return [...document.querySelectorAll('#collabSteps .collab-step-edit')].map(row=>({ name:row.querySelector('.cs-name').value.trim(), pic:row.querySelector('.cs-pic').value, deadline:row.querySelector('.cs-deadline').value, stage:(row.querySelector('.cs-stage')||{}).value||'', link:((row.querySelector('.cs-link')||{}).value||'').trim(), srcOrder:Number(row.dataset.srcOrder||0) })); }
+function collabAddStepRow(){ state._collabDraft=collabReadStepInputs(); state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
+function collabRemoveStep(i){ state._collabDraft=collabReadStepInputs(); state._collabDraft.splice(i,1); if(!state._collabDraft.length) state._collabDraft.push({name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}); renderCollabSteps(currentCollab()); }
 // Atur urutan proses (tombol naik/turun). srcOrder ikut berpindah bersama prosesnya.
 function collabMoveStep(i, dir){ const d=collabReadStepInputs(); const j=i+dir; if(j<0||j>=d.length) return; const t=d[i]; d[i]=d[j]; d[j]=t; state._collabDraft=d; renderCollabSteps(currentCollab()); }
 
@@ -3033,6 +3070,7 @@ function renderCollabSteps(c){
       <select class="cs-pic shrink-0 w-24 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none">${collabPicOptions(s.pic)}</select>
       <select class="cs-stage shrink-0 w-28 rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" title="Stage (opsional)">${collabStageOptions(s.stage)}</select>
       <input type="date" class="cs-deadline shrink-0 w-[120px] rounded bg-gray-100 dark:bg-slate-800 px-1 py-1 text-sm outline-none" value="${escapeAttr(s.deadline||'')}">
+      <input class="cs-link shrink-0 w-36 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-sm outline-none" placeholder="Link hasil (ops.)" title="Tautan hasil pengerjaan — opsional" value="${escapeAttr(s.link||'')}">
       <span class="shrink-0 flex flex-col -space-y-1">
         <button type="button" onclick="collabMoveStep(${i},-1)" title="Naik" ${i===0?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===0?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_up</span></button>
         <button type="button" onclick="collabMoveStep(${i},1)" title="Turun" ${i===draft.length-1?'disabled':''} class="text-gray-300 hover:text-indigo-600 ${i===draft.length-1?'opacity-30 cursor-default':''} leading-none"><span class="material-icons-round text-[14px]">keyboard_arrow_down</span></button>
@@ -3075,7 +3113,7 @@ function renderCollabSteps(c){
         <span class="w-5 text-center text-[10px] font-mono text-gray-400 shrink-0">${s.order}</span>
         <div class="flex-1 min-w-0">
           <div class="text-sm ${s.done?'line-through text-gray-400':'text-gray-700 dark:text-slate-200'}">${escapeHtml(s.name)}</div>
-          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(stepPicLabel(s.pic))}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}<span id="collab-subbadge-${s.order}">${s._pending?'':stepSubBadge(s.order,s.done)}</span></div>
+          <div class="text-[11px] flex items-center gap-2 flex-wrap"><span class="font-semibold ${mine?'text-indigo-600':'text-gray-400'}">${escapeHtml(stepPicLabel(s.pic))}</span>${s.stage?`<span class="inline-flex items-center h-4 px-1.5 rounded text-[10px] font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" title="Stage">${escapeHtml(s.stage)}</span>`:''}${s.deadline?`<span class="${overdue?'text-rose-600 font-semibold':'text-gray-400'}">· ${escapeHtml(s.deadline)}${overdue?' (telat)':''}</span>`:''}${s.done&&s.doneBy?`<span class="text-emerald-600">· ✓ ${escapeHtml(s.doneBy)}</span>`:''}${stepDoneStamp(s)}${s.note?'<span class="material-icons-round text-[12px] text-amber-500 align-middle" title="Ada catatan">sticky_note_2</span>':''}${s.link?linkIcon(s.link,'Buka hasil proses ini'):''}<span id="collab-subbadge-${s.order}">${s._pending?'':stepSubBadge(s.order,s.done)}</span></div>
         </div>
         ${turn?'<span class="shrink-0 text-[10px] font-bold text-rose-600">GILIRAN</span>':(s.done?'<span class="material-icons-round text-emerald-500 text-[18px] shrink-0">check_circle</span>':'')}
         ${s._pending?'':`<button type="button" onclick="toggleStepExpand(${s.order})" title="Catatan & sub-ceklis" class="shrink-0 text-gray-300 hover:text-indigo-600"><span id="collab-chev-${s.order}" class="material-icons-round text-[18px]">${expanded?'expand_less':'expand_more'}</span></button>`}
@@ -3157,11 +3195,15 @@ function loadStepChecklist(order){
 }
 function renderStepChecklist(order, items){
   const box=document.getElementById('collab-subck-'+order); if(!box) return;
+  // Simpan item terakhir yang dirender: dipakai promptSubLink() utk menampilkan link lama.
+  state._subCache=state._subCache||{}; state._subCache[order]=items||[];
   const editable=stepChecklistEditable(order);
   const done=(items||[]).filter(i=>i.done).length, total=(items||[]).length;
   const rows=(items||[]).map(it=>`<div class="flex items-center gap-1.5 group">
     <input type="checkbox" ${it.done?'checked':''} ${editable?'':'disabled'} onchange="toggleStepChecklist(${order},${it.row},this.checked)" class="w-3.5 h-3.5 shrink-0 accent-indigo-600 ${editable?'cursor-pointer':'opacity-50'}">
     <span class="flex-1 text-xs ${it.done?'line-through text-gray-400':'text-gray-600 dark:text-slate-300'}">${escapeHtml(it.item)}</span>
+    ${it.link?linkIcon(it.link,'Buka hasil sub-item ini'):''}
+    ${editable?`<button type="button" onclick="promptSubLink(${order},${it.row})" title="${it.link?'Ubah/hapus link hasil':'Lampirkan link hasil (opsional)'}" class="${it.link?'text-indigo-400 hover:text-indigo-600':'opacity-0 group-hover:opacity-100 text-gray-300 hover:text-indigo-600'}"><span class="material-icons-round text-[13px]">link</span></button>`:''}
     ${editable?`<button type="button" onclick="deleteStepChecklist(${order},${it.row})" class="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-rose-500"><span class="material-icons-round text-[13px]">close</span></button>`:''}
   </div>`).join('');
   // Kepala: hitungan + tombol salin. Menyalin baru masuk akal kalau sumbernya sudah berisi.
@@ -3170,15 +3212,29 @@ function renderStepChecklist(order, items){
       ${editable&&otherStepsFor(order).length?`<button type="button" onclick="toggleCopyChecklistPanel(${order})" class="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"><span class="material-icons-round text-[12px]">content_copy</span>Salin ke proses lain</button>`:''}
     </div><div id="collab-subck-copy-${order}" class="hide mb-2"></div>` : '';
   box.innerHTML=head+(rows||(editable||total?'':'<div class="text-[11px] text-gray-400 px-1">Belum ada sub-item.</div>'))+
-    (editable?`<div class="flex gap-1 mt-1"><input id="collab-subck-input-${order}" onkeydown="if(event.key==='Enter'){event.preventDefault();addStepChecklist(${order});}" class="flex-1 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none" placeholder="Tambah sub-item…"><button type="button" onclick="addStepChecklist(${order})" class="px-2 rounded bg-indigo-600 text-white text-xs font-semibold">+</button></div>`:'');
+    (editable?`<div class="flex gap-1 mt-1"><input id="collab-subck-input-${order}" onkeydown="if(event.key==='Enter'){event.preventDefault();addStepChecklist(${order});}" class="flex-1 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none" placeholder="Tambah sub-item…"><input id="collab-subck-link-${order}" onkeydown="if(event.key==='Enter'){event.preventDefault();addStepChecklist(${order});}" class="w-28 shrink-0 rounded bg-gray-100 dark:bg-slate-800 px-2 py-1 text-xs outline-none" placeholder="link (ops.)" title="Tautan hasil — opsional"><button type="button" onclick="addStepChecklist(${order})" class="px-2 rounded bg-indigo-600 text-white text-xs font-semibold">+</button></div>`:'');
   state.checklistSummary=state.checklistSummary||{};
   if(total) state.checklistSummary[collabStepTaskId(order)]={done,total}; else delete state.checklistSummary[collabStepTaskId(order)];
   syncStepMainCheckbox(order);   // sub-ceklis berubah → segarkan kunci main-ceklis + badge
 }
 function addStepChecklist(order){
   const inp=document.getElementById('collab-subck-input-'+order); const text=(inp&&inp.value||'').trim(); if(!text) return;
-  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah', false); return; } if(inp) inp.value=''; renderStepChecklist(order, res.checklist||[]); })
-     .withFailureHandler(err=>showToast(err.message||err,false)).addChecklistItem(collabStepTaskId(order), text, state.currentUser);
+  const lnk=document.getElementById('collab-subck-link-'+order); const url=(lnk&&lnk.value||'').trim();
+  GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal menambah', false); return; } if(inp) inp.value=''; if(lnk) lnk.value=''; renderStepChecklist(order, res.checklist||[]); })
+     .withFailureHandler(err=>showToast(err.message||err,false)).addChecklistItem(collabStepTaskId(order), text, state.currentUser, url);
+}
+/* Lampirkan / ubah / hapus tautan hasil pada satu sub-item. Dikosongkan = lampiran dicabut,
+   jadi satu tombol cukup untuk ketiga aksi. */
+function promptSubLink(order, row){
+  const it=((state._subCache||{})[order]||[]).find(x=>x.row===row);
+  const kini=(it&&it.link)||'';
+  const v=prompt('Link hasil untuk sub-item ini (opsional). Kosongkan untuk menghapus lampiran.', kini);
+  if(v===null) return;
+  GAS.withSuccessHandler(res=>{
+    if(!res||!res.success){ showToast((res&&res.message)||'Gagal menyimpan link', false); return; }
+    showToast(res.message); renderStepChecklist(order, res.checklist||[]);
+  }).withFailureHandler(err=>showToast(err.message||err,false))
+    .setChecklistLink(collabStepTaskId(order), row, v.trim(), state.currentUser);
 }
 function toggleStepChecklist(order, row, done){
   GAS.withSuccessHandler(res=>{ if(!res||!res.success){ showToast((res&&res.message)||'Gagal', false); loadStepChecklist(order); return; } renderStepChecklist(order, res.checklist||[]); })

@@ -539,6 +539,37 @@ eq('Manager boleh batalkan centang', call('setCollabStepDone', KB, 1, false, 'Ma
 eq('Manager tak boleh mencentangnya', call('setCollabStepDone', KB, 1, true, 'Manager').success, false);
 call('deleteCollab', KB, 'Manager');
 
+console.log("\n=== 7g. Lampiran link: proses & sub-ceklis ===");
+// Proses beruntun boleh membawa tautan hasil (opsional).
+const lk = call('saveCollab', { title: 'Uji Link', platform: 'JadiASN',
+  steps: [{ order: 1, name: 'Kerjakan', pic: 'Staff Soal', link: 'https://drive.google.com/folders/abc' },
+          { order: 2, name: 'Tanpa link', pic: 'Staff Data' }] }, 'Manager');
+eq('collab dgn link proses tersimpan', lk.success, true);
+const LK = call('getCollabs').find(c => c.title === 'Uji Link').id;
+const stepsLK = call('getCollabs').find(c => c.id === LK).steps;
+eq('link proses tersimpan', stepsLK[0].link, 'https://drive.google.com/folders/abc');
+eq('proses tanpa link = string kosong', stepsLK[1].link, '');
+
+call('addChecklistItem', LK + '#1', 'Rekap hasil', 'Staff Soal', 'https://docs.google.com/d/xyz');
+call('addChecklistItem', LK + '#1', 'Tanpa lampiran', 'Staff Soal');
+const subLK = call('getChecklist', LK + '#1');
+eq('sub-item pertama punya link', subLK[0].link, 'https://docs.google.com/d/xyz');
+eq('sub-item kedua tanpa link', subLK[1].link, '');
+eq('lampiran bisa dipasang belakangan', call('setChecklistLink', LK + '#1', subLK[1].row, 'https://drive.google.com/x', 'Staff Soal').success, true);
+eq('tersimpan', call('getChecklist', LK + '#1')[1].link, 'https://drive.google.com/x');
+call('setChecklistLink', LK + '#1', subLK[1].row, '', 'Staff Soal');
+eq('dikosongkan = lampiran dicabut', call('getChecklist', LK + '#1')[1].link, '');
+// Mencentang TIDAK boleh menghapus lampiran (kolom G tak ikut ditulis).
+call('setChecklistDone', LK + '#1', subLK[0].row, true, 'Staff Soal');
+eq('centang tak menghapus lampiran', call('getChecklist', LK + '#1')[0].link, 'https://docs.google.com/d/xyz');
+// Menyalin sub-ceklis ikut membawa lampirannya.
+call('copyChecklist', LK + '#1', [LK + '#2'], 'Staff Soal');
+eq('salin membawa lampiran', call('getChecklist', LK + '#2')[0].link, 'https://docs.google.com/d/xyz');
+eq('link terlalu panjang ditolak', call('setChecklistLink', LK + '#1', subLK[0].row, new Array(502).join('x'), 'Staff Soal').success, false);
+ok('header CHECKLIST punya kolom Link', SS.getSheetByName('CHECKLIST').getRange(1, 7, 1, 1).getValues()[0][0] === 'Link');
+ok('header COLLAB_STEPS punya kolom Link', SS.getSheetByName('COLLAB_STEPS').getRange(1, 11, 1, 1).getValues()[0][0] === 'Link');
+call('deleteCollab', LK, 'Manager');
+
 console.log('\n=== 8. Gerbang status "Done" ===');
 const denied = call('quickUpdateField', 'TSK-028', 'status', 'Done', 'Staff Soal');
 eq('Staff Soal TIDAK boleh set Done', denied.success, false);
@@ -1007,7 +1038,7 @@ ok('ada pilihan tanpa stage', /\(tanpa stage\)/.test(commHtml));
 ok('memakai daftar stage task biasa', /function collabStageOptions\(sel\)[\s\S]{0,300}?state\.options&&state\.options\.stage\)\|\|\[\]/.test(commHtml));
 ok('stage lama di luar dropdown tetap ditawarkan', /\(!v\|\|daftar\.includes\(v\)\)\?daftar:daftar\.concat\(\[v\]\)/.test(commHtml));
 ok('stage ikut dibaca dari baris proses', /stage:\(row\.querySelector\('\.cs-stage'\)\|\|\{\}\)\.value\|\|''/.test(commHtml));
-ok('draft proses baru menyertakan stage', /\{name:'',pic:'',deadline:'',stage:'',srcOrder:0\}/.test(commHtml));
+ok('draft proses baru menyertakan stage & link', /{name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}/.test(commHtml));
 ok('stage tampil di baris proses', /s\.stage\?`<span[^`]*?Stage">\$\{escapeHtml\(s\.stage\)\}/.test(commHtml));
 // Manager boleh membatalkan centang.
 ok('Manager boleh batalkan centang di klien', /if\(s && s\.done && isManager\(state\.currentUser\)\) return true/.test(commHtml));
@@ -1053,6 +1084,23 @@ ok('pencegatan membungkus KEDUA jalur', /const GAS = guardPreview\(GAS_NATIVE \|
 ok('kotak fokus disembunyikan selama pratinjau', /fBox\.classList\.toggle\('hide', \(!mgr && !isDevReal\(\)\) \|\| vo \|\| !!state\.previewAs\)/.test(commHtml));
 ok('label kotak berubah di mode Dev', /fLbl\.textContent = isDevReal\(\) \? 'Lihat sebagai' : 'Fokus PIC'/.test(commHtml));
 ok('ganti identitas keluar dari pratinjau', /function setCurrentUser\(user\)\{if\(state\.previewAs\)\{state\.previewAs='';state\._realUser='';/.test(commHtml));
+
+// Tautan: kolom Dokumen task + lampiran hasil di proses & sub-ceklis.
+ok('ada pengubah teks jadi tautan', commHtml.indexOf("function asUrl(v){") >= 0);
+ok('hanya http/https yang jadi tautan', commHtml.indexOf("new RegExp('^https?://','i').test(t)") >= 0);
+ok('skema lain tidak pernah lolos', !/asUrl[sS]{0,400}?javascript/i.test(commHtml));
+ok('tautan dibuka di tab baru & aman', commHtml.indexOf("target=\"_blank\" rel=\"noopener noreferrer\"") >= 0);
+ok('klik tautan tak ikut membuka modal', commHtml.indexOf("onclick=\"event.stopPropagation()\"") >= 0);
+ok('kolom Dokumen punya pratinjau tautan', commHtml.indexOf("id=\"fieldDocPreview\"") >= 0);
+ok('pratinjau diperbarui saat mengetik', commHtml.indexOf("oninput=\"renderDocPreview()\"") >= 0);
+ok('baris Task List punya ikon dokumen', commHtml.indexOf("linkIcon(t.document,'Buka dokumen task ini')") >= 0);
+ok('editor proses punya kolom link', commHtml.indexOf("class=\"cs-link") >= 0);
+ok('link proses ikut dibaca dari input', commHtml.indexOf(".cs-link')||{}).value||'').trim()") >= 0);
+ok('baris proses menampilkan tautannya', commHtml.indexOf("s.link?linkIcon(s.link,'Buka hasil proses ini'):''") >= 0);
+ok('sub-item bisa dilampiri link', commHtml.indexOf("function promptSubLink(order, row){") >= 0);
+ok('tambah sub-item menyertakan link opsional', commHtml.indexOf("id=\"collab-subck-link-${order}\"") >= 0);
+ok('link ikut dikirim saat menambah sub-item', commHtml.indexOf("addChecklistItem(collabStepTaskId(order), text, state.currentUser, url)") >= 0);
+ok('sub-item menampilkan tautannya', commHtml.indexOf("it.link?linkIcon(it.link,'Buka hasil sub-item ini'):''") >= 0);
 
 // Stage OPSIONAL: boleh dikosongkan, jatuh ke "Umum".
 ok('ada stage bawaan Umum', /const STAGE_UMUM='Umum';/.test(commHtml));
@@ -1114,7 +1162,7 @@ ok('Simpan memakai rancangan bila ada', /state\._collabDirty \? \(state\._collab
 // Menyimpan dari mode baca dulu menghapus seluruh stage karena tak ikut dipetakan.
 ok('stage ikut di jalur mode baca', /\(\(cur&&cur\.steps\)\|\|\[\]\)\.map\(s=>\(\{name:s\.name, pic:s\.pic, deadline:s\.deadline, stage:s\.stage\|\|'', srcOrder:s\.order\}\)\)/.test(commHtml));
 ok('tanda tertunda dibersihkan setelah tersimpan', /state\._collabDirty=false; state\._collabDraft=\[\];\s*\/\/ sudah tersimpan/.test(commHtml));
-ok('tanda tertunda direset saat modal dibuka', /state\._collabDraft=isNew\?\[\{name:'',pic:'',deadline:'',stage:'',srcOrder:0\}\]:\[\]; state\._collabDirty=false;/.test(commHtml));
+ok('tanda tertunda direset saat modal dibuka', commHtml.indexOf("state._collabDraft=isNew?[{name:'',pic:'',deadline:'',stage:'',link:'',srcOrder:0}]:[]; state._collabDirty=false;") >= 0);
 ok('tanda tertunda direset saat modal ditutup', /state\._collabEdit=false; state\._collabDirty=false; state\._collabDraft=\[\];/.test(commHtml));
 
 // Pemilih identitas: kolom menyesuaikan jumlah nama supaya barisnya seimbang.
@@ -1155,7 +1203,7 @@ ok('tanpa tujuan terpilih ditolak di klien', /submitCopyChecklist\(order\)[\s\S]
 ok('tombol dikunci selama menyalin', /submitCopyChecklist\(order\)[\s\S]{0,600}?btn\.disabled=true; btn\.textContent='Menyalin…'/.test(commHtml));
 ok('memanggil copyChecklist sekali utk semua tujuan', /\.copyChecklist\(collabStepTaskId\(order\), picked\.map\(o=>collabStepTaskId\(o\)\), state\.currentUser\)/.test(commHtml));
 ok('proses tujuan disegarkan setelah salin', /picked\.forEach\(o=>\{ if\(state\._collabExpanded&&state\._collabExpanded\[o\]\) loadStepChecklist\(o\); else syncStepMainCheckbox\(o\)/.test(commHtml));
-ok('copyChecklist terdaftar di BACKEND_ACTIONS', /'addChecklistItem','copyChecklist','setChecklistDone'/.test(commHtml));
+ok('aksi ceklis (termasuk salin & link) terdaftar', commHtml.indexOf("'getChecklist','addChecklistItem','copyChecklist','setChecklistLink','setChecklistDone'") >= 0);
 
 console.log('\n=== 16e. Kelola User memuat SEMUA nama, bukan cuma yang terdaftar ===');
 const uaHtml = call('doGet', {})._html;
